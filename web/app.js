@@ -218,7 +218,6 @@ function buildTraitGrid() {
     d.className = 'tg';
     d.dataset.key = t.key;
     d.dataset.search = t.name.toLowerCase();
-    d.title = `${t.name} — breakpoints ${(t.bp || []).join('/')}\nclick to require · right-click to step down`;
     d.innerHTML = (t.icon ? `<img src="${t.icon}">` : '<span class="noimg"></span>') +
       `<span class="tgn">${t.name}</span><span class="tgv"></span>`;
     d.onclick = () => cycleTrait(t.key, false);
@@ -246,6 +245,85 @@ function renderTraitGrid() {
   $('reqTN').textContent = reqTraits.length;
   filterTraits();
 }
+
+// ---------- hover cards ----------
+// Riot ships desc as templates: "@Var@" numbers, "%i:scaleAD%" icon tokens,
+// "(@MinUnits@)" separating each breakpoint's text. PBE hashes most variable
+// names, so we render the shape and mark unknown numbers rather than lie.
+const ICON_WORD = {
+  scaleAD: 'AD', scaleAP: 'AP', scaleAS: 'Attack Speed', scaleArmor: 'Armor',
+  scaleMR: 'MR', scaleHealth: 'HP', scaleManaRegen: 'Mana Regen',
+  scaleDR: 'Damage Reduction', scaleCrit: 'Crit',
+};
+
+function cleanText(s) {
+  if (!s) return '';
+  return s
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')                                  // strip markup
+    .replace(/%i:(\w+)%/g, (_, k) => ICON_WORD[k] ? ' ' + ICON_WORD[k] : '')
+    .replace(/@[^@]+@/g, '<span class="ph" title="value not in PBE data yet">?</span>')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([%.,])/g, '$1')
+    .trim();
+}
+
+function traitDesc(t) {
+  const parts = (t.desc || '').split(/\(@MinUnits@\)/);
+  return { lead: cleanText(parts[0]), tiers: parts.slice(1).map(cleanText) };
+}
+
+function traitCard(key) {
+  const t = DB.traits[key];
+  if (!t) return '';
+  const { lead, tiers } = traitDesc(t);
+  const rows = (t.bp || []).map((n, i) => tiers[i]
+    ? `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span><span class="ctx">${tiers[i]}</span></div>`
+    : `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span></div>`).join('');
+  return `<div class="chd">${t.icon ? `<img src="${t.icon}">` : ''}
+      <div><b>${t.name}</b><span class="csub">${(t.bp || []).join(' / ')}</span></div></div>` +
+    (lead ? `<p class="clead">${lead}</p>` : '') + rows;
+}
+
+function unitCard(key) {
+  const c = DB.champions.find(x => x.key === key);
+  if (!c) return '';
+  const traits = c.traits.map(k => {
+    const t = DB.traits[k];
+    return `<span class="cch">${t?.icon ? `<img src="${t.icon}">` : ''}${t?.name || k}</span>`;
+  }).join('');
+  const mana = c.mana ? `<div class="crow"><span class="ctx">Mana ${c.mana.start} → ${c.mana.max}</span></div>` : '';
+  return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
+      <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
+    <div class="cchs">${traits}</div>${mana}
+    <p class="cnote">Ability text isn't in the PBE data yet.</p>`;
+}
+
+let cardEl = null;
+function hideCard() { if (cardEl) cardEl.classList.remove('show'); }
+
+function showCard(html, ev) {
+  if (!cardEl) { cardEl = document.createElement('div'); cardEl.id = 'card'; document.body.appendChild(cardEl); }
+  cardEl.innerHTML = html;
+  cardEl.classList.add('show');
+  const r = cardEl.getBoundingClientRect();
+  const pad = 12;
+  let x = ev.clientX + 16, y = ev.clientY + 16;
+  if (x + r.width > innerWidth - pad) x = ev.clientX - r.width - 16;
+  if (y + r.height > innerHeight - pad) y = innerHeight - r.height - pad;
+  cardEl.style.left = Math.max(pad, x) + 'px';
+  cardEl.style.top = Math.max(pad, y) + 'px';
+}
+
+document.addEventListener('mouseover', e => {
+  const tEl = e.target.closest('.tg[data-key], .tb[data-tk]');
+  if (tEl) return showCard(traitCard(tEl.dataset.key || tEl.dataset.tk), e);
+  const uEl = e.target.closest('.u[data-key], .uc[data-key]');
+  if (uEl) return showCard(unitCard(uEl.dataset.key), e);
+  hideCard();
+});
+document.addEventListener('mouseleave', hideCard);
+document.addEventListener('scroll', hideCard, true);
 
 // ---------- search dispatch (coalesced) ----------
 function run() {
@@ -321,7 +399,7 @@ function render(m) {
 
     const units = r.units.map(i => DB.champions[i])
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" title="${c.name} — ${c.cost} cost"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
+      .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
       .join('');
 
     const notes = [];

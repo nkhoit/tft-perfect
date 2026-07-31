@@ -182,3 +182,34 @@ button:hover{border-color:var(--acc2)}
 /* search stopped short of a full sweep */
 .status .cut{color:#ffb454;font-weight:700;cursor:help}
 .tag.warn{background:#3a2a12;border-color:#7a5a1e;color:#ffb454}
+
+/* ---- hover cards ---- */
+#card{position:fixed;z-index:99;width:290px;max-height:70vh;overflow:auto;
+  background:#10141c;border:1px solid #333c4d;border-radius:9px;padding:10px 11px;
+  box-shadow:0 10px 34px #000a;font-size:11.5px;line-height:1.45;color:#c3cad6;
+  opacity:0;pointer-events:none;transition:opacity .09s}
+#card.show{opacity:1}
+#card .chd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+#card .chd img{width:30px;height:30px;object-fit:contain;flex:none}
+#card .chd img.sq{border-radius:5px;object-fit:cover}
+#card .chd b{display:block;font-size:13px;color:#eef2f7}
+#card .csub{font-size:10px;color:#8b94a3;letter-spacing:.04em}
+#card .csub.k1{color:#9aa4b2}#card .csub.k2{color:#4ac07a}#card .csub.k3{color:#4a90d9}
+#card .csub.k4{color:#c061d0}#card .csub.k5{color:#e0a13a}
+#card .clead{margin:0 0 7px;color:#aab3c0}
+#card .crow{display:flex;gap:7px;padding:3px 0;border-top:1px solid #1e2531}
+#card .cbp{flex:none;min-width:19px;height:17px;border-radius:4px;font-size:10px;
+  font-weight:800;display:flex;align-items:center;justify-content:center;
+  background:#232a36;color:#dfe5ee}
+#card .cbp.bronze{background:#5a3b23;color:#f0cba8}
+#card .cbp.silver{background:#3f4652;color:#e7ecf3}
+#card .cbp.gold{background:#7a5c17;color:#ffe9a8}
+#card .cbp.chromatic,#card .cbp.prismatic{background:#5a3d6e;color:#f0d8ff}
+#card .cbp.unique{background:#1f5a44;color:#b6f5da}
+#card .ctx{flex:1}
+#card .ph{color:#7f8895;font-style:italic;cursor:help}
+#card .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+#card .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
+  border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}
+#card .cch img{width:13px;height:13px;object-fit:contain}
+#card .cnote{margin:6px 0 0;font-size:10px;color:#6e7683;font-style:italic}
