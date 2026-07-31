@@ -2,9 +2,8 @@
 
 Find Teamfight Tactics boards where every trait actually does something.
 
-Like [datatft.com/tracker/perfect](https://www.datatft.com/tracker/perfect), but with a
-**wasted-traits slider** instead of perfect-only, trait requirements (`Invoker 4`),
-live re-evaluation, and real game icons.
+A **wasted-traits slider**, trait requirements (`Invoker 4`), live re-evaluation,
+and real game icons.
 
 Currently built for **Set 18 · Enchanted Wilds** (PBE data), with Set 17 available
 from the header dropdown.
@@ -15,7 +14,8 @@ from the header dropdown.
 - **Require traits** — click a trait to demand it, click again to step up its
   breakpoints (`Invoker 2 → 3 → 4 → 5 → off`). Trait badges in the results are
   clickable too, so you can pin what you see.
-- Click a unit to **require** it (green), again to **exclude** (red), third clears.
+- Click a unit to **require** it (green); **right-click** to exclude (red). Clicking
+  the same way again clears it.
 - Cost filter, emblems (free trait, no board slot), unit/trait search.
 - Sort by most active traits, highest trait tiers, fewest wasted, or cheapest board.
 - Unique 1-unit traits are shown but **not counted** toward the active-trait score,
@@ -29,7 +29,7 @@ overshooting one trait can still fully earn its slot through another.
 - below a trait's first breakpoint → every carrier counts (2/3 Sprykin = 2 wasted)
 - past a breakpoint → only the overshoot (4/5 Riftbeast = 1 wasted)
 
-`0` = datatft's "perfect" mode.
+`0` = perfect boards only.
 
 ## Run locally
 

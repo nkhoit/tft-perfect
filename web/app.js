@@ -97,13 +97,15 @@ function buildPool() {
     d.title = c.name + ' — ' + c.traits.map(t => DB.traits[t]?.name || t).join(', ');
     d.innerHTML = `<img loading="lazy" src="${c.icon}" alt="">
       <span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
-    d.onclick = () => {
-      const s = (state.get(c.key) + 1) % 3;
+    // left click toggles require, right click toggles exclude
+    const set = s => {
       state.set(c.key, s);
       d.classList.toggle('req', s === 1);
       d.classList.toggle('exc', s === 2);
       updPickN(); run();
     };
+    d.onclick = () => set(state.get(c.key) === 1 ? 0 : 1);
+    d.oncontextmenu = e => { e.preventDefault(); set(state.get(c.key) === 2 ? 0 : 2); };
     el.appendChild(d);
   }
   applyFilter();
