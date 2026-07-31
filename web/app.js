@@ -286,10 +286,14 @@ function render(m) {
     list.innerHTML = `<div class="empty">${m.error}</div>`;
     return;
   }
-  $('status').textContent = `${m.ms} ms · ${(m.nodes || 0).toLocaleString()} nodes`;
-  const shown = m.rows.length < m.total ? `${m.rows.length} shown of ` : '';
+  const secs = (m.ms / 1000).toFixed(1);
+  $('status').innerHTML = m.truncated && !m.capped
+    ? `<span class="cut" title="Hit the search limit — some boards were never checked. Narrow the pool, or require a trait.">stopped early</span> · ${secs}s`
+    : `searched in ${secs}s`;
+  const shown = m.rows.length < m.total ? `${m.rows.length} of ` : '';
   cnt.innerHTML = `${shown}<b>${m.total.toLocaleString()}</b> board${m.total === 1 ? '' : 's'}` +
-    (m.truncated ? ` <span class="tag" title="${m.capped ? 'Hit the result cap' : 'Hit the search budget — some boards were not explored'}">partial${m.capped ? '' : ' — narrow the search'}</span>` : '');
+    (m.truncated ? (m.capped ? ' <span class="tag">capped</span>'
+                             : ' <span class="tag warn">incomplete</span>') : '');
 
   if (!m.rows.length) {
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;

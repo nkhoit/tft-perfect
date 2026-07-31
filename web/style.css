@@ -178,3 +178,7 @@ button:hover{border-color:var(--acc2)}
 .uc.k5 .kc{background:#e0a13a}
 .uc.k4{background:#1d1526}
 .uc.k5{background:#241d12}
+
+/* search stopped short of a full sweep */
+.status .cut{color:#ffb454;font-weight:700;cursor:help}
+.tag.warn{background:#3a2a12;border-color:#7a5a1e;color:#ffb454}

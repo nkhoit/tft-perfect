@@ -31,20 +31,17 @@
     <section>
       <h2>Wasted trait slots allowed</h2>
       <div class="slider">
-        <input type="range" id="waste" min="0" max="8" value="0">
+        <input type="range" id="waste" min="0" max="8" value="0"
+          title="Counted per trait, not per unit — a unit overshooting one trait still counts toward its others.&#10;2/3 Sprykin = 2 wasted · 4/5 Riftbeast = 1 wasted">
         <output id="wasteV">0</output>
       </div>
-      <p class="hint">Counts <b>trait contributions that buy nothing</b> — not units.
-      A unit overshooting one trait can still fully earn its slot through another.<br>
-      · below first breakpoint → every carrier counts (2/3 Sprykin = 2)<br>
-      · past a breakpoint → only the overshoot (4/5 Riftbeast = 1)<br>
-      <b>0</b> = perfect boards only.</p>
+      <p class="hint">Trait slots that aren't paying off. <b>0</b> = perfect boards only.</p>
     </section>
 
     <section>
       <h2>Require traits <span class="tag" id="reqTN">0</span></h2>
-      <p class="hint">Click a trait to require it · click again to step up
-      (3 → 5 → 7 → off). Or click any trait badge in the results.</p>
+      <p class="hint"><b class="g">Click</b> to require · again for the next tier ·
+      <b class="r">right click</b> to go back.</p>
       <input type="search" id="traitSearch" placeholder="filter traits…">
       <div class="tgrid" id="traitGrid"></div>
     </section>
