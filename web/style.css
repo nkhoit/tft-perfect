@@ -161,3 +161,20 @@ button:hover{border-color:var(--acc2)}
 .costhdr.c4{color:#c061d0}
 .costhdr.c5{color:#e0a13a}
 .costhdr.hide{display:none}
+
+/* ---- result unit chips: cost identity ---- */
+.uc{border-left-width:3px}
+.uc .kc{font-size:9px;font-weight:800;line-height:1;padding:1px 3px;border-radius:3px;
+  color:#0b0e14;opacity:.9}
+.uc.k1{border-left-color:#9aa4b2}
+.uc.k2{border-left-color:#4ac07a}
+.uc.k3{border-left-color:#4a90d9}
+.uc.k4{border-left-color:#c061d0}
+.uc.k5{border-left-color:#e0a13a}
+.uc.k1 .kc{background:#9aa4b2}
+.uc.k2 .kc{background:#4ac07a}
+.uc.k3 .kc{background:#4a90d9}
+.uc.k4 .kc{background:#c061d0}
+.uc.k5 .kc{background:#e0a13a}
+.uc.k4{background:#1d1526}
+.uc.k5{background:#241d12}

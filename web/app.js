@@ -317,7 +317,7 @@ function render(m) {
 
     const units = r.units.map(i => DB.champions[i])
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(c => `<span class="uc${state.get(c.key) === 1 ? ' req' : ''}"><img loading="lazy" src="${c.icon}">${c.name}</span>`)
+      .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" title="${c.name} — ${c.cost} cost"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
       .join('');
 
     const notes = [];
