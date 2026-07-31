@@ -72,7 +72,7 @@ function search(o) {
   const results = [];
   let nodes = 0, truncated = false, capped = false;
   const NODE_BUDGET = 40e6;
-  const RESULT_CAP = 60000;
+  const RESULT_CAP = 120000;
 
   // lower bound on wasted traits: any trait already started that cannot
   // possibly reach its first breakpoint with `slotsLeft` more units.
@@ -120,6 +120,39 @@ function search(o) {
     return true;
   }
 
+  // Comparator is known up front, so instead of stopping at an arbitrary cap
+  // (which biases results toward whatever DFS happened to reach first) we keep
+  // the best RESULT_CAP boards seen and drop the worst half when we overflow.
+  const KEY = {
+    live:  (a, b) => b.live - a.live,
+    tier:  (a, b) => b.tierSum - a.tierSum,
+    waste: (a, b) => a.waste - b.waste,
+    cost:  (a, b) => a.gold - b.gold,
+  };
+  const order = [o.sortMode, o.sortMode2, 'live', 'tier', 'waste', 'cost']
+    .filter((k, i, arr) => KEY[k] && arr.indexOf(k) === i);
+  const cmp = (a, b) => {
+    for (const k of order) { const d = KEY[k](a, b); if (d) return d; }
+    return 0;
+  };
+  let trimmed = false;   // true once we've discarded boards that ranked poorly
+  let found = 0;         // total matching boards, including any we trimmed
+  let worst = null;      // worst board currently kept, once we've trimmed once
+
+  // Same ordering as cmp, but on raw scalars so we can reject a candidate
+  // before allocating its result object.
+  const cmpScore = (live, tierSum, waste, gold, b) => {
+    for (const k of order) {
+      let d = 0;
+      if (k === 'live') d = b.live - live;
+      else if (k === 'tier') d = b.tierSum - tierSum;
+      else if (k === 'waste') d = waste - b.waste;
+      else d = gold - b.gold;
+      if (d) return d;
+    }
+    return 0;
+  };
+
   const pick = new Int32Array(need);
 
   function dfs(start, depth) {
@@ -143,13 +176,24 @@ function search(o) {
         }
       }
       if (waste > maxWaste) return;
-      if (results.length >= RESULT_CAP) { capped = true; truncated = true; return; }
+      found++;
+      let gold = 0;
+      for (const u of reqIdx) gold += DB.champions[u].cost * 3;
+      for (let d = 0; d < depth; d++) gold += DB.champions[pick[d]].cost * 3;
+      // Once we're at capacity, reject candidates that can't beat the worst
+      // board we're keeping — avoids allocating millions of doomed results.
+      if (worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) return;
       const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
-      let gold = 0; for (const u of units) gold += DB.champions[u].cost;
-      // unscored traits (unique or muted) last so the meaningful ones read first
+      // uniques last so the meaningful traits read first
       const dim = x => (UNIQ[x] || MUTE[x]) ? 1 : 0;
       active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
       results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold });
+      if (results.length >= RESULT_CAP) {
+        results.sort(cmp);
+        results.length = RESULT_CAP >> 1;   // keep the better half, keep searching
+        worst = results[results.length - 1];
+        trimmed = true;
+      }
       return;
     }
     const slotsLeft = need - depth;
@@ -168,12 +212,6 @@ function search(o) {
   if (need < 0) return { error: 'More required units than board slots.' };
   if (wasteLB(need) <= maxWaste && !reqUnreachable(0, need)) dfs(0, 0);
 
-  const cmp = {
-    live:  (a, b) => b.live - a.live || a.waste - b.waste || b.tierSum - a.tierSum || a.gold - b.gold,
-    tier:  (a, b) => b.tierSum - a.tierSum || b.live - a.live || a.waste - b.waste || a.gold - b.gold,
-    waste: (a, b) => a.waste - b.waste || b.live - a.live || b.tierSum - a.tierSum || a.gold - b.gold,
-    cost:  (a, b) => a.gold - b.gold || b.live - a.live || a.waste - b.waste,
-  }[sortMode];
   results.sort(cmp);
 
   let out = results;
@@ -191,7 +229,7 @@ function search(o) {
     out = results.slice(0, limit);
   }
 
-  return { rows: out, total: results.length, truncated, capped, nodes };
+  return { rows: out, total: found, truncated, capped: trimmed, nodes };
 }
 
 onmessage = (e) => {

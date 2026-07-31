@@ -182,6 +182,7 @@ function renderEmblems() {
   $(id).addEventListener('input', () => { $(id + 'V').textContent = $(id).value; run(); });
 });
 $('sort').addEventListener('change', run);
+$('sort2').addEventListener('change', run);
 $('uniq').addEventListener('change', run);
 $('search').addEventListener('input', applyFilter);
 $('clear').onclick = () => {
@@ -368,7 +369,8 @@ function run() {
       reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
                           .filter(r => r.t >= 0),
       muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
-      sortMode: $('sort').value, limit: 100, uniq: $('uniq').checked,
+      sortMode: $('sort').value, sortMode2: $('sort2').value,
+      limit: 100, uniq: $('uniq').checked,
     }
   });
 }
@@ -432,7 +434,8 @@ function render(m) {
       (notes.length ? `<div class="wasted">${notes.join(' · ')}</div>` : '') + `</div>` +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
-      (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') + `${r.gold}g</div>`;
+      (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
+      `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div>`;
     frag.appendChild(d);
   }
   list.innerHTML = '';

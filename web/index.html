@@ -31,9 +31,9 @@
     <section>
       <h2>Wasted trait slots allowed</h2>
       <div class="slider">
-        <input type="range" id="waste" min="0" max="8" value="0"
+        <input type="range" id="waste" min="0" max="10" value="10"
           title="Counted per trait, not per unit — a unit overshooting one trait still counts toward its others.&#10;2/3 Sprykin = 2 wasted · 4/5 Riftbeast = 1 wasted">
-        <output id="wasteV">0</output>
+        <output id="wasteV">10</output>
       </div>
       <p class="hint">Trait slots that aren't paying off. <b>0</b> = perfect boards only.</p>
     </section>
@@ -59,7 +59,16 @@
         <option value="waste">Fewest wasted</option>
         <option value="cost">Cheapest board</option>
       </select>
-      <label class="chk"><input type="checkbox" id="uniq" checked> Hide duplicate trait-signatures</label>
+      <label class="sub">then by
+        <select id="sort2">
+          <option value="cost">Cheapest board</option>
+          <option value="waste">Fewest wasted</option>
+          <option value="tier">Highest trait tiers</option>
+          <option value="live">Most active traits</option>
+        </select>
+      </label>
+      <label class="chk" title="Many boards share the exact same trait totals using interchangeable units. Keeps only the best one of each."><input type="checkbox" id="uniq" checked> One board per trait combo</label>
+      <p class="hint">Board cost assumes every unit at <b>2★</b> (3 copies each).</p>
     </section>
 
     <section>

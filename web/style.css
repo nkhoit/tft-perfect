@@ -220,3 +220,7 @@ button:hover{border-color:var(--acc2)}
 .tg.muted .tgv{color:#7f8895}
 .tb.mut{opacity:.45;border-style:dashed}
 .tb.mut b{text-decoration:line-through}
+
+/* secondary sort */
+label.sub{display:block;margin-top:6px;font-size:11px;color:#8b94a3}
+label.sub select{margin-top:3px}
