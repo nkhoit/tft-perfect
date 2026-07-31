@@ -1,0 +1,13 @@
+{
+  "navigationFallback": { "rewrite": "/index.html" },
+  "globalHeaders": {
+    "Cache-Control": "public, max-age=300"
+  },
+  "routes": [
+    { "route": "/*.json", "headers": { "Cache-Control": "public, max-age=3600" } }
+  ],
+  "mimeTypes": {
+    ".json": "application/json",
+    ".js": "text/javascript"
+  }
+}
