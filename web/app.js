@@ -89,9 +89,28 @@ function buildCosts() {
 function buildPool() {
   const el = $('pool');
   el.innerHTML = '';
+  // group by cost, cheapest first, alphabetical within a tier
+  const byCost = new Map();
   for (const c of DB.champions) {
+    if (!byCost.has(c.cost)) byCost.set(c.cost, []);
+    byCost.get(c.cost).push(c);
+  }
+  const costs = [...byCost.keys()].sort((a, b) => a - b);
+  for (const cost of costs) {
+    const h = document.createElement('div');
+    h.className = 'costhdr c' + cost;
+    h.dataset.cost = cost;
+    h.innerHTML = `<span>${cost} cost</span><i>${byCost.get(cost).length}</i>`;
+    el.appendChild(h);
+    byCost.get(cost).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => addUnit(el, c));
+  }
+  applyFilter();
+}
+
+function addUnit(el, c) {
     const d = document.createElement('div');
     d.className = 'u b' + c.cost;
+    d.dataset.cost = c.cost;
     d.dataset.key = c.key;
     d.dataset.search = (c.name + ' ' + c.traits.map(t => DB.traits[t]?.name || t).join(' ')).toLowerCase();
     d.title = c.name + ' — ' + c.traits.map(t => DB.traits[t]?.name || t).join(', ');
@@ -107,17 +126,26 @@ function buildPool() {
     d.onclick = () => set(state.get(c.key) === 1 ? 0 : 1);
     d.oncontextmenu = e => { e.preventDefault(); set(state.get(c.key) === 2 ? 0 : 2); };
     el.appendChild(d);
-  }
-  applyFilter();
+    state.set(c.key, state.get(c.key) || 0);
 }
 
 function applyFilter() {
   const q = $('search').value.trim().toLowerCase();
+  const shown = new Map();   // cost -> visible unit count
   for (const d of $('pool').children) {
+    if (d.classList.contains('costhdr')) continue;
     const c = DB.champions.find(x => x.key === d.dataset.key);
     const hide = (!costOn.has(c.cost) && state.get(c.key) !== 1) ||
                  (q && !d.dataset.search.includes(q));
     d.classList.toggle('hide', hide);
+    if (!hide) shown.set(c.cost, (shown.get(c.cost) || 0) + 1);
+  }
+  // drop a tier header when nothing under it survived the filter
+  for (const d of $('pool').children) {
+    if (!d.classList.contains('costhdr')) continue;
+    const n = shown.get(+d.dataset.cost) || 0;
+    d.classList.toggle('hide', n === 0);
+    d.querySelector('i').textContent = n;
   }
 }
 

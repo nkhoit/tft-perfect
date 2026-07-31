@@ -146,3 +146,18 @@ button:hover{border-color:var(--acc2)}
 .tb[data-tk]{cursor:pointer}
 .tb[data-tk]:hover{outline:1px solid #3ddc84;outline-offset:1px}
 .tb.pin{box-shadow:0 0 0 2px #3ddc84 inset}
+
+/* ---- unit pool grouped by cost ---- */
+.costhdr{grid-column:1/-1;display:flex;align-items:center;gap:8px;
+  margin:10px 0 1px;font-size:10.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:#8b94a3}
+.costhdr:first-child{margin-top:2px}
+.costhdr::after{content:"";flex:1;height:1px;background:currentColor;opacity:.22}
+.costhdr i{font-style:normal;font-weight:700;font-size:9.5px;color:#6b7484;
+  background:#181d27;border:1px solid #232a36;border-radius:8px;padding:0 6px;order:3}
+.costhdr.c1{color:#9aa4b2}
+.costhdr.c2{color:#4ac07a}
+.costhdr.c3{color:#4a90d9}
+.costhdr.c4{color:#c061d0}
+.costhdr.c5{color:#e0a13a}
+.costhdr.hide{display:none}
