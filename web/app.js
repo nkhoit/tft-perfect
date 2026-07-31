@@ -7,6 +7,7 @@ const state = new Map();          // champ key -> 0 none / 1 required / 2 exclud
 const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
+const muted = new Set();          // trait keys that still show but earn no score
 
 const STYLE_ORDER = ['bronze', 'silver', 'gold', 'chromatic', 'prismatic', 'unique'];
 
@@ -198,14 +199,28 @@ function cycleTrait(key, back) {
   const bp = DB.traits[key].bp || [1];
   const cur = reqTraits.find(r => r.key === key);
   if (!cur) {
+    // right-click on an unrequired trait mutes it instead of stepping down
+    if (back) return toggleMute(key);
+    muted.delete(key);
     // start at the first breakpoint that's actually interesting (>=2 if it exists)
     const start = bp.find(n => n >= 2) ?? bp[0];
-    reqTraits.push({ key, n: back ? bp[bp.length - 1] : start });
+    reqTraits.push({ key, n: start });
   } else {
     const i = bp.indexOf(cur.n);
     const next = back ? i - 1 : i + 1;
     if (next < 0 || next >= bp.length) reqTraits.splice(reqTraits.indexOf(cur), 1);
     else cur.n = bp[next];
+  }
+  renderTraitGrid(); run();
+}
+
+// Muted traits still appear on boards, they just stop counting toward the score.
+function toggleMute(key) {
+  if (muted.has(key)) muted.delete(key);
+  else {
+    muted.add(key);
+    const i = reqTraits.findIndex(r => r.key === key);   // can't require what doesn't count
+    if (i >= 0) reqTraits.splice(i, 1);
   }
   renderTraitGrid(); run();
 }
@@ -239,10 +254,12 @@ function filterTraits() {
 function renderTraitGrid() {
   for (const d of $('traitGrid').children) {
     const r = reqTraits.find(x => x.key === d.dataset.key);
+    const m = muted.has(d.dataset.key);
     d.classList.toggle('on', !!r);
-    d.querySelector('.tgv').textContent = r ? r.n : '';
+    d.classList.toggle('muted', m);
+    d.querySelector('.tgv').textContent = m ? '—' : (r ? r.n : '');
   }
-  $('reqTN').textContent = reqTraits.length;
+  $('reqTN').textContent = reqTraits.length + (muted.size ? ` · ${muted.size} muted` : '');
   filterTraits();
 }
 
@@ -350,6 +367,7 @@ function run() {
       size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems,
       reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
                           .filter(r => r.t >= 0),
+      muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
       sortMode: $('sort').value, limit: 100, uniq: $('uniq').checked,
     }
   });
@@ -391,10 +409,11 @@ function render(m) {
       const key = tkeys[ti], t = DB.traits[key];
       const cls = styleAt(t, n);
       const isEmb = embCount[key] ? ' emb' : '';
-      const uq = isUnique(t) ? ' uq' : '';
+      const uq = (isUnique(t) || muted.has(key)) ? ' uq' : '';
+      const mu = muted.has(key) ? ' mut' : '';
       const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} unit(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
       const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
-      return `<span class="tb ${cls}${isEmb}${uq}${req}" data-tk="${key}" data-tn="${n}" title="Click to require ${n}+ ${t.name}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
+      return `<span class="tb ${cls}${isEmb}${uq}${mu}${req}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
     }).join('');
 
     const units = r.units.map(i => DB.champions[i])

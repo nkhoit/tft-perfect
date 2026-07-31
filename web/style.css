@@ -213,3 +213,10 @@ button:hover{border-color:var(--acc2)}
   border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}
 #card .cch img{width:13px;height:13px;object-fit:contain}
 #card .cnote{margin:6px 0 0;font-size:10px;color:#6e7683;font-style:italic}
+
+/* ---- muted traits: shown on boards, worth no score ---- */
+.tg.muted{opacity:.5;border-style:dashed}
+.tg.muted .tgn{text-decoration:line-through;color:#7f8895}
+.tg.muted .tgv{color:#7f8895}
+.tb.mut{opacity:.45;border-style:dashed}
+.tb.mut b{text-decoration:line-through}

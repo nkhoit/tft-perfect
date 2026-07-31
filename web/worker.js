@@ -5,6 +5,7 @@ let DB = null;
 let TK = [];        // trait keys, indexed
 let BP1 = null;     // Int16Array: first breakpoint per trait
 let UNIQ = null;    // Uint8Array: 1 = unique/1-unit trait, excluded from the active count
+let MUTE = null;    // Uint8Array: 1 = user muted this trait, excluded from the active count
 let BPS = [];       // per-trait breakpoint arrays
 let CTR = [];       // per-champion array of trait indices
 
@@ -57,6 +58,9 @@ function search(o) {
   const reqTraits = o.reqTraits || [];   // [{t: traitIdx, n: minCount}]
 
   const nT = TK.length;
+  // muted traits still show on the board, they just stop earning score
+  MUTE = new Uint8Array(nT);
+  for (const t of (o.muted || [])) if (t >= 0 && t < nT) MUTE[t] = 1;
   const counts = new Int16Array(nT);
   for (const e of emblems) counts[e]++;              // emblems are free trait points
 
@@ -134,7 +138,7 @@ function search(o) {
         if (c >= BP1[t]) {
           const ti = tierOf(bp, c);
           active.push([t, c, ti]);
-          if (UNIQ[t]) uniqN++;               // shown, but not scored
+          if (UNIQ[t] || MUTE[t]) uniqN += UNIQ[t] ? 1 : 0;   // shown, but not scored
           else { live++; tierSum += ti + 1; }
         }
       }
@@ -142,8 +146,9 @@ function search(o) {
       if (results.length >= RESULT_CAP) { capped = true; truncated = true; return; }
       const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
       let gold = 0; for (const u of units) gold += DB.champions[u].cost;
-      // uniques last so the meaningful traits read first
-      active.sort((a, b) => (UNIQ[a[0]] - UNIQ[b[0]]) || b[1] - a[1]);
+      // unscored traits (unique or muted) last so the meaningful ones read first
+      const dim = x => (UNIQ[x] || MUTE[x]) ? 1 : 0;
+      active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
       results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold });
       return;
     }
