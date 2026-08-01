@@ -19,6 +19,8 @@ test('the application contains only Set 18', () => {
   assert.equal(data.set, 'set18');
   assert.equal(data.teamPlannerSet, 'TFTSet18');
   assert.match(html, /Set 18/);
+  assert.match(html, /id="share"/);
+  assert.match(html, /src="share-state\.js"/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
   assert.match(app, /ability\.descResolved \|\| ability\.desc/);
@@ -74,6 +76,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /indexedDB/);
   assert.match(app, /TFTSearchMetrics/);
   assert.match(app, /recordMetric\('cancellations'\)/);
+  assert.match(app, /function sharedSearchState/);
+  assert.match(app, /function applySharedSearchState/);
+  assert.match(app, /history\.replaceState/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

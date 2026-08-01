@@ -12,6 +12,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Stackable emblems that add trait points without using board slots.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
 - Debounced, cancellable searches with versioned memory and device caches.
+- Compact shareable URLs that restore every search control.
 - Sorting by active traits, trait tiers, waste, or board cost.
 - Copyable codes for importing any result into TFT's Team Planner.
 - Unique one-unit traits remain visible but do not inflate the active-trait score.

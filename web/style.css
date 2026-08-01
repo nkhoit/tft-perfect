@@ -67,6 +67,7 @@ button:hover{border-color:var(--acc2)}
 .pickctl{margin-left:auto;display:flex;gap:6px}
 .pickctl input{background:var(--panel2);color:var(--txt);border:1px solid var(--edge);
   border-radius:6px;padding:5px 9px;font-size:12px;width:180px}
+.pickctl button:disabled{opacity:.55;cursor:wait}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;margin-top:10px}
 .u{position:relative;border:2px solid var(--edge);border-radius:7px;overflow:hidden;
   cursor:pointer;background:var(--panel2);aspect-ratio:1;transition:border-color .1s,transform .06s}

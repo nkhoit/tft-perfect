@@ -13,6 +13,12 @@ const DEVICE_CACHE_LIMIT = 50;
 const DEVICE_CACHE_DB = 'tft-trait-search-cache';
 const DEVICE_CACHE_STORE = 'results';
 const METRICS_KEY = 'tft-search-metrics-v1';
+const SHARE_SCHEMA_VERSION = 1;
+const DEFAULT_LEVEL = 8;
+const DEFAULT_WASTE = 10;
+const DEFAULT_SORT = ['live', 'cost'];
+const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
+const MAX_SHARED_EMBLEMS = 20;
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
@@ -26,6 +32,7 @@ const { antiStack, breakpoints, comparator, isUnique, scoreFloor, scoresAt,
 
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
+let urlSyncGeneration = 0;
 
 function loadMetrics() {
   const empty = {
@@ -162,6 +169,187 @@ async function deviceCacheSet(key, result) {
 
 function filterable(t) { return Number.isFinite(scoreFloor(t)); }
 
+function resetSearchState() {
+  for (const key of state.keys()) state.set(key, 0);
+  costOn.clear();
+  for (let cost = 1; cost <= 5; cost++) costOn.add(cost);
+  emblems.length = 0;
+  reqTraits.length = 0;
+  muted.clear();
+  $('size').value = DEFAULT_LEVEL;
+  $('sizeV').textContent = DEFAULT_LEVEL;
+  $('waste').value = DEFAULT_WASTE;
+  $('wasteV').textContent = DEFAULT_WASTE;
+  $('sort').value = DEFAULT_SORT[0];
+  $('sort2').value = DEFAULT_SORT[1];
+  $('search').value = '';
+}
+
+function sharedSearchState() {
+  const shared = { v: SHARE_SCHEMA_VERSION };
+  const level = +$('size').value;
+  const waste = +$('waste').value;
+  if (level !== DEFAULT_LEVEL) shared.l = level;
+  if (waste !== DEFAULT_WASTE) shared.w = waste;
+
+  const required = [], excluded = [];
+  for (const champion of DB.champions) {
+    const value = state.get(champion.key);
+    if (value === 1) required.push(champion.key);
+    else if (value === 2) excluded.push(champion.key);
+  }
+  if (required.length) shared.r = required;
+  if (excluded.length) shared.x = excluded;
+
+  const costs = [...costOn].sort((a, b) => a - b);
+  if (costs.length !== 5 || costs.some((cost, index) => cost !== index + 1)) {
+    shared.c = costs;
+  }
+
+  if (reqTraits.length) {
+    shared.t = reqTraits.map(({ key, n }) => [key, n])
+      .sort(([a], [b]) => a.localeCompare(b));
+  }
+  if (muted.size) shared.m = [...muted].sort();
+  if (emblems.length) {
+    const counts = new Map();
+    for (const key of emblems) counts.set(key, (counts.get(key) || 0) + 1);
+    let remaining = MAX_SHARED_EMBLEMS;
+    shared.e = [...counts].sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, count]) => {
+        const accepted = Math.min(count, remaining);
+        remaining -= accepted;
+        return [key, accepted];
+      })
+      .filter(([, count]) => count > 0);
+  }
+
+  const sort = [$('sort').value, $('sort2').value];
+  if (sort[0] !== DEFAULT_SORT[0] || sort[1] !== DEFAULT_SORT[1]) shared.s = sort;
+  const query = $('search').value.trim();
+  if (query) shared.q = query.slice(0, 100);
+  return shared;
+}
+
+function applySharedSearchState(shared) {
+  if (shared.v !== SHARE_SCHEMA_VERSION) {
+    throw new Error(`Unsupported shared-search version: ${shared.v}`);
+  }
+  resetSearchState();
+
+  if (Number.isInteger(shared.l) && shared.l >= 2 && shared.l <= 10) {
+    $('size').value = shared.l;
+    $('sizeV').textContent = shared.l;
+  }
+  if (Number.isInteger(shared.w) && shared.w >= 0 && shared.w <= 10) {
+    $('waste').value = shared.w;
+    $('wasteV').textContent = shared.w;
+  }
+
+  const championKeys = new Set(DB.champions.map(champion => champion.key));
+  const strings = (value, limit) => Array.isArray(value)
+    ? value.filter(item => typeof item === 'string').slice(0, limit)
+    : [];
+  for (const key of strings(shared.r, DB.champions.length)) {
+    if (championKeys.has(key)) state.set(key, 1);
+  }
+  for (const key of strings(shared.x, DB.champions.length)) {
+    if (championKeys.has(key) && state.get(key) === 0) state.set(key, 2);
+  }
+
+  if (Array.isArray(shared.c)) {
+    costOn.clear();
+    for (const cost of shared.c) {
+      if (Number.isInteger(cost) && cost >= 1 && cost <= 5) costOn.add(cost);
+    }
+  }
+
+  for (const entry of Array.isArray(shared.t) ? shared.t.slice(0, 35) : []) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    const [key, n] = entry;
+    const trait = DB.traits[key];
+    if (!trait || !filterable(trait) || !scoringBreakpoints(trait).includes(n)) continue;
+    if (!reqTraits.some(requirement => requirement.key === key)) reqTraits.push({ key, n });
+  }
+
+  for (const key of strings(shared.m, 35)) {
+    if (DB.traits[key] && filterable(DB.traits[key])) muted.add(key);
+  }
+  for (let i = reqTraits.length - 1; i >= 0; i--) {
+    if (muted.has(reqTraits[i].key)) reqTraits.splice(i, 1);
+  }
+
+  const emblemKeys = new Set(emblemable().map(trait => trait.key));
+  let emblemTotal = 0;
+  for (const entry of Array.isArray(shared.e) ? shared.e.slice(0, 35) : []) {
+    if (!Array.isArray(entry) || entry.length !== 2) continue;
+    const [key, count] = entry;
+    if (!emblemKeys.has(key) || !Number.isInteger(count) || count < 1) continue;
+    const accepted = Math.min(count, MAX_SHARED_EMBLEMS - emblemTotal);
+    for (let i = 0; i < accepted; i++) emblems.push(key);
+    emblemTotal += accepted;
+    if (emblemTotal >= MAX_SHARED_EMBLEMS) break;
+  }
+
+  if (Array.isArray(shared.s) && shared.s.length === 2
+      && shared.s.every(sort => VALID_SORTS.has(sort))) {
+    $('sort').value = shared.s[0];
+    $('sort2').value = shared.s[1];
+  }
+  if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
+}
+
+function refreshSearchControls() {
+  for (const button of $('costs').children) {
+    button.classList.toggle('on', costOn.has(+button.dataset.cost));
+  }
+  for (const tile of $('pool').children) {
+    if (!tile.dataset.key) continue;
+    const value = state.get(tile.dataset.key);
+    tile.classList.toggle('req', value === 1);
+    tile.classList.toggle('exc', value === 2);
+  }
+  renderEmblems();
+  renderTraitGrid();
+  applyFilter();
+  updPickN();
+}
+
+function isDefaultSharedState(shared) {
+  return Object.keys(shared).length === 1;
+}
+
+async function shareUrl(shared = sharedSearchState()) {
+  const url = new URL(location.href);
+  if (isDefaultSharedState(shared)) {
+    url.searchParams.delete('s');
+  } else {
+    url.searchParams.set('s', await ShareState.encode(shared));
+  }
+  return url;
+}
+
+async function syncSearchUrl(generation) {
+  if (!dataReady || !DB) return;
+  const sync = ++urlSyncGeneration;
+  const url = await shareUrl();
+  if (sync !== urlSyncGeneration || generation !== searchGeneration) return;
+  history.replaceState(null, '', url);
+}
+
+async function restoreSharedSearch() {
+  const url = new URL(location.href);
+  const token = url.searchParams.get('s');
+  if (!token) return;
+  try {
+    applySharedSearchState(await ShareState.decode(token));
+  } catch (error) {
+    console.warn('Ignoring invalid shared search.', error);
+    url.searchParams.delete('s');
+    history.replaceState(null, '', url);
+  }
+}
+
 function styleAt(tr, n) {
   let s = null;
   for (const st of (tr.styles || [])) {
@@ -237,9 +425,10 @@ function loadData() {
   return fetch('data.json', { cache: 'no-cache' }).then(r => {
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
-  }).then(db => {
+  }).then(async db => {
     DB = db;
     db.champions.forEach(c => state.set(c.key, 0));
+    resetSearchState();
     const build = String(db.gameBuild || '').split('+')[0];
     const nUniq = Object.values(db.traits).filter(t => !filterable(t)).length;
     const nTr = Object.keys(db.traits).length;
@@ -251,6 +440,8 @@ function loadData() {
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
     buildTraitGrid(); updPickN();
+    await restoreSharedSearch();
+    refreshSearchControls();
     dataReady = true;
     run(true);
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
@@ -314,6 +505,7 @@ function buildCosts() {
   for (let c = 1; c <= 5; c++) {
     const b = document.createElement('div');
     b.className = 'cbtn on'; b.textContent = c + '\u00A0★';
+    b.dataset.cost = c;
     b.onclick = () => {
       costOn.has(c) ? costOn.delete(c) : costOn.add(c);
       b.classList.toggle('on', costOn.has(c));
@@ -476,7 +668,38 @@ function renderEmblems() {
 });
 $('sort').addEventListener('change', run);
 $('sort2').addEventListener('change', run);
-$('search').addEventListener('input', applyFilter);
+$('search').addEventListener('input', () => {
+  applyFilter();
+  void syncSearchUrl(searchGeneration);
+});
+$('share').onclick = async () => {
+  const button = $('share');
+  button.disabled = true;
+  let url = null;
+  try {
+    url = await shareUrl();
+    history.replaceState(null, '', url);
+    const copied = () => {
+      clearTimeout(button.copyReset);
+      button.textContent = 'Copied';
+      button.copyReset = setTimeout(() => {
+        button.textContent = 'Copy link';
+      }, 1200);
+    };
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url.toString());
+      copied();
+    } else {
+      window.prompt('Copy this search link:', url.toString());
+    }
+  } catch (error) {
+    console.error('Could not copy the search link.', error);
+    if (url) window.prompt('Copy this search link:', url.toString());
+    else button.textContent = 'Copy failed';
+  } finally {
+    button.disabled = false;
+  }
+};
 $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
   emblems.length = 0; renderEmblems();
@@ -807,6 +1030,7 @@ function dispatchSearch(generation, opts, key) {
 async function executeSearch(generation) {
   if (!dataReady || generation !== searchGeneration) return;
   recordMetric('requests');
+  void syncSearchUrl(generation);
   const opts = buildSearchOptions();
   const version = `${SEARCH_ALGORITHM_VERSION}:${DB.builtAt || DB.gameBuild || DB.set}`;
   const key = searchCacheKey(version, opts);
