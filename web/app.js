@@ -1381,7 +1381,7 @@ function render(m) {
     d.innerHTML =
       `<div class="comphead"><div class="tline">${badges}${deadBadges}</div>` +
       `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
-      (r.uniqN ? `<span class="u">+${r.uniqN} unique</span>` : '') +
+      (r.uniqN ? `<span class="unique">+${r.uniqN} unique</span>` : '') +
       `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
       `<div class="comprow primary">${units}${varTag}${profile}` +
       `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +

@@ -160,7 +160,7 @@ button:hover{border-color:var(--acc2)}
 .score b{font-size:10.5px;color:inherit;font-variant-numeric:tabular-nums}
 .score .active{color:var(--acc);border-color:#2c6242}
 .score .w{color:var(--red);border-color:#66343d}
-.score .u,.score .slots{color:#9aa4b2}
+.score .unique,.score .slots{color:#9aa4b2}
 .copycode{position:relative;display:grid;place-items:center;width:28px;height:28px;
   margin:7px 0 0 auto;padding:0;border:1px solid #344052;border-radius:7px;
   background:#171d28;color:var(--dim);line-height:1;transition:color .1s,border-color .1s,background .1s}

@@ -129,12 +129,15 @@ test('main and alternate compositions share the roster row layout', () => {
   assert.match(app, /class="comprow primary"/);
   assert.match(app, /class="comprow alternate"/);
   assert.match(app, /class="active"><b>\$\{r\.live\}<\/b> traits active/);
+  assert.match(app, /class="unique">\+\$\{r\.uniqN\} unique/);
+  assert.doesNotMatch(app, /class="u">\+\$\{r\.uniqN\} unique/);
   assert.match(app, /class="w"><b>\$\{r\.waste\}<\/b> wasted/);
   assert.match(app, /teamProfile\(r\.units, true\)/);
   assert.match(app, /class="vg"[^>]*>\$\{r\.gold\}g/);
   assert.doesNotMatch(app + css, /compmeta/);
   assert.match(css, /\.comphead\{/);
   assert.match(css, /\.comprow\{/);
+  assert.match(css, /\.score \.unique,\.score \.slots\{/);
 });
 
 test('team composition renders as one segmented strip', () => {
