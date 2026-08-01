@@ -269,3 +269,24 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 #card .qline{margin:0 0 4px}
 #card .qline:last-child{margin:0}
 .meta .u{font-style:normal;color:#6b7280}
+
+/* ---- selected/excluded units strip ---- */
+.sel{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;
+  border-top:1px dashed var(--edge)}
+.selgrp{display:flex;align-items:flex-start;gap:8px}
+.sellbl{flex:0 0 62px;font-size:10px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;padding-top:4px}
+.sellbl.g{color:var(--acc)} .sellbl.r{color:var(--red)}
+.selchips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.selc{display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--edge);border-left-width:3px;
+  border-radius:6px;padding:2px 6px 2px 3px;font-size:11px;white-space:nowrap;
+  transition:border-color .1s,color .1s}
+.selc img{width:18px;height:18px;border-radius:4px;object-fit:cover}
+.selc .x{color:var(--dim);font-size:9px;font-weight:700;margin-left:1px}
+.selc:hover{border-color:var(--red);color:var(--red)}
+.selc:hover .x{color:var(--red)}
+.selc.k1{border-left-color:#9aa4b2} .selc.k2{border-left-color:#4ac07a}
+.selc.k3{border-left-color:#4a90d9} .selc.k4{border-left-color:#c061d0}
+.selc.k5{border-left-color:#e0a13a}
+@media(max-width:820px){ .selgrp{flex-direction:column;gap:4px} .sellbl{flex:none} }

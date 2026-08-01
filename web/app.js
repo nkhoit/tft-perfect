@@ -216,7 +216,40 @@ function updPickN() {
   let r = 0, x = 0;
   for (const v of state.values()) { if (v === 1) r++; else if (v === 2) x++; }
   $('pickN').textContent = `${r} required · ${x} excluded`;
+  renderSel();
 }
+
+// The pool is 73 tiles deep and your picks scatter across five cost rows, so a
+// selection is easy to lose track of. Mirror them into one strip.
+function renderSel() {
+  const req = [], exc = [];
+  for (const c of DB.champions) {
+    const v = state.get(c.key);
+    if (v === 1) req.push(c); else if (v === 2) exc.push(c);
+  }
+  const fill = (el, arr, kind) => {
+    el.innerHTML = arr
+      .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+      .map(c => `<span class="selc k${c.cost}" data-key="${c.key}" data-kind="${kind}" ` +
+        `title="${c.name} — click to clear"><img loading="lazy" src="${c.icon}">` +
+        `${c.name}<b class="x">\u2715</b></span>`).join('');
+  };
+  fill($('selReqC'), req, 'req');
+  fill($('selExcC'), exc, 'exc');
+  $('selReq').hidden = !req.length;
+  $('selExc').hidden = !exc.length;
+  $('sel').hidden = !req.length && !exc.length;
+}
+
+// Clearing from the strip has to drive the pool tile too, or the two views drift.
+$('sel').addEventListener('click', e => {
+  const c = e.target.closest('.selc');
+  if (!c) return;
+  state.set(c.dataset.key, 0);
+  const tile = [...$('pool').children].find(d => d.dataset.key === c.dataset.key);
+  if (tile) tile.classList.remove('req', 'exc');
+  applyFilter(); updPickN(); run();
+});
 
 // Only traits with real breakpoints can exist as emblems -- a unique trait
 // belongs to exactly one champion and has no spatula version in game.
