@@ -253,8 +253,11 @@ button:hover{border-color:var(--acc2)}
 #card .ph{color:#7f8895;font-style:italic;cursor:help}
 #card .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
 #card .cab b{font-size:12px;color:#eef2f7}
+#card .apara{margin:0 0 7px;color:#aab3c0}
+#card .apara:last-child{margin-bottom:0}
+#card .alabel{color:#eef2f7;font-weight:800}
 #card .asections{display:flex;flex-direction:column;gap:5px;margin-top:5px}
-#card .asections .clead{margin:0}
+#card .asections .apara{margin:0}
 #card .amode{padding:6px 7px;background:#141a24;border:1px solid #252d3a;
   border-left-width:2px;border-radius:5px}
 #card .amode.ad{border-left-color:#d4a84f}
@@ -266,6 +269,7 @@ button:hover{border-color:var(--acc2)}
 #card .amodestat{display:inline-flex;align-items:center;gap:1px;margin-left:3px}
 #card .amodekey .si{width:12px;height:12px;margin:0}
 #card .amodetext{display:block;color:#c3cad6;line-height:1.4}
+#card .amodetext .apara{margin:0;color:inherit}
 #card .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 #card .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
   border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}

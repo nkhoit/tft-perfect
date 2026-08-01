@@ -52,6 +52,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /class="crole"/);
   assert.match(app, /scaleDA:/);
   assert.match(css, /\.crole\{/);
+  assert.match(app, /function abilityText/);
+  assert.match(app, /class="alabel"/);
+  assert.match(css, /\.apara\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -109,6 +112,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.equal(champions.get('Shen').role, 'APTank');
   assert.match(champions.get('Shen').ability.descResolved, /%i:scaleAP%/);
   assert.equal(data.champions.filter(champion => champion.role).length, 73);
+  assert.match(champions.get('Teemo').ability.descResolved, /\n\nEach cast/);
+  assert.match(champions.get('Teemo').ability.descResolved, /\nGreen:/);
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

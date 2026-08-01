@@ -409,6 +409,20 @@ function roleBadge(role) {
     `<img src="${icon}" alt=""><span>${label}</span></div>`;
 }
 
+function abilityLine(line) {
+  return cleanText(line).replace(
+    /^([A-Z][A-Za-z ]{0,24}:)(?=\s|$)/,
+    '<b class="alabel">$1</b>');
+}
+
+function abilityText(text) {
+  return String(text || '').split(/\n{2,}/)
+    .map(paragraph => paragraph.split(/\n/).filter(Boolean).map(abilityLine).join('<br>'))
+    .filter(Boolean)
+    .map(paragraph => `<p class="apara">${paragraph}</p>`)
+    .join('');
+}
+
 function cleanText(s) {
   if (!s) return '';
   return s
@@ -458,16 +472,16 @@ function traitCard(key) {
 
 function abilityDescription(ability) {
   if (!(ability.sections || []).length) {
-    return `<p class="clead">${cleanText(ability.descResolved || ability.desc)}</p>`;
+    return abilityText(ability.descResolved || ability.desc);
   }
   const sections = ability.sections.map(section => {
-    if (!section.mode) return `<p class="clead ashared">${cleanText(section.desc)}</p>`;
+    if (!section.mode) return `<div class="ashared">${abilityText(section.desc)}</div>`;
     const mode = section.mode.toUpperCase();
     const icon = statIcon(mode === 'AD' ? 'scaleAD' : 'scaleAP');
     return `<div class="amode ${mode.toLowerCase()}">` +
       `<span class="amodekey"><b>Adaptor</b>` +
       `<span class="amodestat">${icon}<b>${mode}</b></span></span>` +
-      `<span class="amodetext">${cleanText(section.desc)}</span></div>`;
+      `<div class="amodetext">${abilityText(section.desc)}</div></div>`;
   }).join('');
   return `<div class="asections">${sections}</div>`;
 }

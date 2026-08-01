@@ -130,14 +130,24 @@ def clean(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
-def clean_lolchess(s, keep_icons=False):
-    s = re.sub(r"<br\s*/?>", " ", s or "", flags=re.I)
+def clean_lolchess(s, keep_icons=False, keep_breaks=False):
+    s = html.unescape(s or "")
+    if keep_breaks:
+        s = re.sub(r"(?:\s*<br\s*/?>\s*){2,}", "\n\n", s, flags=re.I)
+        s = re.sub(r"\s*<br\s*/?>\s*", "\n", s, flags=re.I)
+    else:
+        s = re.sub(r"<br\s*/?>", " ", s, flags=re.I)
     if not keep_icons:
         s = re.sub(r"%i:\w+%", "", s, flags=re.I)
         # Icons often sit inside parens ("320(%i:scaleAD%)"); stripping the
         # icon alone would leave bare "()" litter in player-facing text.
         s = re.sub(r"\(\s*\)", "", s)
-    return clean(html.unescape(s))
+    s = re.sub(r"<[^>]+>", "", s)
+    if keep_breaks:
+        s = re.sub(r"[^\S\n]+", " ", s)
+        s = re.sub(r" *\n *", "\n", s)
+        return re.sub(r"\n{3,}", "\n\n", s).strip()
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def adaptor_ability_sections(s):
@@ -622,7 +632,8 @@ def main():
                 c["role"] = role
             else:
                 mechanic_errors.append(f"{c['key']} has unknown unit role {role!r}")
-        resolved = clean_lolchess(skill.get("desc"), keep_icons=True)
+        resolved = clean_lolchess(
+            skill.get("desc"), keep_icons=True, keep_breaks=True)
         if resolved:
             ability = c.setdefault("ability", {"name": skill.get("name") or "",
                                                 "desc": ""})
