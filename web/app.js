@@ -433,7 +433,8 @@ function abilityDescription(ability) {
     const mode = section.mode.toUpperCase();
     const icon = statIcon(mode === 'AD' ? 'scaleAD' : 'scaleAP');
     return `<div class="amode ${mode.toLowerCase()}">` +
-      `<span class="amodekey">${icon}<b>${mode}</b></span>` +
+      `<span class="amodekey"><b>Adaptor</b>` +
+      `<span class="amodestat">${icon}<b>${mode}</b></span></span>` +
       `<span class="amodetext">${cleanText(section.desc)}</span></div>`;
   }).join('');
   return `<div class="asections">${sections}</div>`;

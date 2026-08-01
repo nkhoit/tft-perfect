@@ -41,6 +41,8 @@ test('the application contains only Set 18', () => {
   assert.match(css, /\.si\{/);
   assert.match(app, /function abilityDescription/);
   assert.match(app, /class="amode /);
+  assert.match(app, /class="amodekey"><b>Adaptor<\/b>/);
+  assert.match(app, /class="amodestat"/);
   assert.match(css, /\.amode\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
