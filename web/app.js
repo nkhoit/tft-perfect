@@ -310,11 +310,23 @@ function unitCard(key) {
     const t = DB.traits[k];
     return `<span class="cch">${t?.icon ? `<img src="${t.icon}">` : ''}${t?.name || k}</span>`;
   }).join('');
-  const mana = c.mana ? `<div class="crow"><span class="ctx">Mana ${c.mana.start} → ${c.mana.max}</span></div>` : '';
+  // Mana reads as a cost, not a transition: 0/45 means "needs 45, starts at 0".
+  const mana = c.mana
+    ? `<div class="cstat"><span>Mana</span><b>${c.mana.start}/${c.mana.max}</b></div>` : '';
+  const s = c.stats;
+  const stats = s ? `<div class="cstats">
+      <div class="cstat"><span>Health</span><b>${s.hp}</b></div>
+      <div class="cstat"><span>Damage</span><b>${s.ad}</b></div>
+      <div class="cstat"><span>Atk Spd</span><b>${s.as}</b></div>
+      <div class="cstat"><span>Armor</span><b>${s.armor}</b></div>
+      <div class="cstat"><span>MR</span><b>${s.mr}</b></div>
+      <div class="cstat"><span>Range</span><b>${s.range} hex</b></div>
+      ${mana}</div>
+    <p class="cnote">Base stats at 1★. 2★ ≈ 1.8× · 3★ ≈ 3.24× Health and Damage.</p>` : mana;
   return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
       <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
-    <div class="cchs">${traits}</div>${mana}
-    <p class="cnote">Ability text isn't in the PBE data yet.</p>`;
+    <div class="cchs">${traits}</div>${stats}
+    <p class="cnote">Ability text lands with the 18.1 patch.</p>`;
 }
 
 let cardEl = null;
