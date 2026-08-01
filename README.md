@@ -71,6 +71,7 @@ npm run check
 [CommunityDragon](https://communitydragon.org), Riot's team-planner data,
 [LoLChess](https://lolchess.gg), and a checked-in origin/class taxonomy sourced
 from [Blitz](https://utils.iesdev.com/static/json/tftTest/set18/en_us/traits).
+Placeholder PBE ability names are corrected from [MetaTFT](https://www.metatft.com/new-set#Units).
 
 ```bash
 python3 -m pip install -r requirements.txt

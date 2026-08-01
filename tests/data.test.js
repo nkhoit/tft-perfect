@@ -275,7 +275,11 @@ test('the generated data and checked-in roster are internally consistent', () =>
     const origin = lux.traits.find(trait => trait !== 'Avatar');
     assert.equal(lux.group, 'Lux');
     assert.equal(lux.traitPoints[origin], 2);
+    assert.equal(lux.ability.name, 'Final Spark');
   }
+  assert.equal(champions.get('Raptor').ability.name, 'Flock Family');
+  assert.match(builder, /ABILITY_NAME_OVERRIDES = \{/);
+  assert.match(builder, /"Raptor": "Flock Family"/);
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
   assert.ok(data.traits.Adaptor.tiers.every(tier =>

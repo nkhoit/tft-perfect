@@ -111,6 +111,14 @@ LUX_ART = {"Blossom": "blossom", "Coven": "coven", "Elderwood": "elderwood",
 for _origin, _art in LUX_ART.items():
     ICON_OVERRIDE[f"TFT18_Lux{_origin}"] = f"game/assets/characters/tft18_lux/tft18_lux_{_art}_square.png"
 
+# PBE bins still expose placeholder spell names for these units. MetaTFT's
+# Set 18 unit page provides the player-facing names:
+# https://www.metatft.com/new-set#Units
+ABILITY_NAME_OVERRIDES = {
+    "Raptor": "Flock Family",
+    **{f"Lux{origin}": "Final Spark" for origin in LUX_ART},
+}
+
 
 def get(url, raw=False, timeout=300):
     req = urllib.request.Request(url, headers=UA)
@@ -459,6 +467,8 @@ def fetch_champion_data(names, strings):
                 ability = ability_from(doc, strings)
             except Exception:
                 pass
+        if ability and name in ABILITY_NAME_OVERRIDES:
+            ability["name"] = ABILITY_NAME_OVERRIDES[name]
         return name, {"stats": stats, "ability": ability}
 
     out = {}
@@ -706,8 +716,8 @@ def main():
         if resolved:
             ability = c.setdefault("ability", {"name": skill.get("name") or "",
                                                 "desc": ""})
-            # Name and desc remain first-party even while PBE spell values are
-            # placeholders; numeric fields are explicitly third-party.
+            # Names come from Riot bins or checked-in overrides. Description
+            # numbers remain explicitly third-party while PBE values are placeholders.
             ability.update({"descResolved": resolved,
                             "stats": [clean_lolchess(x)
                                       for x in skill.get("stats") or []],
@@ -800,13 +810,20 @@ def main():
     no_ability = [c["name"] for c in champions if not c.get("ability")]
     duplicate_champions = sorted({c["key"] for c in champions
                                   if sum(x["key"] == c["key"] for x in champions) > 1})
+    ability_name_failures = [
+        f"{c['key']}: {(c.get('ability') or {}).get('name')!r}"
+        for c in champions
+        if c["key"] in ABILITY_NAME_OVERRIDES
+        and (c.get("ability") or {}).get("name") != ABILITY_NAME_OVERRIDES[c["key"]]
+    ]
 
 
     out = {"set": "set18", "setName": "Enchanted Wilds",
            "teamPlannerSet": "TFTSet18",
            "gameBuild": "PBE TFTSet18",
            "source": ("checked-in reveal roster + CommunityDragon PBE TFTSet18 "
-                      "+ Riot team planner + LoLChess + checked-in Blitz trait taxonomy"),
+                      "+ Riot team planner + LoLChess + checked-in Blitz trait taxonomy "
+                      "+ checked-in MetaTFT ability names"),
            "note": "PBE data — breakpoints are live-PBE and may shift before 18.1 launch (2026-08-12).",
            "abilityNote": ("Ability numbers and structured stat lines sourced from "
                            "LoLChess championRefs en/set18 on "
@@ -837,6 +854,8 @@ def main():
         errors.append(f"{len(no_ability)} champions without ability text: {no_ability}")
     if duplicate_champions:
         errors.append(f"duplicate champion keys: {duplicate_champions}")
+    if ability_name_failures:
+        errors.append(f"ability name overrides failed: {ability_name_failures}")
     if nostats:
         errors.append(f"{len(nostats)} champions without stats: {nostats}")
     if missing_roles:
