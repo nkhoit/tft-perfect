@@ -459,6 +459,9 @@ function traitCard(key) {
       `<img class="tstar" src="${THREE_STAR_ICON}" alt="3-star"></span>` +
       `<span>${cleanText(upgrade.desc)}</span></div>`).join('');
   const upgradeList = upgrades ? `<div class="tupgrades">${upgrades}</div>` : '';
+  const details = (t.details || []).map(detail =>
+    `<div class="tdetail">${abilityLine(detail)}</div>`).join('');
+  const detailList = details ? `<div class="tdetails">${details}</div>` : '';
   const rows = (t.bp || []).map((n, i) => {
     const content = (tiers[i] || '') + (i === 0 ? upgradeList : '');
     return content
@@ -467,7 +470,7 @@ function traitCard(key) {
   }).join('');
   return `<div class="chd">${t.icon ? `<img src="${t.icon}">` : ''}
       <div><b>${t.name}</b><span class="csub">${(t.bp || []).join(' / ')}</span></div></div>` +
-    (lead ? `<p class="clead">${lead}</p>` : '') + rows;
+    (lead ? `<p class="clead">${lead}</p>` : '') + detailList + rows;
 }
 
 function abilityDescription(ability) {

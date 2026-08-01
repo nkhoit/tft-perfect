@@ -471,6 +471,7 @@ def main():
         rows = re.findall(r"<row>(.*?)</row>", t.get("desc") or "", re.S)
         tiers = []
         upgrades = []
+        details = []
         if len(rows) == len(effs):
             # Each row opens with its own "(5)" which the UI already prints as
             # the breakpoint pip -- strip it so it isn't shown twice.
@@ -499,6 +500,17 @@ def main():
             re.split(r"<row>", t.get("desc") or "", maxsplit=1)[0],
             effs[0] if effs else {}))
         desc = clean(t.get("desc"))
+
+        if key == "Primal":
+            tiers = ["Choose a blessing.", "Choose a second blessing."]
+        elif key == "Summoner" and effs:
+            prefix = re.split(r"<row>", t.get("desc") or "", maxsplit=1)[0]
+            parts = [clean(part) for part in
+                     re.split(r"<br\s*/?>", render_row(prefix, effs[0]),
+                              flags=re.I)]
+            parts = [part for part in parts if part]
+            if len(parts) == 5:
+                lead, details = parts[0], parts[1:]
 
         # PBE's Adaptor rows contain a bare "OR" where the client renders the
         # AD and AP text icons. Restore the transport tokens for the web card.
@@ -531,6 +543,8 @@ def main():
                  "desc": desc}
         if upgrades:
             trait["upgrades"] = upgrades
+        if details:
+            trait["details"] = details
         if key in TRAIT_TEAM_SIZE:
             trait["teamSize"] = TRAIT_TEAM_SIZE[key]
         traits[key] = trait
@@ -775,6 +789,11 @@ def main():
     solar_upgrades = (traits.get("Solar") or {}).get("upgrades", [])
     if [upgrade.get("count") for upgrade in solar_upgrades] != [1, 3, 5, 8]:
         errors.append("Solar three-star upgrades are missing or malformed")
+    if (traits.get("Primal") or {}).get("tiers") != [
+            "Choose a blessing.", "Choose a second blessing."]:
+        errors.append("Primal tier descriptions are missing")
+    if len((traits.get("Summoner") or {}).get("details", [])) != 4:
+        errors.append("Summoner unit details are missing")
     errors.extend(mechanic_errors)
     for trait_key, tiers in TRAIT_TEAM_SIZE.items():
         trait = traits.get(trait_key)

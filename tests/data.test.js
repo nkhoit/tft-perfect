@@ -55,6 +55,8 @@ test('the application contains only Set 18', () => {
   assert.match(app, /function abilityText/);
   assert.match(app, /class="alabel"/);
   assert.match(css, /\.apara\{/);
+  assert.match(app, /class="tdetails"/);
+  assert.match(css, /\.tdetail\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -114,6 +116,15 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.equal(data.champions.filter(champion => champion.role).length, 73);
   assert.match(champions.get('Teemo').ability.descResolved, /\n\nEach cast/);
   assert.match(champions.get('Teemo').ability.descResolved, /\nGreen:/);
+  assert.deepEqual(data.traits.Primal.tiers,
+    ['Choose a blessing.', 'Choose a second blessing.']);
+  assert.equal(data.traits.Summoner.lead, 'Summoners empower their summons in different ways.');
+  assert.deepEqual(data.traits.Summoner.details, [
+    'Yorick: +30% Health',
+    'Azir: +45% Damage',
+    'Mama Beak: +45% Damage',
+    'Zyra: +4 Plant Attacks',
+  ]);
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

@@ -231,6 +231,8 @@ button:hover{border-color:var(--acc2)}
 #card .csub.k1{color:#9aa4b2}#card .csub.k2{color:#4ac07a}#card .csub.k3{color:#4a90d9}
 #card .csub.k4{color:#c061d0}#card .csub.k5{color:#e0a13a}
 #card .clead{margin:0 0 7px;color:#aab3c0}
+#card .tdetails{margin:0 0 7px;color:#c3cad6}
+#card .tdetail{line-height:1.45}
 #card .crow{display:flex;gap:7px;padding:3px 0;border-top:1px solid #1e2531}
 #card .cbp{flex:none;min-width:19px;height:17px;border-radius:4px;font-size:10px;
   font-weight:800;display:flex;align-items:center;justify-content:center;
