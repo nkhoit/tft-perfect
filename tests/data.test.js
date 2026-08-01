@@ -32,6 +32,10 @@ test('the application contains only Set 18', () => {
   assert.match(css, /#embGrid\{grid-template-columns:repeat\(6,1fr\)\}/);
   assert.match(app, /function unitPortrait/);
   assert.match(app, /class="un"/);
+  assert.match(app, /<button type="button" class="vtag" aria-expanded="false"/);
+  assert.match(app, /alternate\$\{nv > 1 \? 's' : ''\}/);
+  assert.match(app, /vt\.setAttribute\('aria-expanded', String\(open\)\)/);
+  assert.match(css, /\.vchev\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

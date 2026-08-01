@@ -596,7 +596,12 @@ function render(m) {
     // global toggle, because the question is "swap THIS board", not "show me
     // every permutation of everything".
     const nv = (r.variants || []).length;
-    const varTag = nv ? `<span class="vtag" title="Same traits, same counts — different units. Click to show.">${nv} variant${nv > 1 ? 's' : ''}</span>` : '';
+    const varTag = nv
+      ? `<button type="button" class="vtag" aria-expanded="false" data-count="${nv}" ` +
+        `aria-label="Show ${nv} alternate composition${nv > 1 ? 's' : ''}" ` +
+        `title="Same traits and counts, different units">${nv} alternate${nv > 1 ? 's' : ''}` +
+        `<i class="vchev" aria-hidden="true"></i></button>`
+      : '';
     const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
       `<div class="vrow">` + v.units.map(i => DB.champions[i])
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
@@ -648,7 +653,14 @@ $('list').addEventListener('click', (e) => {
     return;
   }
   const vt = e.target.closest('.vtag');
-  if (vt) { vt.closest('.comp').classList.toggle('vopen'); return; }
+  if (vt) {
+    const open = vt.closest('.comp').classList.toggle('vopen');
+    vt.setAttribute('aria-expanded', String(open));
+    vt.setAttribute('aria-label',
+      `${open ? 'Hide' : 'Show'} ${vt.dataset.count} alternate composition` +
+      (vt.dataset.count === '1' ? '' : 's'));
+    return;
+  }
   const b = e.target.closest('.tb');
   if (!b || !b.dataset.tk) return;
   const key = b.dataset.tk, n = +b.dataset.tn;

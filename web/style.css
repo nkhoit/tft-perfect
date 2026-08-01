@@ -269,11 +269,16 @@ label.sub select{margin-top:3px}
 .cstat b{color:#e6e9ef;font-weight:600}
 
 /* ---- per-board variants: same trait signature, different roster ---- */
-.vtag{display:inline-flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;
-  color:#9aa4b2;background:#1b2130;border:1px dashed #3a4354;border-radius:6px;
-  padding:2px 7px;user-select:none;white-space:nowrap}
-.vtag:hover{color:#3ddc84;border-color:#3ddc84}
-.comp.vopen .vtag{color:#3ddc84;border-style:solid;border-color:#3ddc84}
+.vtag{appearance:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  font-size:10px;font-weight:600;color:#8f98a8;background:transparent;border:0;
+  border-radius:5px;padding:4px 6px;user-select:none;white-space:nowrap}
+.vtag:hover{color:var(--txt);background:#1b2130}
+.vtag:focus-visible{color:var(--txt);background:#1b2130;outline:1px solid var(--acc2)}
+.comp.vopen .vtag{color:#b9c3d1;background:#1b2130}
+.vchev{width:6px;height:6px;border-right:1.5px solid currentColor;
+  border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-top:-3px;
+  transition:transform .12s,margin-top .12s}
+.comp.vopen .vchev{transform:rotate(225deg);margin-top:3px}
 .vlist{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed #232a36;gap:5px}
 .comp>.vlist{grid-column:1/-1;margin-top:0}
 .comp.vopen .vlist{display:flex;flex-direction:column}
