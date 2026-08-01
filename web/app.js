@@ -243,23 +243,16 @@ function buildEmblemGrid() {
 function filterEmblems() {}
 
 function renderEmblems() {
-  const el = $('embList'); el.innerHTML = '';
-  emblems.forEach((k, i) => {
-    const t = DB.traits[k];
-    const d = document.createElement('span');
-    d.className = 'emb';
-    d.innerHTML = (t.icon ? `<img src="${t.icon}">` : '') + t.name + ' ✕';
-    d.onclick = () => { emblems.splice(i, 1); renderEmblems(); run(); };
-    el.appendChild(d);
-  });
+  // No chip list -- the grid tile itself carries the count, same as the
+  // require-traits panel. Right click a tile to remove one.
   $('embN').textContent = emblems.length;
   // Stacked emblems show as xN on the grid tile so three of a kind is legible.
   const n = {};
   emblems.forEach(k => n[k] = (n[k] || 0) + 1);
   for (const d of $('embGrid').children) {
     const c = n[d.dataset.key] || 0;
-    d.classList.toggle('req', c > 0);
-    d.querySelector('.tgv').textContent = c > 1 ? '\u00d7' + c : (c ? '\u2713' : '');
+    d.classList.toggle('on', c > 0);
+    d.querySelector('.tgv').textContent = c ? String(c) : '';
   }
 }
 
