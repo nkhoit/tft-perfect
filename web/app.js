@@ -464,15 +464,26 @@ function unitCard(key) {
   const ability = a
     ? `<div class="cab"><b>${a.name}</b></div><p class="clead">${cleanText(a.desc)}</p>`
     : `<p class="cnote">No ability text in the PBE data for this unit.</p>`;
-  const s = c.stats;
-  const stats = s ? `<div class="cstats">
-      <div class="cstat"><span>Health</span><b>${s.hp}</b></div>
-      <div class="cstat"><span>Damage</span><b>${s.ad}</b></div>
-      <div class="cstat"><span>Atk Spd</span><b>${s.as}</b></div>
-      <div class="cstat"><span>Armor</span><b>${s.armor}</b></div>
-      <div class="cstat"><span>MR</span><b>${s.mr}</b></div>
-      <div class="cstat"><span>Range</span><b>${s.range} hex</b></div>
-      ${mana}</div>` : mana;
+  // Stats come from the raw character bins. Any given unit can be missing a
+  // field (Kayle has no baseDamage -- she transforms), so each row is dropped
+  // rather than printed as "undefined".
+  const s = c.stats || {};
+  const row = (label, v) =>
+    v == null ? '' : `<div class="cstat"><span>${label}</span><b>${v}</b></div>`;
+  const n1 = v => (v == null ? null : Math.round(v * 100) / 100);
+  const body =
+    row('Health', n1(s.hp)) +
+    row('Damage', n1(s.ad)) +
+    row('Atk Spd', n1(s.as)) +
+    row('Armor', n1(s.armor)) +
+    row('MR', n1(s.mr)) +
+    // attackRange is in game units; ~180 per hex. Show hexes, keep the raw
+    // number on hover for anyone who wants it.
+    (s.hexRange == null ? '' :
+      `<div class="cstat"><span>Range</span><b title="${s.range} units">` +
+      `${s.hexRange} hex</b></div>`) +
+    mana;
+  const stats = body ? `<div class="cstats">${body}</div>` : '';
   return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
       <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
     <div class="cchs">${traits}</div>${stats}${ability}`;

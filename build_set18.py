@@ -111,6 +111,97 @@ def clean(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+# Champion stats live in the raw character bins, NOT in cdragon/tft/en_us.json.
+# That feed's Set 18 block only carries the 19 mock/encounter units. The real
+# roster is filed under DA_18_<name> (plus a pile of one-off stems), which is
+# why a TFT18_ prefix search finds nothing but art.
+LUX_BIN = {"Blossom": "blossom", "Coven": "coven", "Elderwood": "elderwood",
+           "Eldritch": "blackthorn", "Fae": "fae", "Inferno": "inferno",
+           "Lunar": "moonbeam", "Primal": "primal", "Solar": "sunbeam"}
+BIN_OVERRIDE = {
+    "Pebbles": "da_18_sentry",          # internally a Sentry, not a krug
+    "AncientSentinel": "da_sentinel18",
+    "KogMaw": "da_kogmaw18_ad",
+    "Raptor": "da_crimsonraptor18",
+    "Gnar": "da_18_gnarbig",            # small Gnar is a separate record
+    "Krug": "da_krug18",
+    "Akali": "da_18_akali_ad",
+}
+
+
+def bin_candidates(name):
+    """Every stem Riot has used for a Set 18 champion record, best guess first."""
+    out = []
+    if name in BIN_OVERRIDE:
+        out.append(BIN_OVERRIDE[name])
+    if name.startswith("Lux") and name != "Lux":
+        art = LUX_BIN.get(name[3:], name[3:].lower())
+        out += [f"da_18_lux_{art}", f"da_lux18_{art}"]
+    st = name.lower()
+    out += [f"da_18_{st}", f"tft18_{st}", f"da_18_{st}_ad",
+            f"da_{st}18", f"da_{st}18_ad", f"da_{st}18_ap"]
+    return out
+
+
+def char_record(doc):
+    for v in (doc or {}).values():
+        if isinstance(v, dict) and v.get("__type") == "TFTCharacterRecord":
+            return v
+    return None
+
+
+def stats_from(rec):
+    """Pull the handful of numbers a player actually reads off a unit card."""
+    def mod(key):
+        v = rec.get(key + "Modifiable")
+        if isinstance(v, dict):
+            return v.get("baseValue")
+        return v if isinstance(v, (int, float)) else None
+
+    def plain(key):
+        v = rec.get(key)
+        if isinstance(v, dict):          # baseMR arrives as a ModifiableFloat
+            return v.get("baseValue")
+        return v if isinstance(v, (int, float)) else None
+
+    out = {
+        "hp": mod("baseHP"),
+        "ad": mod("baseDamage"),
+        "armor": mod("baseArmor"),
+        "mr": plain("baseMR"),
+        "as": mod("attackSpeed"),
+        "range": mod("attackRange"),
+        "crit": plain("baseCritChance"),
+    }
+    # Attack range is in game units; 180 = melee, one hex is ~180.
+    if out["range"]:
+        out["hexRange"] = round(out["range"] / 180.0)
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def fetch_stats(names):
+    """Resolve + download every champion bin in parallel. Returns {name: stats}."""
+    import concurrent.futures
+
+    def one(name):
+        for stem in bin_candidates(name):
+            url = f"{PBE}/game/characters/{stem}.cdtb.bin.json"
+            try:
+                rec = char_record(get(url, timeout=120))
+            except Exception:
+                continue
+            if rec:
+                return name, stats_from(rec)
+        return name, None
+
+    out = {}
+    with concurrent.futures.ThreadPoolExecutor(10) as ex:
+        for name, st in ex.map(one, names):
+            if st:
+                out[name] = st
+    return out
+
+
 def main():
     print("loading Set 18 reveal roster ...")
     reveal = json.load(open(REVEAL))
@@ -220,6 +311,17 @@ def main():
         champions.append({"key": api.replace("TFT18_", ""), "name": disp,
                           "cost": c["cost"], "traits": keys, "icon": icon,
                           "mana": c.get("mana")})
+
+    print("fetching champion stat bins (73 requests) ...")
+    stats = fetch_stats([c["key"] for c in champions])
+    for c in champions:
+        st = stats.get(c["key"])
+        if st:
+            c["stats"] = st
+    print(f"  stats resolved for {len(stats)}/{len(champions)} champions")
+    nostats = [c["key"] for c in champions if "stats" not in c]
+    if nostats:
+        print("  ! no stat bin found:", nostats)
 
     champions.sort(key=lambda c: (c["cost"], c["name"]))
 
