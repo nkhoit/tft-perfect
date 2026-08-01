@@ -42,6 +42,12 @@ STYLE_NAMES = {1: "bronze", 2: "silver", 3: "silver", 4: "unique",
 # The pre-PBE reveal capture used names Riot has since changed on PBE.
 TRAIT_ALIAS = {"Eldritch": "Blackthorn"}
 
+# Structured board-capacity rules are kept explicit instead of parsed from
+# player-facing trait text.
+TRAIT_TEAM_SIZE = {
+    "Riftbeast": [{"min": 10, "slots": 2}],
+}
+
 # Units whose art doesn't follow the tft18_<name>/tft18_<name>_square.png rule.
 ICON_OVERRIDE = {
     # Pebbles is internally DA_18_Sentry, NOT a krug. Its ability is "Azure Laser".
@@ -453,16 +459,19 @@ def main():
                 icon = ASSET + cand
                 break
 
-        traits[key] = {"key": key, "name": name, "icon": icon,
-                       "bp": bp or [1], "styles": styles,
-                       "lead": lead, "tiers": tiers,
-                       "desc": clean(t.get("desc"))}
+        trait = {"key": key, "name": name, "icon": icon,
+                 "bp": bp or [1], "styles": styles,
+                 "lead": lead, "tiers": tiers,
+                 "desc": clean(t.get("desc"))}
+        if key in TRAIT_TEAM_SIZE:
+            trait["teamSize"] = TRAIT_TEAM_SIZE[key]
+        traits[key] = trait
         bykey[key] = key
         bykey[name] = key
         bykey[re.sub(r"[^A-Za-z0-9]", "", t["apiName"].split("_")[-1])] = key
 
     # ---- champions: reveal roster, resolve trait keys + icons ----------
-    champions, unresolved = [], set()
+    champions, unresolved, mechanic_errors = [], set(), []
     for c in reveal:
         api = c["apiName"]                      # TFT18_Akali
         stem = api.lower()                      # tft18_akali
@@ -499,9 +508,35 @@ def main():
         if disp.startswith("Lux") and disp != "Lux":
             disp = f"Lux ({disp[3:]})"
 
-        champions.append({"key": api.replace("TFT18_", ""), "name": disp,
-                          "cost": c["cost"], "traits": keys, "icon": icon,
-                          "mana": c.get("mana")})
+        champion = {"key": api.replace("TFT18_", ""), "name": disp,
+                    "cost": c["cost"], "traits": keys, "icon": icon,
+                    "mana": c.get("mana")}
+        slots = c.get("slots", 1)
+        if not isinstance(slots, int) or slots < 1:
+            mechanic_errors.append(f"{api} has invalid slot cost {slots!r}")
+        elif slots != 1:
+            champion["slots"] = slots
+        if c.get("group"):
+            champion["group"] = c["group"]
+
+        trait_points = {}
+        for raw_name, points in (c.get("traitPoints") or {}).items():
+            trait_name = TRAIT_ALIAS.get(raw_name, raw_name)
+            trait_key = (bykey.get(trait_name)
+                         or bykey.get(re.sub(r"[^A-Za-z0-9]", "", trait_name)))
+            if not trait_key or trait_key not in keys:
+                mechanic_errors.append(
+                    f"{api} traitPoints references unowned trait {raw_name!r}")
+                continue
+            if not isinstance(points, int) or points < 1:
+                mechanic_errors.append(
+                    f"{api} has invalid {raw_name} trait points {points!r}")
+                continue
+            if points != 1:
+                trait_points[trait_key] = points
+        if trait_points:
+            champion["traitPoints"] = trait_points
+        champions.append(champion)
 
     print("loading cached PBE string table (~25MB) ...")
     strings = stringtable()
@@ -648,6 +683,16 @@ def main():
         errors.append(f"{len(planner_failures)} team-planner joins failed: {planner_failures}")
     if nresolved != len(champions):
         errors.append(f"numeric ability descriptions resolved for only {nresolved}/{len(champions)} champions")
+    errors.extend(mechanic_errors)
+    for trait_key, tiers in TRAIT_TEAM_SIZE.items():
+        trait = traits.get(trait_key)
+        if not trait:
+            errors.append(f"team-size rule references missing trait {trait_key}")
+            continue
+        invalid = [tier for tier in tiers if tier["min"] not in trait["bp"]
+                   or not isinstance(tier["slots"], int) or tier["slots"] < 1]
+        if invalid:
+            errors.append(f"invalid team-size rule for {trait_key}: {invalid}")
 
     if errors:
         print("data validation failed; existing output was not changed:", file=sys.stderr)

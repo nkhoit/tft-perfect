@@ -11,7 +11,13 @@ let SCORE1 = null;  // Int16Array: first breakpoint that earns score
 let UNIQ = null;    // Uint8Array: 1 = unique/1-unit trait, excluded from the active count
 let MUTE = null;    // Uint8Array: 1 = user muted this trait, excluded from the active count
 let BPS = [];       // per-trait breakpoint arrays
-let CTR = [];       // per-champion array of trait indices
+let CTP = [];       // per-champion [trait index, points] pairs
+let CSLOT = null;   // Int16Array: team slots consumed per champion
+let CGROUP = [];    // mutually exclusive champion-form group
+let TEAM_SIZE = []; // per-trait [{min, slots}] capacity bonuses
+let TEAM_TRAITS = [];
+let TEAM_BONUSES = [0];
+let MAX_TEAM_BONUS = 0;
 
 // A trait is "unique" when it activates off a single unit (Avatar, Caustic,
 // Thornmaiden, ...). They're free with the unit, so counting them inflates the
@@ -30,7 +36,22 @@ function init(db) {
     SCORE1[i] = Number.isFinite(floor) ? floor : 32767;
     UNIQ[i] = SearchUtils.isUnique(db.traits[k]) ? 1 : 0;
   });
-  CTR = db.champions.map(c => c.traits.map(t => TI.get(t)).filter(x => x !== undefined));
+  CTP = db.champions.map(c => c.traits
+    .map(k => [TI.get(k), (c.traitPoints || {})[k] || 1])
+    .filter(([t]) => t !== undefined));
+  CSLOT = Int16Array.from(db.champions, c => c.slots || 1);
+  CGROUP = db.champions.map(c => c.group || null);
+  TEAM_SIZE = TK.map(k => (db.traits[k].teamSize || []).slice().sort((a, b) => a.min - b.min));
+  TEAM_TRAITS = TEAM_SIZE.map((tiers, trait) => tiers.length ? trait : -1)
+    .filter(trait => trait >= 0);
+  MAX_TEAM_BONUS = TEAM_TRAITS.reduce((sum, trait) =>
+    sum + TEAM_SIZE[trait].reduce((best, tier) => Math.max(best, tier.slots), 0), 0);
+  let bonuses = new Set([0]);
+  for (const trait of TEAM_TRAITS) {
+    const options = [0, ...new Set(TEAM_SIZE[trait].map(tier => tier.slots))];
+    bonuses = new Set([...bonuses].flatMap(total => options.map(slots => total + slots)));
+  }
+  TEAM_BONUSES = [...bonuses].sort((a, b) => b - a);
 }
 
 // tier index for a trait at a given count (-1 = inactive)
@@ -47,7 +68,7 @@ function bpReached(bp, n) {
   return v;
 }
 
-// Wasted units for one trait: units carrying it that buy nothing.
+// Wasted points for one trait: contributions that buy nothing.
 //   below first breakpoint -> all of them are dead weight
 //   past a breakpoint      -> the overshoot (4/5 Riftbeast = 1 wasted)
 function wasteOf(bp, n) {
@@ -64,20 +85,38 @@ function search(o) {
   MUTE = new Uint8Array(nT);
   for (const t of (o.muted || [])) if (t >= 0 && t < nT) MUTE[t] = 1;
   const counts = new Int16Array(nT);
+  const emblemCounts = new Int16Array(nT);
   for (const emblem of emblems) {
     const trait = typeof emblem === 'string' ? TI.get(emblem) : emblem;
-    if (trait >= 0 && trait < nT) counts[trait]++;
+    if (trait >= 0 && trait < nT) {
+      counts[trait]++;
+      emblemCounts[trait]++;
+    }
   }
 
-  // seed required units
-  for (const i of reqIdx) for (const t of CTR[i]) counts[t]++;
+  const groups = new Set();
+  let requiredSlots = 0;
+  let baseGold = 0;
+  for (const i of reqIdx) {
+    const group = CGROUP[i];
+    if (group && groups.has(group)) {
+      return { error: `Required ${group} forms are mutually exclusive.` };
+    }
+    if (group) groups.add(group);
+    requiredSlots += CSLOT[i];
+    baseGold += DB.champions[i].cost * 3;
+    for (const [t, points] of CTP[i]) counts[t] += points;
+  }
 
-  const need = size - reqIdx.length;
+  const maxSlots = size + MAX_TEAM_BONUS;
+  if (requiredSlots > maxSlots) {
+    return { error: 'More required unit slots than this level can support.' };
+  }
+
   const pool = poolIdx;
   const results = [];
-  let nodes = 0, truncated = false, capped = false;
-  // Shards split the top-level branch round-robin across workers. Each owns a
-  // slice of the node budget so total work matches the single-threaded ceiling.
+  let nodes = 0, truncated = false;
+  // Shards split the top-level branch round-robin across workers.
   const shards = o.shards || 1, shard = o.shard || 0;
   // Budget is per shard, not a split of one global pot. Top-level branches are
   // wildly uneven in size, so dividing the budget starves whichever shard drew
@@ -85,61 +124,50 @@ function search(o) {
   const NODE_BUDGET = 40e6;
   const RESULT_CAP = Math.max(20000, Math.ceil(120000 / shards));
 
-  // lower bound on wasted traits: any trait already started that cannot
-  // possibly reach its first breakpoint with `slotsLeft` more units.
-  // Lower bound on wasted units. Adding more units can only raise a trait's
-  // count, so any overshoot past the highest breakpoint still reachable with
-  // `slotsLeft` spare slots is already locked in.
-  // wasteLB runs at every node, so the per-trait breakpoint scan is precomputed.
-  // Counts and spare slots are both tiny and bounded, so the whole function
-  // collapses into a flat table lookup: LBT[trait][count][slotsLeft].
-  const MAXC = size + emblems.length + 1;   // a trait can't exceed board size + its emblems
-  const MC1 = MAXC + 1, S1 = size + 1;
-  const LBT = new Int16Array(nT * MC1 * S1);
-  for (let t = 0; t < nT; t++) {
-    const bp = BPS[t];
-    for (let c = 0; c <= MAXC; c++) {
-      for (let s = 0; s < S1; s++) {
-        let v = 0;
-        if (c) {
-          const ceiling = c + s;
-          let best = 0;
-          for (let i = 0; i < bp.length; i++) if (bp[i] <= ceiling) best = bp[i];
-          if (best <= c) v = c - best;   // can't reach the next tier from here
-        }
-        LBT[(t * MC1 + c) * S1 + s] = v;
+  // Maximum trait points reachable from each pool suffix for every remaining
+  // slot capacity. This is a 0/1 knapsack because Elder Dragon consumes two
+  // slots and Avatar origins contribute two points.
+  const P = poolIdx.length;
+  const CAP = maxSlots + 1;
+  const reach = new Int16Array((P + 1) * nT * CAP);
+  const reachAt = (start, trait, capacity) => reach[(start * nT + trait) * CAP + capacity];
+  for (let i = P - 1; i >= 0; i--) {
+    for (let t = 0; t < nT; t++) {
+      for (let capacity = 0; capacity <= maxSlots; capacity++) {
+        reach[(i * nT + t) * CAP + capacity] = reachAt(i + 1, t, capacity);
+      }
+    }
+    const champion = poolIdx[i];
+    const slots = CSLOT[champion];
+    for (const [t, points] of CTP[champion]) {
+      for (let capacity = slots; capacity <= maxSlots; capacity++) {
+        const index = (i * nT + t) * CAP + capacity;
+        reach[index] = Math.max(reach[index], points + reachAt(i + 1, t, capacity - slots));
       }
     }
   }
 
-  function wasteLB(slotsLeft) {
-    let w = 0;
+  // Lower bound on waste: if even the best reachable point total cannot hit a
+  // higher breakpoint, the current overshoot is locked in.
+  function wasteLB(start, capacity) {
+    let waste = 0;
     for (let t = 0; t < nT; t++) {
       if (MUTE[t]) continue;
-      const c = counts[t];
-      if (c) w += LBT[(t * MC1 + c) * S1 + slotsLeft];
+      const count = counts[t];
+      if (!count) continue;
+      const ceiling = count + reachAt(start, t, capacity);
+      let best = 0;
+      for (const breakpoint of BPS[t]) if (breakpoint <= ceiling) best = breakpoint;
+      if (best <= count) waste += count - best;
     }
-    return w;
-  }
-
-  // Suffix availability: avail[t * (P+1) + i] = how many units in pool[i..]
-  // carry trait t. Lets the requirement prune know what's *still reachable*
-  // from the current DFS position instead of using a whole-pool over-estimate.
-  const P = poolIdx.length;
-  const avail = new Int16Array(nT * (P + 1));
-  for (let i = P - 1; i >= 0; i--) {
-    const base = i * nT, prev = (i + 1) * nT;
-    for (let t = 0; t < nT; t++) avail[base + t] = avail[prev + t];
-    for (const t of CTR[poolIdx[i]]) avail[base + t]++;
+    return waste;
   }
 
   // Prune when a demanded trait can no longer reach its target count from here.
-  function reqUnreachable(start, slotsLeft) {
-    const base = start * nT;
-    for (let k = 0; k < reqTraits.length; k++) {
-      const { t, n } = reqTraits[k];
+  function reqUnreachable(start, capacity) {
+    for (const { t, n } of reqTraits) {
       const short = n - counts[t];
-      if (short > 0 && short > (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t])) return true;
+      if (short > 0 && short > reachAt(start, t, capacity)) return true;
     }
     return false;
   }
@@ -173,156 +201,249 @@ function search(o) {
     return 0;
   };
 
-  // ---- branch-and-bound support ----
-  // cheapK[start * (size+1) + k] = gold for the k cheapest units in pool[start..].
-  // Used for an admissible lower bound on a board's final cost.
-  const cheapK = new Int32Array((P + 1) * (size + 1));
-  // Mirror of cheapK for the 'rich' sort, which maximises gold instead of
-  // minimising it -- there the admissible bound is the *most* the remaining
-  // slots could still add.
-  const dearK = new Int32Array((P + 1) * (size + 1));
-  {
-    const costs = poolIdx.map(i => DB.champions[i].cost * 3);
-    for (let s = P - 1; s >= 0; s--) {
-      const tail = costs.slice(s).sort((a, b) => a - b);
-      const desc = tail.slice().reverse();
-      let acc = 0, accD = 0;
-      for (let k = 1; k <= size; k++) {
-        acc += (k <= tail.length ? tail[k - 1] : 0);
-        cheapK[s * (size + 1) + k] = acc;
-        accD += (k <= desc.length ? desc[k - 1] : 0);
-        dearK[s * (size + 1) + k] = accD;
+  // Exact-slot suffix knapsacks provide admissible cost bounds for weighted
+  // units. Group conflicts are intentionally ignored, making the bounds more
+  // optimistic but never unsafe.
+  const INF = 0x3fffffff;
+  const cheap = new Int32Array((P + 1) * CAP);
+  const dear = new Int32Array((P + 1) * CAP);
+  cheap.fill(INF);
+  dear.fill(-1);
+  cheap[P * CAP] = 0;
+  dear[P * CAP] = 0;
+  for (let i = P - 1; i >= 0; i--) {
+    const champion = poolIdx[i];
+    const slots = CSLOT[champion];
+    const gold = DB.champions[champion].cost * 3;
+    for (let capacity = 0; capacity <= maxSlots; capacity++) {
+      const next = (i + 1) * CAP + capacity;
+      const here = i * CAP + capacity;
+      cheap[here] = cheap[next];
+      dear[here] = dear[next];
+      if (capacity >= slots) {
+        const tail = (i + 1) * CAP + capacity - slots;
+        if (cheap[tail] < INF) cheap[here] = Math.min(cheap[here], gold + cheap[tail]);
+        if (dear[tail] >= 0) dear[here] = Math.max(dear[here], gold + dear[tail]);
       }
     }
   }
 
-  // Gold already locked in by the required units — constant for the whole run.
-  let baseGold = 0;
-  for (const u of reqIdx) baseGold += DB.champions[u].cost * 3;
+  function teamSizeBonus() {
+    let bonus = 0;
+    for (const t of TEAM_TRAITS) {
+      let traitBonus = 0;
+      for (const tier of TEAM_SIZE[t]) if (counts[t] >= tier.min) traitBonus = tier.slots;
+      bonus += traitBonus;
+    }
+    return bonus;
+  }
+
+  function maxReachableTeamSizeBonus(start, capacity) {
+    let bonus = 0;
+    for (const t of TEAM_TRAITS) {
+      const ceiling = counts[t] + reachAt(start, t, capacity);
+      let traitBonus = 0;
+      for (const tier of TEAM_SIZE[t]) if (ceiling >= tier.min) traitBonus = tier.slots;
+      bonus += traitBonus;
+    }
+    return bonus;
+  }
+
+  function bonusReachable(expected, start, capacity) {
+    const current = teamSizeBonus();
+    if (current > expected) return false;
+    if (current === expected) return true;
+    return maxReachableTeamSizeBonus(start, capacity) >= expected;
+  }
+
+  function minSlotsForTrait(trait, target, depth) {
+    const needed = Math.max(0, target - emblemCounts[trait]);
+    if (!needed) return 0;
+    const best = new Int16Array(needed + 1);
+    best.fill(32767);
+    best[0] = 0;
+
+    const add = champion => {
+      const pair = CTP[champion].find(([t]) => t === trait);
+      if (!pair) return;
+      const points = pair[1];
+      const slots = CSLOT[champion];
+      for (let have = needed - 1; have >= 0; have--) {
+        if (best[have] === 32767) continue;
+        const next = Math.min(needed, have + points);
+        best[next] = Math.min(best[next], best[have] + slots);
+      }
+    };
+    for (const champion of reqIdx) add(champion);
+    for (let i = 0; i < depth; i++) add(pick[i]);
+    return best[needed];
+  }
+
+  // A capacity trait must be activatable before using the slots it grants.
+  // Find an unlocking order for all active capacity traits on the final board.
+  function unlockedTeamSizeBonus(depth) {
+    const pending = [];
+    for (const trait of TEAM_TRAITS) {
+      let active = null;
+      for (const tier of TEAM_SIZE[trait]) if (counts[trait] >= tier.min) active = tier;
+      if (active) pending.push({ trait, ...active });
+    }
+    let capacity = size;
+    let bonus = 0;
+    while (pending.length) {
+      const index = pending.findIndex(rule =>
+        minSlotsForTrait(rule.trait, rule.min, depth) <= capacity);
+      if (index < 0) break;
+      const [rule] = pending.splice(index, 1);
+      capacity += rule.slots;
+      bonus += rule.slots;
+    }
+    return bonus;
+  }
 
   // Optimistic bounds on what the current partial board could still become.
   // Every one of these must err in the candidate's favour: overestimate the
   // maximised keys (live/tier), underestimate the minimised ones (waste/cost).
   // A bound that is ever too pessimistic silently deletes valid boards.
-  function boundLive(start, slotsLeft) {
-    const base = start * nT;
+  function boundLive(start, capacity) {
     let ub = 0;
     for (let t = 0; t < nT; t++) {
       if (UNIQ[t] || MUTE[t]) continue;         // never scored
       const c = counts[t];
       if (c >= SCORE1[t]) { ub++; continue; }   // already scoring
-      const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
-      if (reach >= SCORE1[t]) ub++;             // could still score
+      if (c + reachAt(start, t, capacity) >= SCORE1[t]) ub++;
     }
     return ub;
   }
 
-  function boundTier(start, slotsLeft) {
-    const base = start * nT;
+  function boundTier(start, capacity) {
     let ub = 0;
     for (let t = 0; t < nT; t++) {
       if (UNIQ[t] || MUTE[t]) continue;
       const c = counts[t];
-      const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
-      if (reach < SCORE1[t]) continue;
-      const ti = tierOf(BPS[t], reach);
+      const ceiling = c + reachAt(start, t, capacity);
+      if (ceiling < SCORE1[t]) continue;
+      const ti = tierOf(BPS[t], ceiling);
       if (ti >= 0) ub += ti + 1;
     }
     return ub;
   }
 
-  function boundGold(start, slotsLeft, depth) {
-    let g = baseGold;
-    for (let d = 0; d < depth; d++) g += DB.champions[pick[d]].cost * 3;
-    return g + cheapK[start * (size + 1) + slotsLeft];
+  function boundGold(start, capacity, gold) {
+    const addition = cheap[start * CAP + capacity];
+    return addition < INF ? gold + addition : INF;
   }
 
-  function boundGoldMax(start, slotsLeft, depth) {
-    let g = baseGold;
-    for (let d = 0; d < depth; d++) g += DB.champions[pick[d]].cost * 3;
-    return g + dearK[start * (size + 1) + slotsLeft];
+  function boundGoldMax(start, capacity, gold) {
+    const addition = dear[start * CAP + capacity];
+    return gold + addition;
   }
 
   // Prune only on the primary sort key. Deeper keys are tie-breakers, and a
   // bound that's optimistic on key 1 says nothing about key 2, so comparing
   // past the first strict decision would not be admissible.
   const primary = order[0];
-  function canBeat(start, slotsLeft, depth) {
+  function canBeat(start, capacity, gold) {
     if (!worst) return true;                    // buffer not full: keep everything
-    if (primary === 'live')  return boundLive(start, slotsLeft) >= worst.live;
-    if (primary === 'tier')  return boundTier(start, slotsLeft) >= worst.tierSum;
-    if (primary === 'waste') return wasteLB(slotsLeft) <= worst.waste;
-    if (primary === 'cost')  return boundGold(start, slotsLeft, depth) <= worst.gold;
-    if (primary === 'rich')  return boundGoldMax(start, slotsLeft, depth) >= worst.gold;
+    if (primary === 'live')  return boundLive(start, capacity) >= worst.live;
+    if (primary === 'tier')  return boundTier(start, capacity) >= worst.tierSum;
+    if (primary === 'waste') return wasteLB(start, capacity) <= worst.waste;
+    if (primary === 'cost')  return boundGold(start, capacity, gold) <= worst.gold;
+    if (primary === 'rich')  return boundGoldMax(start, capacity, gold) >= worst.gold;
     return true;
   }
 
-  const pick = new Int32Array(need);
+  const pick = new Int32Array(maxSlots);
 
-  function dfs(start, depth) {
-    if (truncated) return;
-    if (depth === need) {
-      // final evaluation
-      if (!reqSatisfied()) return;
-      let live = 0, uniqN = 0, waste = 0, tierSum = 0;
-      const active = [], dead = [], over = [];
-      for (let t = 0; t < nT; t++) {
-        const c = counts[t];
-        if (!c) continue;
-        const bp = BPS[t];
-        const w = wasteOf(bp, c);
-        if (w) {
-          if (!MUTE[t]) waste += w;
-          if (c >= BP1[t]) over.push([t, w]); else dead.push([t, c]);
-        }
-        if (c >= BP1[t]) {
-          const ti = tierOf(bp, c);
-          active.push([t, c, ti]);
-          if (UNIQ[t]) uniqN++;
-          else if (!MUTE[t] && c >= SCORE1[t]) { live++; tierSum += ti + 1; }
-        }
+  function evaluate(depth, usedSlots, gold) {
+    if (!reqSatisfied()) return;
+    let live = 0, uniqN = 0, waste = 0, tierSum = 0;
+    const active = [], dead = [], over = [];
+    for (let t = 0; t < nT; t++) {
+      const c = counts[t];
+      if (!c) continue;
+      const bp = BPS[t];
+      const w = wasteOf(bp, c);
+      if (w) {
+        if (!MUTE[t]) waste += w;
+        if (c >= BP1[t]) over.push([t, w]); else dead.push([t, c]);
       }
-      if (waste > maxWaste) return;
-      found++;
-      let gold = 0;
-      for (const u of reqIdx) gold += DB.champions[u].cost * 3;
-      for (let d = 0; d < depth; d++) gold += DB.champions[pick[d]].cost * 3;
-      // Once we're at capacity, reject candidates that can't beat the worst
-      // board we're keeping — avoids allocating millions of doomed results.
-      if (worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) return;
-      const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
-      // uniques last so the meaningful traits read first
-      const dim = x => (UNIQ[x] || MUTE[x] || counts[x] < SCORE1[x]) ? 1 : 0;
-      active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
-      results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold });
-      if (results.length >= RESULT_CAP) {
-        results.sort(cmp);
-        results.length = RESULT_CAP >> 1;   // keep the better half, keep searching
-        worst = results[results.length - 1];
-        trimmed = true;
+      if (c >= BP1[t]) {
+        const ti = tierOf(bp, c);
+        active.push([t, c, ti]);
+        if (UNIQ[t]) uniqN++;
+        else if (!MUTE[t] && c >= SCORE1[t]) { live++; tierSum += ti + 1; }
+      }
+    }
+    if (waste > maxWaste) return;
+    found++;
+    // Once we're at capacity, reject candidates that can't beat the worst
+    // board we're keeping — avoids allocating millions of doomed results.
+    if (worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) return;
+    const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
+    // uniques last so the meaningful traits read first
+    const dim = x => (UNIQ[x] || MUTE[x] || counts[x] < SCORE1[x]) ? 1 : 0;
+    active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
+    results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold, slots: usedSlots });
+    if (results.length >= RESULT_CAP) {
+      results.sort(cmp);
+      results.length = RESULT_CAP >> 1;   // keep the better half, keep searching
+      worst = results[results.length - 1];
+      trimmed = true;
+    }
+  }
+
+  function dfs(start, depth, usedSlots, gold, targetSlots, expectedBonus) {
+    if (truncated) return;
+    if (usedSlots === targetSlots) {
+      // A required-only board belongs to shard zero. Every board with optional
+      // units already belongs to the shard of its first selected pool index.
+      if ((depth > 0 || shard === 0) && teamSizeBonus() === expectedBonus
+          && unlockedTeamSizeBonus(depth) === expectedBonus) {
+        evaluate(depth, usedSlots, gold);
       }
       return;
     }
-    const slotsLeft = need - depth;
-    for (let i = start; i <= pool.length - slotsLeft; i++) {
+    const remainingCapacity = targetSlots - usedSlots;
+
+    for (let i = start; i < pool.length; i++) {
       if (depth === 0 && shards > 1 && i % shards !== shard) continue;
-      if (++nodes > NODE_BUDGET) { truncated = true; return; }
       const ci = pool[i];
-      const ts = CTR[ci];
-      for (const t of ts) counts[t]++;
+      const slots = CSLOT[ci];
+      if (slots > remainingCapacity) continue;
+      const group = CGROUP[ci];
+      if (group && groups.has(group)) continue;
+      if (++nodes > NODE_BUDGET) { truncated = true; return; }
+      if (group) groups.add(group);
+      for (const [t, points] of CTP[ci]) counts[t] += points;
       pick[depth] = ci;
-      if (wasteLB(slotsLeft - 1) <= maxWaste && !reqUnreachable(i + 1, slotsLeft - 1)
-          && canBeat(i + 1, slotsLeft - 1, depth + 1)) dfs(i + 1, depth + 1);
-      for (const t of ts) counts[t]--;
+      const nextSlots = usedSlots + slots;
+      const capacity = targetSlots - nextSlots;
+      const nextGold = gold + DB.champions[ci].cost * 3;
+      if (bonusReachable(expectedBonus, i + 1, capacity)
+          && wasteLB(i + 1, capacity) <= maxWaste
+          && !reqUnreachable(i + 1, capacity)
+          && canBeat(i + 1, capacity, nextGold)) {
+        dfs(i + 1, depth + 1, nextSlots, nextGold, targetSlots, expectedBonus);
+      }
+      for (const [t, points] of CTP[ci]) counts[t] -= points;
+      if (group) groups.delete(group);
       if (truncated) return;
     }
   }
 
-  if (need < 0) return { error: 'More required units than board slots.' };
-  if (need === 0 && shard > 0) {
-    return { rows: [], total: 0, truncated: false, capped: false, nodes: 0 };
+  for (const expectedBonus of TEAM_BONUSES) {
+    if (truncated) break;
+    const targetSlots = size + expectedBonus;
+    if (requiredSlots > targetSlots) continue;
+    const capacity = targetSlots - requiredSlots;
+    if (bonusReachable(expectedBonus, 0, capacity)
+        && wasteLB(0, capacity) <= maxWaste
+        && !reqUnreachable(0, capacity)
+        && canBeat(0, capacity, baseGold)) {
+      dfs(0, 0, requiredSlots, baseGold, targetSlots, expectedBonus);
+    }
   }
-  if (wasteLB(need) <= maxWaste && !reqUnreachable(0, need)) dfs(0, 0);
 
   results.sort(cmp);
   // Dedup happens at the merge step: a signature can span shards, so a worker

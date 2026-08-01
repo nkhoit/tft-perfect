@@ -56,4 +56,18 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.equal(duplicatePlannerCodes.length, 1);
   assert.equal(duplicatePlannerCodes[0][0], 0x413);
   assert.ok(duplicatePlannerCodes[0][1].every(champion => champion.key.startsWith('Lux')));
+
+  const elderDragon = champions.get('ElderDragon');
+  assert.equal(elderDragon.slots, 2);
+  assert.equal(elderDragon.traitPoints.Riftbeast, 3);
+
+  const luxForms = data.champions.filter(champion => champion.key.startsWith('Lux'));
+  assert.equal(luxForms.length, 9);
+  for (const lux of luxForms) {
+    const origin = lux.traits.find(trait => trait !== 'Avatar');
+    assert.equal(lux.group, 'Lux');
+    assert.equal(lux.traitPoints[origin], 2);
+  }
+  assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
+  assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
 });
