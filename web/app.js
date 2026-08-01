@@ -603,8 +603,6 @@ function render(m) {
       .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
       .join('');
 
-    const notes = [];
-    if ((r.over || []).length) notes.push('Over: ' + r.over.map(([ti, w]) => `${DB.traits[tkeys[ti]].name} +${w}`).join(', '));
 
     // Same trait signature, different roster. Offered per-board instead of as a
     // global toggle, because the question is "swap THIS board", not "show me
@@ -622,7 +620,7 @@ function render(m) {
     d.className = 'comp';
     d.innerHTML =
       `<div class="left"><div class="tline">${badges}${deadBadges}</div><div class="uline">${units}${varTag}</div>` +
-      (notes.length ? `<div class="wasted">${notes.join(' · ')}</div>` : '') + varRows + `</div>` +
+      varRows + `</div>` +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
       (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
