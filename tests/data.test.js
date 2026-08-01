@@ -59,6 +59,9 @@ test('the application contains only Set 18', () => {
   assert.match(css, /\.tdetail\{/);
   assert.match(app, /class="stars"/);
   assert.match(css, /\.stars\{/);
+  assert.match(app, /function traitUnitStrip/);
+  assert.match(app, /class="tunits"/);
+  assert.match(css, /\.tunit\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

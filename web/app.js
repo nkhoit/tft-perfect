@@ -450,6 +450,15 @@ function traitDesc(t) {
   return { lead: cleanText(parts[0]), tiers: parts.slice(1).map(cleanText) };
 }
 
+function traitUnitStrip(key) {
+  const units = DB.champions.filter(champion => champion.traits.includes(key))
+    .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+    .map(champion => `<span class="tunit k${champion.cost}" title="${champion.name}">` +
+      `<img src="${champion.icon}" alt="${champion.name}"></span>`)
+    .join('');
+  return units ? `<div class="tunits">${units}</div>` : '';
+}
+
 function traitCard(key) {
   const t = DB.traits[key];
   if (!t) return '';
@@ -470,7 +479,7 @@ function traitCard(key) {
   }).join('');
   return `<div class="chd">${t.icon ? `<img src="${t.icon}">` : ''}
       <div><b>${t.name}</b><span class="csub">${(t.bp || []).join(' / ')}</span></div></div>` +
-    (lead ? `<p class="clead">${lead}</p>` : '') + detailList + rows;
+    (lead ? `<p class="clead">${lead}</p>` : '') + detailList + rows + traitUnitStrip(key);
 }
 
 function abilityDescription(ability) {
