@@ -20,6 +20,7 @@ UA = {"User-Agent": "Mozilla/5.0 (kuro-tft-perfect)"}
 PBE = "https://raw.communitydragon.org/pbe"
 CD_TFT = PBE + "/cdragon/tft/en_us.json"
 CD_FILES = PBE + "/cdragon/files.exported.txt"
+TEAM_PLANNER = PBE + "/plugins/rcp-be-lol-game-data/global/default/v1/tftchampions-teamplanner.json"
 ASSET = PBE + "/"
 STRINGTABLE = PBE + "/game/en_us/data/menu/en_us/tft.stringtable.json"
 BUILD_CACHE = os.path.join(tempfile.gettempdir(), "tft-trait-explorer")
@@ -292,6 +293,25 @@ def join_lolchess(names, refs):
     return joined, failures
 
 
+def join_team_planner(names, refs):
+    """Join Riot's stable 12-bit planner IDs through the internal character name."""
+    by_character = {(c.get("character_id") or "").lower(): c for c in refs
+                    if c.get("character_id")}
+    joined, failures = {}, {}
+    for name in names:
+        candidates = bin_candidates(name)
+        if name.startswith("Lux"):
+            candidates.append("da_lux18_base")
+        ref = next((by_character.get(stem.lower()) for stem in candidates
+                    if by_character.get(stem.lower())), None)
+        code = (ref or {}).get("team_planner_code")
+        if isinstance(code, int) and 0 < code <= 0xfff:
+            joined[name] = code
+        else:
+            failures[name] = "no valid team_planner_code matched bin candidates"
+    return joined, failures
+
+
 def char_record(doc):
     for v in (doc or {}).values():
         if isinstance(v, dict) and v.get("__type") == "TFTCharacterRecord":
@@ -381,6 +401,8 @@ def main():
 
     print("fetching exported-file manifest (~58MB, verifies icon paths) ...")
     files = set(get(CD_FILES, raw=True).decode("utf-8", "replace").split("\n"))
+    print("fetching Riot team-planner champion IDs ...")
+    planner_refs = get(TEAM_PLANNER).get("TFTSet18") or []
 
     # ---- traits: real breakpoints from PBE -----------------------------
     traits = {}
@@ -545,6 +567,12 @@ def main():
 
     champions.sort(key=lambda c: (c["cost"], c["name"]))
 
+    planner_joined, planner_failures = join_team_planner(
+        [c["key"] for c in champions], planner_refs)
+    for c in champions:
+        if c["key"] in planner_joined:
+            c["teamPlannerCode"] = planner_joined[c["key"]]
+
     used = {t for c in champions for t in c["traits"]}
     traits = {k: v for k, v in traits.items() if k in used}
 
@@ -582,8 +610,10 @@ def main():
 
 
     out = {"set": "set18", "setName": "Enchanted Wilds",
+           "teamPlannerSet": "TFTSet18",
            "gameBuild": "PBE TFTSet18",
-           "source": "checked-in reveal roster + CommunityDragon PBE TFTSet18 + LoLChess",
+           "source": ("checked-in reveal roster + CommunityDragon PBE TFTSet18 "
+                      "+ Riot team planner + LoLChess"),
            "note": "PBE data — breakpoints are live-PBE and may shift before 18.1 launch (2026-08-12).",
            "abilityNote": ("Ability numbers and structured stat lines sourced from "
                            "LoLChess championRefs en/set18 on "
@@ -614,6 +644,8 @@ def main():
         errors.append(f"{len(nostats)} champions without stats: {nostats}")
     if lol_failures:
         errors.append(f"{len(lol_failures)} LoLChess joins failed: {lol_failures}")
+    if planner_failures:
+        errors.append(f"{len(planner_failures)} team-planner joins failed: {planner_failures}")
     if nresolved != len(champions):
         errors.append(f"numeric ability descriptions resolved for only {nresolved}/{len(champions)} champions")
 

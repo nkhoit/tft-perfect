@@ -11,6 +11,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Required and excluded units, cost filters, and unit/trait search.
 - Stackable emblems that add trait points without using board slots.
 - Sorting by active traits, trait tiers, waste, or board cost.
+- Copyable codes for importing any result into TFT's Team Planner.
 - Unique one-unit traits remain visible but do not inflate the active-trait score.
 
 ### Waste
@@ -34,6 +35,22 @@ Open the [local app](http://localhost:8808). Set `TFT_PORT` to override port 880
 The deployed application is static HTML, CSS, and JavaScript with no runtime
 dependencies or build step. Searches run across Web Workers to keep the UI responsive.
 
+## Team Planner Codes
+
+Set 18 uses the version 2 team-code format:
+
+```text
+02 + ten 3-hex-digit champion IDs + TFTSet18
+```
+
+Each champion slot is Riot's 12-bit `team_planner_code`; `000` is an empty slot.
+For example, `3f7` is Cinderling and `429` is Pebbles. The builder retrieves these
+IDs from Riot's team-planner dataset through CommunityDragon, and result rows encode
+them directly for import into the TFT client.
+
+Riot assigns all nine Lux origins the same planner ID (`413`), so importing a code
+containing Lux cannot preserve which origin variant was shown.
+
 ## Test
 
 ```bash
@@ -44,7 +61,8 @@ npm run check
 ## Data
 
 `web/data.json` is generated from the checked-in `set18-roster.json`,
-[CommunityDragon](https://communitydragon.org), and [LoLChess](https://lolchess.gg).
+[CommunityDragon](https://communitydragon.org), Riot's team-planner data, and
+[LoLChess](https://lolchess.gg).
 
 ```bash
 python3 -m pip install -r requirements.txt

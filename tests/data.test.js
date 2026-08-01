@@ -16,6 +16,7 @@ test('the application contains only Set 18', () => {
   const readme = read('README.md');
 
   assert.equal(data.set, 'set18');
+  assert.equal(data.teamPlannerSet, 'TFTSet18');
   assert.match(html, /Set 18/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
@@ -36,6 +37,7 @@ test('the generated data and checked-in roster are internally consistent', () =>
     assert.ok(champion.icon, `${key} has no icon`);
     assert.ok(champion.stats, `${key} has no stats`);
     assert.ok(champion.ability?.descResolved, `${key} has no resolved ability text`);
+    assert.ok(Number.isInteger(champion.teamPlannerCode), `${key} has no team-planner code`);
     assert.deepEqual(champion.manaReveal || champion.mana, source.mana);
     assert.deepEqual(champion.traits.map(trait => data.traits[trait].name), source.traits);
     for (const trait of champion.traits) {
@@ -46,4 +48,9 @@ test('the generated data and checked-in roster are internally consistent', () =>
     assert.ok(trait.icon, `${trait.name} has no icon`);
     assert.ok(trait.bp.length, `${trait.name} has no breakpoints`);
   }
+  const duplicatePlannerCodes = [...Map.groupBy(data.champions, champion => champion.teamPlannerCode)]
+    .filter(([, champions]) => champions.length > 1);
+  assert.equal(duplicatePlannerCodes.length, 1);
+  assert.equal(duplicatePlannerCodes[0][0], 0x413);
+  assert.ok(duplicatePlannerCodes[0][1].every(champion => champion.key.startsWith('Lux')));
 });

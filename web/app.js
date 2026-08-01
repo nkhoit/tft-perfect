@@ -515,6 +515,10 @@ function run() {
 }
 
 // ---------- render ----------
+function copyCodeButton(units) {
+  return `<button class="copycode" data-units="${units.join(',')}" title="Copy for TFT Team Planner">Copy team code</button>`;
+}
+
 function render(m) {
   const list = $('list'), cnt = $('count');
   if (m.error) {
@@ -585,7 +589,8 @@ function render(m) {
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
         .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
         .join('') +
-      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span></div>`).join('') + `</div>` : '';
+      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
+      copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
 
     const d = document.createElement('div');
     d.className = 'comp';
@@ -595,7 +600,8 @@ function render(m) {
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
       (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
-      `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div>`;
+      `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
+      copyCodeButton(r.units) + `</div>`;
     frag.appendChild(d);
   }
   list.innerHTML = '';
@@ -604,6 +610,22 @@ function render(m) {
 
 // Click any trait badge in the results to pin it as a requirement at that count.
 $('list').addEventListener('click', (e) => {
+  const copy = e.target.closest('.copycode');
+  if (copy) {
+    const champions = copy.dataset.units.split(',').map(i => DB.champions[+i]);
+    const code = TeamCode.encode(champions, DB.teamPlannerSet);
+    const copied = () => {
+      copy.textContent = 'Copied';
+      setTimeout(() => { copy.textContent = 'Copy team code'; }, 1200);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(code).then(copied)
+        .catch(() => window.prompt('Copy this TFT Team Planner code:', code));
+    } else {
+      window.prompt('Copy this TFT Team Planner code:', code);
+    }
+    return;
+  }
   const vt = e.target.closest('.vtag');
   if (vt) { vt.closest('.comp').classList.toggle('vopen'); return; }
   const b = e.target.closest('.tb');
