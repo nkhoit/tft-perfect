@@ -82,13 +82,22 @@ test('the application contains only Set 18', () => {
   assert.doesNotMatch(app, /class="kc"/);
 });
 
-test('required result portraits preserve their cost border', () => {
+test('required units use check badges without replacing cost borders', () => {
   const css = read('web/style.css');
-  const requiredRule = css.match(/\.uc\.req\{([^}]*)\}/);
 
-  assert.ok(requiredRule, 'missing required-unit portrait styling');
-  assert.doesNotMatch(requiredRule[1], /\bborder(?:-[a-z]+)?\s*:/);
-  assert.match(requiredRule[1], /\bbox-shadow\s*:/);
+  assert.doesNotMatch(css, /\.u\.req\{[^}]*(?:border|box-shadow)/);
+  assert.doesNotMatch(css, /\.uc\.req\{[^}]*(?:border|box-shadow)/);
+  assert.match(css, /\.u\.req::before,\.uc\.req::before\{[^}]*content:"\\2713"/);
+  assert.match(css, /\.u\.req::before,\.uc\.req::before\{[^}]*top:[^;]+;right:/);
+});
+
+test('unit picker portraits include role badges', () => {
+  const app = read('web/app.js');
+  const addUnit = app.match(
+    /function addUnit\(el, c\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction applyFilter/);
+
+  assert.ok(addUnit, 'missing unit picker renderer');
+  assert.match(addUnit[1], /\$\{portraitRoleBadge\(c\)\}/);
 });
 
 test('team composition renders as one segmented strip', () => {

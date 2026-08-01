@@ -544,7 +544,7 @@ function addUnit(el, c) {
     d.dataset.search = (c.name + ' ' + c.traits.map(t => DB.traits[t]?.name || t).join(' ')).toLowerCase();
     d.title = c.name + ' — ' + c.traits.map(t => DB.traits[t]?.name || t).join(', ');
     d.innerHTML = `<img loading="lazy" src="${c.icon}" alt="">
-      <span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
+      ${portraitRoleBadge(c)}<span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
     // left click toggles require, right click toggles exclude
     const set = s => {
       state.set(c.key, s);
