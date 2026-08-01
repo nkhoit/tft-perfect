@@ -30,9 +30,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /aria-label="Copy TFT Team Planner code"/);
   assert.match(app, /class="copyicon"/);
   assert.doesNotMatch(app, />Copy team code<\/button>/);
-  assert.match(app, /`<div class="compmeta">` \+\s*copyCodeButton\(r\.units\)/);
-  assert.match(css, /\.compmeta>\.copycode\{[^}]*margin:0/);
-  assert.match(css, /\.comp>\.vlist\{[^}]*grid-column:1\/-1/);
+  assert.match(app, /`<div class="comphead"><div class="tline">/);
+  assert.match(css, /\.comprow>\.copycode\{[^}]*margin:0/);
+  assert.match(css, /\.comp>\.vlist\{[^}]*margin-top:0/);
   assert.match(css, /#traitGrid\{grid-template-columns:repeat\(5,1fr\)\}/);
   assert.match(css, /#embGrid\{grid-template-columns:repeat\(6,1fr\)\}/);
   assert.match(app, /function unitPortrait/);
@@ -118,6 +118,21 @@ test('unit picker portraits include role badges', () => {
 
   assert.ok(addUnit, 'missing unit picker renderer');
   assert.match(addUnit[1], /\$\{portraitRoleBadge\(c\)\}/);
+});
+
+test('main and alternate compositions share the roster row layout', () => {
+  const app = read('web/app.js');
+  const css = read('web/style.css');
+
+  assert.match(app, /class="comprow primary"/);
+  assert.match(app, /class="comprow alternate"/);
+  assert.match(app, /class="active"><b>\$\{r\.live\}<\/b> traits active/);
+  assert.match(app, /class="w"><b>\$\{r\.waste\}<\/b> wasted/);
+  assert.match(app, /teamProfile\(r\.units, true\)/);
+  assert.match(app, /class="vg"[^>]*>\$\{r\.gold\}g/);
+  assert.doesNotMatch(app + css, /compmeta/);
+  assert.match(css, /\.comphead\{/);
+  assert.match(css, /\.comprow\{/);
 });
 
 test('team composition renders as one segmented strip', () => {
