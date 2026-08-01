@@ -1,4 +1,4 @@
-# TFT Perfect Traits Explorer
+# TFT Trait Explorer
 
 Find Teamfight Tactics boards where every trait actually does something.
 

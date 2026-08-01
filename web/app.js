@@ -1,4 +1,4 @@
-// app.js — TFT Perfect Traits Explorer
+// app.js — TFT Trait Explorer
 let DB = null, W = [], ready = false;
 let reqId = 0, pending = false, dirty = false;
 let inbox = [];                   // shard results for the in-flight request

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Set 18 (Enchanted Wilds) data.json for the Perfect Traits explorer.
+"""Build Set 18 (Enchanted Wilds) data.json for the TFT Trait Explorer.
 
 Set 18 is not on dakgg yet (dakgg currentSeason == set17), so this stitches:
   - champion roster (cost + traits)  <- local reveal capture, refs/tft-moltbot/set18
