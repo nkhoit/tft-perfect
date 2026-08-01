@@ -241,6 +241,8 @@ button:hover{border-color:var(--acc2)}
 #card .cbp.chromatic,#card .cbp.prismatic{background:#5a3d6e;color:#f0d8ff}
 #card .cbp.unique{background:#1f5a44;color:#b6f5da}
 #card .ctx{flex:1}
+#card .si{display:inline-block;width:14px;height:14px;margin:0 2px;object-fit:contain;
+  vertical-align:-2px}
 #card .ph{color:#7f8895;font-style:italic;cursor:help}
 #card .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
 #card .cab b{font-size:12px;color:#eef2f7}

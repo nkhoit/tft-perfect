@@ -362,11 +362,28 @@ function renderTraitGrid() {
 // Riot ships desc as templates: "@Var@" numbers, "%i:scaleAD%" icon tokens,
 // "(@MinUnits@)" separating each breakpoint's text. PBE hashes most variable
 // names, so we render the shape and mark unknown numbers rather than lie.
-const ICON_WORD = {
-  scaleAD: 'AD', scaleAP: 'AP', scaleAS: 'Attack Speed', scaleArmor: 'Armor',
-  scaleMR: 'MR', scaleHealth: 'HP', scaleManaRegen: 'Mana Regen',
-  scaleDR: 'Damage Reduction', scaleCrit: 'Crit',
+const STAT_ICON_BASE =
+  'https://raw.communitydragon.org/pbe/plugins/rcp-be-lol-game-data/global/default/' +
+  'assets/ux/fonts/texticons/lol/statsicon';
+const STAT_ICONS = {
+  scaleAD: ['AD', 'Attack Damage'],
+  scaleAP: ['AP', 'Ability Power'],
+  scaleAS: ['Attack Speed', 'Attack Speed'],
+  scaleArmor: ['Armor', 'Armor'],
+  scaleMR: ['MR', 'Magic Resist'],
+  scaleHealth: ['HP', 'Health'],
+  scaleManaRegen: ['Mana Regen', 'Mana Regeneration'],
+  scaleDR: ['Damage Reduction', 'Damage Reduction'],
+  scaleCrit: ['Crit', 'Critical Strike Chance'],
 };
+
+function statIcon(token) {
+  const stat = STAT_ICONS[token];
+  if (!stat) return '';
+  const [label, title] = stat;
+  return `<img class="si" src="${STAT_ICON_BASE}/${token.toLowerCase()}.png" ` +
+    `alt="${label}" title="${title}">`;
+}
 
 function cleanText(s) {
   if (!s) return '';
@@ -376,7 +393,7 @@ function cleanText(s) {
     .replace(/\\+[rn]/g, ' ')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, '')                                  // strip markup
-    .replace(/%i:(\w+)%/g, (_, k) => ICON_WORD[k] ? ' ' + ICON_WORD[k] : '')
+    .replace(/%i:(\w+)%/g, (_, token) => statIcon(token))
     .replace(/@[^@]+@/g, '<span class="ph" title="value not in PBE data yet">?</span>')
     .replace(/\s+/g, ' ')
     .replace(/\s+([%.,])/g, '$1')

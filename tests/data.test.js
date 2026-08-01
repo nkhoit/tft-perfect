@@ -36,6 +36,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /alternate\$\{nv > 1 \? 's' : ''\}/);
   assert.match(app, /vt\.setAttribute\('aria-expanded', String\(open\)\)/);
   assert.match(css, /\.vchev\{/);
+  assert.match(app, /STAT_ICON_BASE/);
+  assert.match(app, /class="si"/);
+  assert.match(css, /\.si\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -83,4 +86,6 @@ test('the generated data and checked-in roster are internally consistent', () =>
   }
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
+  assert.ok(data.traits.Adaptor.tiers.every(tier =>
+    tier.includes('%i:scaleAD%') && tier.includes('%i:scaleAP%')));
 });

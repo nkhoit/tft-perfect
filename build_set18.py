@@ -446,6 +446,14 @@ def main():
         lead = clean(render_row(
             re.split(r"<row>", t.get("desc") or "", maxsplit=1)[0],
             effs[0] if effs else {}))
+        desc = clean(t.get("desc"))
+
+        # PBE's Adaptor rows contain a bare "OR" where the client renders the
+        # AD and AP text icons. Restore the transport tokens for the web card.
+        if key == "Adaptor":
+            stat_choice = "%i:scaleAD% or %i:scaleAP%"
+            tiers = [re.sub(r"\bOR\b", stat_choice, tier) for tier in tiers]
+            desc = re.sub(r"\bOR\b", stat_choice, desc)
 
         icon = None
         # CommunityDragon gives the authoritative asset path in `icon`; the
@@ -462,7 +470,7 @@ def main():
         trait = {"key": key, "name": name, "icon": icon,
                  "bp": bp or [1], "styles": styles,
                  "lead": lead, "tiers": tiers,
-                 "desc": clean(t.get("desc"))}
+                 "desc": desc}
         if key in TRAIT_TEAM_SIZE:
             trait["teamSize"] = TRAIT_TEAM_SIZE[key]
         traits[key] = trait
