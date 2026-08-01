@@ -21,7 +21,7 @@ test('the application contains only Set 18', () => {
   assert.match(html, /Set 18/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
-  assert.match(app, /descResolved \|\| a\.desc/);
+  assert.match(app, /ability\.descResolved \|\| ability\.desc/);
   assert.match(app, /aria-label="Copy TFT Team Planner code"/);
   assert.match(app, /class="copyicon"/);
   assert.doesNotMatch(app, />Copy team code<\/button>/);
@@ -39,6 +39,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /STAT_ICON_BASE/);
   assert.match(app, /class="si"/);
   assert.match(css, /\.si\{/);
+  assert.match(app, /function abilityDescription/);
+  assert.match(app, /class="amode /);
+  assert.match(css, /\.amode\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -88,4 +91,12 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
   assert.ok(data.traits.Adaptor.tiers.every(tier =>
     tier.includes('%i:scaleAD%') && tier.includes('%i:scaleAP%')));
+
+  const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
+  assert.equal(adaptors.length, 5);
+  for (const adaptor of adaptors) {
+    const modes = adaptor.ability.sections.filter(section => section.mode)
+      .map(section => section.mode).sort();
+    assert.deepEqual(modes, ['AD', 'AP'], `${adaptor.key} is missing an Adaptor ability mode`);
+  }
 });

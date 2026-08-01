@@ -424,6 +424,21 @@ function traitCard(key) {
     (lead ? `<p class="clead">${lead}</p>` : '') + rows;
 }
 
+function abilityDescription(ability) {
+  if (!(ability.sections || []).length) {
+    return `<p class="clead">${cleanText(ability.descResolved || ability.desc)}</p>`;
+  }
+  const sections = ability.sections.map(section => {
+    if (!section.mode) return `<p class="clead ashared">${cleanText(section.desc)}</p>`;
+    const mode = section.mode.toUpperCase();
+    const icon = statIcon(mode === 'AD' ? 'scaleAD' : 'scaleAP');
+    return `<div class="amode ${mode.toLowerCase()}">` +
+      `<span class="amodekey">${icon}<b>${mode}</b></span>` +
+      `<span class="amodetext">${cleanText(section.desc)}</span></div>`;
+  }).join('');
+  return `<div class="asections">${sections}</div>`;
+}
+
 function unitCard(key) {
   const c = DB.champions.find(x => x.key === key);
   if (!c) return '';
@@ -434,11 +449,9 @@ function unitCard(key) {
   // Mana reads as a cost, not a transition: 0/45 means "needs 45, starts at 0".
   const mana = c.mana
     ? `<div class="cstat"><span>Mana</span><b>${c.mana.start}/${c.mana.max}</b></div>` : '';
-  // Ability text is resolved from the game string table; numbers stay templated
-  // until 18.1, so cleanText renders those as muted "?" like the trait cards.
   const a = c.ability;
   const ability = a
-    ? `<div class="cab"><b>${a.name}</b></div><p class="clead">${cleanText(a.descResolved || a.desc)}</p>`
+    ? `<div class="cab"><b>${a.name}</b></div>${abilityDescription(a)}`
     : `<p class="cnote">No ability text in the PBE data for this unit.</p>`;
   // Stats come from the raw character bins. Any given unit can be missing a
   // field (Kayle has no baseDamage -- she transforms), so each row is dropped

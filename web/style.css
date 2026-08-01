@@ -246,6 +246,19 @@ button:hover{border-color:var(--acc2)}
 #card .ph{color:#7f8895;font-style:italic;cursor:help}
 #card .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
 #card .cab b{font-size:12px;color:#eef2f7}
+#card .asections{display:flex;flex-direction:column;gap:5px;margin-top:5px}
+#card .asections .clead{margin:0}
+#card .amode{display:grid;grid-template-columns:43px minmax(0,1fr);gap:7px;
+  align-items:start;padding:6px 7px;background:#141a24;border:1px solid #252d3a;
+  border-left-width:2px;border-radius:5px}
+#card .amode.ad{border-left-color:#d4a84f}
+#card .amode.ap{border-left-color:#7568df}
+#card .amodekey{display:inline-flex;align-items:center;justify-content:center;gap:2px;
+  padding:2px 4px;border-radius:4px;font-size:10px}
+#card .amode.ad .amodekey{background:#4b3b1f;color:#f2d68c}
+#card .amode.ap .amodekey{background:#302b57;color:#c9c3ff}
+#card .amodekey .si{width:12px;height:12px;margin:0}
+#card .amodetext{color:#c3cad6;line-height:1.4}
 #card .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 #card .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
   border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}

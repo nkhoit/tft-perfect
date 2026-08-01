@@ -124,15 +124,33 @@ def clean(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
-def clean_lolchess(s):
-    # LoLChess embeds Riot stat icons inline; retaining `%i:scaleAD%` would
-    # expose transport markup rather than player-readable ability text.
+def clean_lolchess(s, keep_icons=False):
     s = re.sub(r"<br\s*/?>", " ", s or "", flags=re.I)
-    s = re.sub(r"%i:\w+%", "", s, flags=re.I)
-    # Icons often sit inside parens ("320(%i:scaleAD%)"); stripping the icon
-    # alone would leave bare "()" litter in player-facing text.
-    s = re.sub(r"\(\s*\)", "", s)
+    if not keep_icons:
+        s = re.sub(r"%i:\w+%", "", s, flags=re.I)
+        # Icons often sit inside parens ("320(%i:scaleAD%)"); stripping the
+        # icon alone would leave bare "()" litter in player-facing text.
+        s = re.sub(r"\(\s*\)", "", s)
     return clean(html.unescape(s))
+
+
+def adaptor_ability_sections(s):
+    """Preserve LoLChess's ordered shared, AD, and AP ability paragraphs."""
+    sections = []
+    for part in re.split(r"(?:\s*<br\s*/?>\s*){2,}", s or "", flags=re.I):
+        match = re.match(
+            r"^\s*Adaptor\s*\(\s*%i:scale(AD|AP)%\s*\)\s*:\s*(.*)$",
+            part, re.I | re.S)
+        body = match.group(2) if match else part
+        desc = clean_lolchess(body, keep_icons=True)
+        if not desc:
+            continue
+        section = {"desc": desc}
+        if match:
+            section["mode"] = match.group(1).upper()
+        sections.append(section)
+    modes = {section["mode"] for section in sections if section.get("mode")}
+    return sections if modes == {"AD", "AP"} else []
 
 
 def lolchess_champions():
@@ -578,6 +596,9 @@ def main():
                             "startingMana": skill.get("startingMana"),
                             "skillMana": skill.get("skillMana"),
                             "source": "lolchess"})
+            sections = adaptor_ability_sections(skill.get("desc"))
+            if sections:
+                ability["sections"] = sections
             expected = ((c.get("mana") or {}).get("start"),
                         (c.get("mana") or {}).get("max"))
             actual = (skill.get("startingMana"), skill.get("skillMana"))
@@ -594,6 +615,12 @@ def main():
     nability = sum("ability" in c for c in champions)
     nresolved = sum(bool((c.get("ability") or {}).get("descResolved"))
                     for c in champions)
+    adaptor_mode_failures = [
+        c["key"] for c in champions if "Adaptor" in c["traits"]
+        and {section["mode"] for section in
+             (c.get("ability") or {}).get("sections", [])
+             if section.get("mode")} != {"AD", "AP"}
+    ]
     print(f"  stats resolved for {nstats}/{len(champions)} champions")
     print(f"  abilities resolved for {nability}/{len(champions)} champions")
     print(f"  LoLChess numeric descriptions for {nresolved}/{len(champions)} champions")
@@ -691,6 +718,8 @@ def main():
         errors.append(f"{len(planner_failures)} team-planner joins failed: {planner_failures}")
     if nresolved != len(champions):
         errors.append(f"numeric ability descriptions resolved for only {nresolved}/{len(champions)} champions")
+    if adaptor_mode_failures:
+        errors.append(f"Adaptor ability modes missing: {adaptor_mode_failures}")
     errors.extend(mechanic_errors)
     for trait_key, tiers in TRAIT_TEAM_SIZE.items():
         trait = traits.get(trait_key)
