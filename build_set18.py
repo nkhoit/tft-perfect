@@ -454,11 +454,29 @@ def main():
         # nothing rather than risk pairing 5-unit numbers with the 3-unit text.
         rows = re.findall(r"<row>(.*?)</row>", t.get("desc") or "", re.S)
         tiers = []
+        upgrades = []
         if len(rows) == len(effs):
             # Each row opens with its own "(5)" which the UI already prints as
             # the breakpoint pip -- strip it so it isn't shown twice.
             tiers = [re.sub(r"^\s*\(\d+\)\s*", "", clean(render_row(r, e)))
                      for r, e in zip(rows, effs)]
+
+        # Solar has one trait breakpoint followed by four three-star upgrade
+        # thresholds separated with <br> tags inside that same row.
+        if key == "Solar" and len(rows) == 1 and effs:
+            parts = [clean(part) for part in
+                     re.split(r"<br\s*/?>", render_row(rows[0], effs[0]),
+                              flags=re.I)]
+            parts = [part for part in parts if part]
+            parsed = []
+            for part in parts[1:]:
+                match = re.match(r"^(\d+)\s*:\s*(.*)$", part)
+                if match:
+                    parsed.append({"count": int(match.group(1)),
+                                   "desc": match.group(2)})
+            if [upgrade["count"] for upgrade in parsed] == [1, 3, 5, 8]:
+                tiers = [re.sub(r"^\s*\(\d+\)\s*", "", parts[0])]
+                upgrades = parsed
 
         # The lead paragraph is everything before the first <row>.
         lead = clean(render_row(
@@ -495,6 +513,8 @@ def main():
                  "bp": bp or [1], "styles": styles,
                  "lead": lead, "tiers": tiers,
                  "desc": desc}
+        if upgrades:
+            trait["upgrades"] = upgrades
         if key in TRAIT_TEAM_SIZE:
             trait["teamSize"] = TRAIT_TEAM_SIZE[key]
         traits[key] = trait
@@ -726,6 +746,9 @@ def main():
         errors.append(f"numeric ability descriptions resolved for only {nresolved}/{len(champions)} champions")
     if adaptor_mode_failures:
         errors.append(f"Adaptor ability modes missing: {adaptor_mode_failures}")
+    solar_upgrades = (traits.get("Solar") or {}).get("upgrades", [])
+    if [upgrade.get("count") for upgrade in solar_upgrades] != [1, 3, 5, 8]:
+        errors.append("Solar three-star upgrades are missing or malformed")
     errors.extend(mechanic_errors)
     for trait_key, tiers in TRAIT_TEAM_SIZE.items():
         trait = traits.get(trait_key)

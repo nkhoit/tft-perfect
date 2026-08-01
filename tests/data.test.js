@@ -44,6 +44,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /class="amodekey"><b>Adaptor<\/b>/);
   assert.match(app, /class="amodestat"/);
   assert.match(css, /\.amode\{/);
+  assert.match(app, /THREE_STAR_ICON/);
+  assert.match(app, /class="tupgrade"/);
+  assert.match(css, /\.tupgrade\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -95,6 +98,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
     tier.includes('%i:scaleAD%') && tier.includes('%i:scaleAP%')));
   assert.ok(data.traits.Defender.tiers.every(tier =>
     tier.includes('%i:scaleArmor%') && tier.includes('%i:scaleMR%')));
+  assert.deepEqual(data.traits.Solar.upgrades.map(upgrade => upgrade.count), [1, 3, 5, 8]);
+  assert.doesNotMatch(data.traits.Solar.tiers[0], /\b1\s*:/);
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

@@ -365,6 +365,9 @@ function renderTraitGrid() {
 const STAT_ICON_BASE =
   'https://raw.communitydragon.org/pbe/plugins/rcp-be-lol-game-data/global/default/' +
   'assets/ux/fonts/texticons/lol/statsicon';
+const THREE_STAR_ICON =
+  'https://raw.communitydragon.org/pbe/plugins/rcp-be-lol-game-data/global/default/' +
+  'assets/ux/fonts/texticons/tft/staricon_3_enabled.png';
 const STAT_ICONS = {
   scaleAD: ['AD', 'Attack Damage'],
   scaleAP: ['AP', 'Ability Power'],
@@ -416,9 +419,17 @@ function traitCard(key) {
   const t = DB.traits[key];
   if (!t) return '';
   const { lead, tiers } = traitDesc(t);
-  const rows = (t.bp || []).map((n, i) => tiers[i]
-    ? `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span><span class="ctx">${tiers[i]}</span></div>`
-    : `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span></div>`).join('');
+  const upgrades = (t.upgrades || []).map(upgrade =>
+    `<div class="tupgrade"><span class="tucount">${upgrade.count}` +
+      `<img class="tstar" src="${THREE_STAR_ICON}" alt="3-star"></span>` +
+      `<span>${cleanText(upgrade.desc)}</span></div>`).join('');
+  const upgradeList = upgrades ? `<div class="tupgrades">${upgrades}</div>` : '';
+  const rows = (t.bp || []).map((n, i) => {
+    const content = (tiers[i] || '') + (i === 0 ? upgradeList : '');
+    return content
+      ? `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span><span class="ctx">${content}</span></div>`
+      : `<div class="crow"><span class="cbp ${styleAt(t, n)}">${n}</span></div>`;
+  }).join('');
   return `<div class="chd">${t.icon ? `<img src="${t.icon}">` : ''}
       <div><b>${t.name}</b><span class="csub">${(t.bp || []).join(' / ')}</span></div></div>` +
     (lead ? `<p class="clead">${lead}</p>` : '') + rows;
