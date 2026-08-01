@@ -57,6 +57,54 @@ def get(url, raw=False, timeout=300):
     return b if raw else json.loads(b)
 
 
+def fnv1a(s):
+    """Riot hashes most variable names in PBE data: `variables` keys arrive as
+    "{a9a813e7}" instead of "BonusDamagePercentBase". It's FNV-1a 32-bit over
+    the lowercased name, so the numbers were never missing -- just locked."""
+    h = 0x811c9dc5
+    for c in s.encode():
+        h ^= c
+        h = (h * 0x01000193) & 0xffffffff
+    return h
+
+
+def fmt_num(v):
+    if isinstance(v, float):
+        r = round(v, 4)
+        return str(int(r)) if abs(r - int(r)) < 1e-6 else str(round(r, 2))
+    return str(v)
+
+
+def render_row(text, eff):
+    """Substitute @Var@ / @Var*100@ / @MinUnits@ using this effect's variables.
+    Unknown tokens stay as-is so the UI can render its own "?" marker; we never
+    invent a number."""
+    vals = {k.lower(): v for k, v in (eff.get("variables") or {}).items()}
+
+    def sub(m):
+        expr = m.group(1)
+        mm = re.fullmatch(r"([A-Za-z0-9_]+)(?:\*(\d+(?:\.\d+)?))?", expr)
+        if not mm:
+            return m.group(0)
+        key = mm.group(1).lower()
+        if key == "minunits":
+            return str(eff.get("minUnits"))
+        val = vals.get(key)
+        if val is None:
+            val = vals.get("{%08x}" % fnv1a(key))
+        if val is None:
+            return m.group(0)
+        if isinstance(val, list):
+            val = val[0] if val else None
+            if val is None:
+                return m.group(0)
+        if mm.group(2):
+            val = val * float(mm.group(2))
+        return fmt_num(val)
+
+    return re.sub(r"@([^@]+)@", sub, text)
+
+
 def clean(s):
     s = re.sub(r"<br\s*/?>", " ", s or "")
     s = re.sub(r"<[^>]+>", "", s)
@@ -81,7 +129,7 @@ def main():
         name = t["name"]
         key = re.sub(r"[^A-Za-z0-9]", "", name)
         effects = sorted(t.get("effects") or [], key=lambda e: e.get("minUnits", 0))
-        styles, bp = [], []
+        styles, bp, effs = [], [], []
         for e in effects:
             mn = e.get("minUnits")
             if not mn:
@@ -92,6 +140,24 @@ def main():
             styles.append({"style": STYLE_NAMES.get(e.get("style"), "bronze"),
                            "min": mn, "max": mx})
             bp.append(mn)
+            effs.append(e)
+
+        # Riot splits the per-breakpoint text into <row> tags, one per effect,
+        # in breakpoint order. Render each row against its own effect so the
+        # numbers land on the right tier. If the counts don't line up we emit
+        # nothing rather than risk pairing 5-unit numbers with the 3-unit text.
+        rows = re.findall(r"<row>(.*?)</row>", t.get("desc") or "", re.S)
+        tiers = []
+        if len(rows) == len(effs):
+            # Each row opens with its own "(5)" which the UI already prints as
+            # the breakpoint pip -- strip it so it isn't shown twice.
+            tiers = [re.sub(r"^\s*\(\d+\)\s*", "", clean(render_row(r, e)))
+                     for r, e in zip(rows, effs)]
+
+        # The lead paragraph is everything before the first <row>.
+        lead = clean(render_row(
+            re.split(r"<row>", t.get("desc") or "", 1)[0],
+            effs[0] if effs else {}))
 
         icon = None
         # CommunityDragon gives the authoritative asset path in `icon`; the
@@ -107,6 +173,7 @@ def main():
 
         traits[key] = {"key": key, "name": name, "icon": icon,
                        "bp": bp or [1], "styles": styles,
+                       "lead": lead, "tiers": tiers,
                        "desc": clean(t.get("desc"))}
         bykey[key] = key
         bykey[name] = key

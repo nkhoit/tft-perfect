@@ -425,6 +425,13 @@ function cleanText(s) {
 }
 
 function traitDesc(t) {
+  // The build script now renders per-breakpoint text with the real numbers
+  // substituted (Riot FNV-1a hashes most variable names, which is why these
+  // used to come through as "?"). Fall back to splitting the raw template for
+  // traits where the <row> count didn't match the breakpoint count.
+  if (t.tiers && t.tiers.length) {
+    return { lead: cleanText(t.lead || ''), tiers: t.tiers.map(cleanText) };
+  }
   const parts = (t.desc || '').split(/\(@MinUnits@\)/);
   return { lead: cleanText(parts[0]), tiers: parts.slice(1).map(cleanText) };
 }
