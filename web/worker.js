@@ -275,7 +275,7 @@ function search(o) {
         if (!c) continue;
         const bp = BPS[t];
         const w = wasteOf(bp, c);
-        if (w) { waste += w; if (c >= BP1[t]) over.push([t, w]); else dead.push(t); }
+        if (w) { waste += w; if (c >= BP1[t]) over.push([t, w]); else dead.push([t, c]); }
         if (c >= BP1[t]) {
           const ti = tierOf(bp, c);
           active.push([t, c, ti]);

@@ -292,3 +292,14 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 @media(max-width:820px){ .selgrp{flex-direction:column;gap:4px} .sellbl{flex:none} }
 /* traits you can't require (uniques, Rival) shouldn't look clickable */
 .tb.nopin{cursor:default}
+
+/* dead traits: on the board but below the first breakpoint. Grey, inert,
+   and showing n/next so the gap reads at a glance ("3/4 Riftbeast"). */
+.tb.dead{opacity:.5;border-style:dashed;border-color:#333c4d;color:#8b95a3;
+  background:#151a22;cursor:default}
+.tb.dead img{filter:grayscale(1);opacity:.6}
+.tb.dead b{font-weight:700}
+.tb.dead b i{font-style:normal;opacity:.6;font-weight:600}
+/* display:flex beats the hidden attribute; without this the empty
+   REQUIRED/EXCLUDED labels render with no chips under them */
+.sel[hidden],.selgrp[hidden]{display:none}

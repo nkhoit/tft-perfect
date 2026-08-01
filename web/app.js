@@ -571,6 +571,18 @@ function render(m) {
     const overBy = {};
     (r.over || []).forEach(([ti, w]) => overBy[ti] = w);
 
+    // Dead traits used to be a "Dead: X, Y" sentence under the board. Render
+    // them as grey badges inline instead, and show n/next so the gap is
+    // legible at a glance ("3/4 Riftbeast" = one unit short).
+    const deadBadges = (r.dead || []).map(([ti, n]) => {
+      const key = tkeys[ti], t = DB.traits[key];
+      const bp = t.bp || [1];
+      const nxt = bp.find(x => x > n) || bp[bp.length - 1];
+      return `<span class="tb dead" data-tk="${key}" data-tn="${n}" ` +
+        `title="${t.name} ${n}/${nxt} — ${nxt - n} more to activate">` +
+        `${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}<i>/${nxt}</i></b> ${t.name}</span>`;
+    }).join('');
+
     const badges = r.active.map(([ti, n]) => {
       const key = tkeys[ti], t = DB.traits[key];
       const cls = styleAt(t, n);
@@ -589,7 +601,6 @@ function render(m) {
       .join('');
 
     const notes = [];
-    if (r.dead.length) notes.push('Dead: ' + r.dead.map(ti => DB.traits[tkeys[ti]].name).join(', '));
     if ((r.over || []).length) notes.push('Over: ' + r.over.map(([ti, w]) => `${DB.traits[tkeys[ti]].name} +${w}`).join(', '));
 
     // Same trait signature, different roster. Offered per-board instead of as a
@@ -607,7 +618,7 @@ function render(m) {
     const d = document.createElement('div');
     d.className = 'comp';
     d.innerHTML =
-      `<div class="left"><div class="tline">${badges}</div><div class="uline">${units}${varTag}</div>` +
+      `<div class="left"><div class="tline">${badges}${deadBadges}</div><div class="uline">${units}${varTag}</div>` +
       (notes.length ? `<div class="wasted">${notes.join(' · ')}</div>` : '') + varRows + `</div>` +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
