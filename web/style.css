@@ -16,9 +16,16 @@ header{display:flex;align-items:center;gap:12px;padding:10px 16px;
 .status{font-variant-numeric:tabular-nums}
 .spacer{flex:1}
 .setsel{width:auto;font-size:12px;padding:4px 8px}
-.wrap{display:grid;grid-template-columns:290px 1fr;align-items:start}
+/* align-items:start shrink-wraps the sidebar's grid area to its own content,
+   and a sticky element can never escape its containing block -- so it stuck
+   for ~600px then scrolled away. Stretch gives it the full row to stick in. */
+.wrap{display:grid;grid-template-columns:290px 1fr;align-items:stretch}
+/* --hdr is measured from the real header in JS: a hardcoded value drifts the
+   moment the header wraps or its font changes, which reads as the sidebar
+   sliding a few px under the header while you scroll */
 .side{background:var(--panel);border-right:1px solid var(--edge);padding:14px;
-  position:sticky;top:41px;max-height:calc(100vh - 41px);overflow-y:auto}
+  position:sticky;top:var(--hdr,47px);max-height:calc(100vh - var(--hdr,47px));
+  overflow-y:auto}
 .side section{margin-bottom:20px}
 .main{padding:14px 16px;min-width:0}
 .hint{font-size:11px;color:var(--dim);line-height:1.45;margin:6px 0 0}

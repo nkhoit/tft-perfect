@@ -585,3 +585,13 @@ $('list').addEventListener('click', (e) => {
   else reqTraits.push({ key, n });
   renderTraitGrid(); run();
 });
+
+// Sticky sidebar offset must equal the real header height, or the panel slides
+// a few px under it before locking. Measured, not hardcoded.
+function syncHeaderVar() {
+  const h = document.querySelector('header');
+  if (h) document.documentElement.style.setProperty('--hdr', Math.round(h.getBoundingClientRect().height) + 'px');
+}
+syncHeaderVar();
+addEventListener('resize', syncHeaderVar);
+if (window.ResizeObserver) new ResizeObserver(syncHeaderVar).observe(document.querySelector('header'));
