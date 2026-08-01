@@ -102,11 +102,12 @@ button:hover{border-color:var(--acc2)}
 .tb.gold{border-color:var(--gold);color:#f5d789} .tb.chromatic,.tb.prismatic{border-color:var(--prism);color:#c4f2f9}
 .tb.unique{border-color:#7c6cf5;color:#c3bbff}
 .tb.emb{border-style:dashed}
-.uline{display:flex;flex-wrap:wrap;gap:4px}
-.uc{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--edge);
-  border-radius:6px;padding:2px 7px 2px 2px;font-size:11px;white-space:nowrap}
-.uc img{width:20px;height:20px;border-radius:4px;object-fit:cover}
-.uc.req{border-color:var(--acc)}
+.uline{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.uc{position:relative;display:block;flex:none;width:56px;height:56px;overflow:hidden;
+  background:var(--panel2);border:2px solid var(--edge);border-radius:8px;cursor:help;
+  transition:filter .1s,transform .1s}
+.uc:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.uc img{display:block;width:100%;height:100%;border-radius:5px;object-fit:cover}
 .score{text-align:right;font-size:11px;color:var(--dim);line-height:1.7;white-space:nowrap}
 .score b{font-size:15px;color:var(--acc);display:block;font-variant-numeric:tabular-nums}
 .score .w{color:var(--red)}
@@ -195,17 +196,13 @@ button:hover{border-color:var(--acc2)}
 .costhdr.c5{color:#e0a13a}
 .costhdr.hide{display:none}
 
-/* ---- result unit chips: cost identity ---- */
-.uc{border-left-width:3px}
-/* cost reads off the colored left border alone -- the number was redundant */
-.uc .kc{display:none}
-.uc.k1{border-left-color:#9aa4b2}
-.uc.k2{border-left-color:#4ac07a}
-.uc.k3{border-left-color:#4a90d9}
-.uc.k4{border-left-color:#c061d0}
-.uc.k5{border-left-color:#e0a13a}
-.uc.k4{background:#1d1526}
-.uc.k5{background:#241d12}
+/* ---- result unit portraits: cost identity ---- */
+.uc.k1{border-color:#9aa4b2}
+.uc.k2{border-color:#4ac07a}
+.uc.k3{border-color:#4a90d9}
+.uc.k4{border-color:#c061d0}
+.uc.k5{border-color:#e0a13a}
+.uc.req{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
 
 /* search stopped short of a full sweep */
 .status .cut{color:#ffb454;font-weight:700;cursor:help}
@@ -271,6 +268,7 @@ label.sub select{margin-top:3px}
 .vlist{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed #232a36;gap:5px}
 .comp.vopen .vlist{display:flex;flex-direction:column}
 .vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.vrow .uc{width:42px;height:42px;border-radius:7px}
 .vg{font-size:11px;color:var(--dim);margin-left:auto;padding-left:8px;white-space:nowrap}
 
 /* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
@@ -326,3 +324,4 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 /* display:flex beats the hidden attribute; without this the empty
    REQUIRED/EXCLUDED labels render with no chips under them */
 .sel[hidden],.selgrp[hidden]{display:none}
+@media(max-width:820px){.uline>.uc{width:50px;height:50px}}
