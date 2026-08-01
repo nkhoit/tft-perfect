@@ -77,6 +77,15 @@ test('the application contains only Set 18', () => {
   assert.doesNotMatch(app, /class="kc"/);
 });
 
+test('required result portraits preserve their cost border', () => {
+  const css = read('web/style.css');
+  const requiredRule = css.match(/\.uc\.req\{([^}]*)\}/);
+
+  assert.ok(requiredRule, 'missing required-unit portrait styling');
+  assert.doesNotMatch(requiredRule[1], /\bborder(?:-[a-z]+)?\s*:/);
+  assert.match(requiredRule[1], /\bbox-shadow\s*:/);
+});
+
 test('the generated data and checked-in roster are internally consistent', () => {
   const data = JSON.parse(read('web/data.json'));
   const roster = JSON.parse(read('set18-roster.json'));

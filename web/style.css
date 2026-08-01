@@ -229,7 +229,7 @@ button:hover{border-color:var(--acc2)}
 .uc.k3{border-color:#4a90d9}
 .uc.k4{border-color:#c061d0}
 .uc.k5{border-color:#e0a13a}
-.uc.req{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.uc.req{box-shadow:0 0 0 2px var(--acc)}
 
 /* search stopped short of a full sweep */
 .status .cut{color:#ffb454;font-weight:700;cursor:help}
