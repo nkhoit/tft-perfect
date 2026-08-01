@@ -7,7 +7,6 @@ let debounceTimer = null, queuedDispatch = null, activeSearch = null;
 // past that the merge cost outweighs the split on this search size.
 const NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
 const DEBOUNCE_MS = 200;
-const SEARCH_ALGORITHM_VERSION = 'weighted-v2';
 const MEMORY_CACHE_LIMIT = 24;
 const DEVICE_CACHE_LIMIT = 50;
 const DEVICE_CACHE_DB = 'tft-trait-search-cache';
@@ -27,8 +26,8 @@ const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
 const muted = new Set();          // trait keys that still show but earn no score or waste
 
-const { antiStack, breakpoints, comparator, isUnique, scoreFloor, scoresAt,
-  scoringBreakpoints, searchCacheKey, summary, traitSignature } = SearchUtils;
+const { algorithmVersion, antiStack, breakpoints, isUnique, mergeSearchResults,
+  scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey, summary } = SearchUtils;
 
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
@@ -37,7 +36,7 @@ let savedSearches = [], savedSearchesAvailable = true;
 
 function loadMetrics() {
   const empty = {
-    requests: 0, memoryHits: 0, deviceHits: 0, workerRuns: 0,
+    requests: 0, memoryHits: 0, deviceHits: 0, precomputedHits: 0, workerRuns: 0,
     cancellations: 0, truncated: 0, workerMs: 0, cacheErrors: 0,
   };
   try {
@@ -83,6 +82,40 @@ function memoryCacheSet(key, result) {
   memoryCache.set(key, value);
   while (memoryCache.size > MEMORY_CACHE_LIMIT) {
     memoryCache.delete(memoryCache.keys().next().value);
+  }
+}
+
+async function showPrecomputedLanding() {
+  if (!isDefaultSharedState(sharedSearchState())) return false;
+  const generation = searchGeneration;
+  const opts = buildSearchOptions();
+  const version = `${algorithmVersion}:${DB.builtAt || DB.gameBuild || DB.set}`;
+  const key = searchCacheKey(version, opts);
+  try {
+    const response = await fetch('precomputed-default.json', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const snapshot = await response.json();
+    if (generation !== searchGeneration) return true;
+    const result = snapshot.result;
+    if (snapshot.schemaVersion !== 1
+        || snapshot.algorithmVersion !== algorithmVersion
+        || snapshot.dataBuiltAt !== DB.builtAt
+        || snapshot.queryKey !== key
+        || !result || !Array.isArray(result.rows)
+        || result.rows.length !== 100
+        || !Number.isFinite(result.total)
+        || typeof result.truncated !== 'boolean') {
+      throw new Error('Landing result metadata does not match this build.');
+    }
+    recordMetric('requests');
+    recordMetric('precomputedHits');
+    memoryCacheSet(key, result);
+    render({ ...result, cached: 'precomputed' });
+    return true;
+  } catch (error) {
+    if (generation !== searchGeneration) return true;
+    console.warn('Could not load the precomputed landing result.', error);
+    return false;
   }
 }
 
@@ -566,7 +599,7 @@ function loadData() {
     refreshSearchControls();
     dataReady = true;
     renderSavedSearches();
-    run(true);
+    if (!await showPrecomputedLanding()) run(true);
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
 
@@ -588,32 +621,10 @@ function onWorker(e) {
     return;
   }
 
-  // Each shard returns its own sorted top slice; merge, re-sort, then dedup
-  // globally — a trait signature can appear in more than one shard.
   const search = activeSearch;
   if (!search) return;
-  const merged = {
-    rows: [].concat(...parts.map(p => p.rows))
-      .sort(comparator(search.opts.sortMode, search.opts.sortMode2)),
-    total: parts.reduce((n, p) => n + p.total, 0),
-    truncated: parts.some(p => p.truncated),
-    capped: parts.some(p => p.capped),
-    ms: Math.max(...parts.map(p => p.ms)),
-  };
-  // Boards with an identical trait signature are the same comp reached with
-  // interchangeable units. Collapse them, but KEEP the alternates attached so
-  // the row can offer them -- that's the real question ("I don't have Ahri").
-  {
-    const by = new Map();
-    for (const r of merged.rows) {
-      const sig = traitSignature(r);
-      const hit = by.get(sig);
-      if (hit) { if (hit.variants.length < 24) hit.variants.push(r); }
-      else { r.variants = []; by.set(sig, r); }
-    }
-    merged.rows = [...by.values()];
-  }
-  merged.rows = merged.rows.slice(0, 100);
+  const merged = mergeSearchResults(
+    parts, search.opts.sortMode, search.opts.sortMode2);
   activeSearch = null;
   recordMetric('workerMs', merged.ms);
   if (merged.truncated) recordMetric('truncated');
@@ -1169,7 +1180,7 @@ async function executeSearch(generation) {
   recordMetric('requests');
   void syncSearchUrl(generation);
   const opts = buildSearchOptions();
-  const version = `${SEARCH_ALGORITHM_VERSION}:${DB.builtAt || DB.gameBuild || DB.set}`;
+  const version = `${algorithmVersion}:${DB.builtAt || DB.gameBuild || DB.set}`;
   const key = searchCacheKey(version, opts);
 
   const memoryResult = memoryCacheGet(key);

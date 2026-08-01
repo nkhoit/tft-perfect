@@ -12,6 +12,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Stackable emblems that add trait points without using board slots.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
 - Debounced, cancellable searches with versioned memory and device caches.
+- An instant precomputed result for the default landing search.
 - Compact shareable URLs that restore every search control.
 - Named saved searches stored privately on the current device.
 - Sorting by active traits, trait tiers, waste, or board cost.
@@ -77,7 +78,8 @@ python3 build_set18.py
 
 The builder caches large downloads under the operating system's temporary directory.
 It validates roster joins, trait breakpoints, icons, champion stats, and abilities before
-replacing `web/data.json`.
+replacing `web/data.json`. Node.js is also required because the builder regenerates the
+versioned default-search snapshot alongside the dataset.
 
 To compare a directory of archived patch-note JSON files with the generated data:
 

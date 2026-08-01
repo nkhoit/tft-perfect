@@ -4,7 +4,8 @@
     "Cache-Control": "public, max-age=300"
   },
   "routes": [
-    { "route": "/data.json", "headers": { "Cache-Control": "no-cache" } }
+    { "route": "/data.json", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/precomputed-default.json", "headers": { "Cache-Control": "no-cache" } }
   ],
   "mimeTypes": {
     ".json": "application/json",

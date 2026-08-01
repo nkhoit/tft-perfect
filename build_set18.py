@@ -10,6 +10,7 @@ This stitches:
 Usage: python3 build_set18.py [--out web/data.json]
 """
 import argparse, json, os, re, sys, urllib.request, urllib.error, datetime, hashlib, concurrent.futures, html, tempfile
+import subprocess
 import xxhash
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -826,7 +827,22 @@ def main():
     tmp = out_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
-    os.replace(tmp, out_path)
+    precomputed_path = os.path.join(
+        os.path.dirname(out_path), "precomputed-default.json")
+    precomputed_tmp = precomputed_path + ".tmp"
+    try:
+        subprocess.run([
+            "node", os.path.join(HERE, "precompute_default.js"),
+            "--data", tmp,
+            "--out", precomputed_tmp,
+        ], check=True)
+        os.replace(precomputed_tmp, precomputed_path)
+        os.replace(tmp, out_path)
+    except Exception:
+        for path in (tmp, precomputed_tmp):
+            if os.path.exists(path):
+                os.remove(path)
+        raise
     print(f"wrote {out_path}: {len(champions)} champions, {len(traits)} traits")
 
 

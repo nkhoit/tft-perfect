@@ -3,6 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
+  const ALGORITHM_VERSION = 'weighted-v2';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -64,6 +65,29 @@
       .join('|');
   }
 
+  function mergeSearchResults(parts, primary, secondary, limit = 100) {
+    const merged = {
+      rows: [].concat(...parts.map(part => part.rows)).sort(comparator(primary, secondary)),
+      total: parts.reduce((total, part) => total + part.total, 0),
+      truncated: parts.some(part => part.truncated),
+      capped: parts.some(part => part.capped),
+      ms: Math.max(...parts.map(part => part.ms)),
+    };
+    const bySignature = new Map();
+    for (const row of merged.rows) {
+      const signature = traitSignature(row);
+      const existing = bySignature.get(signature);
+      if (existing) {
+        if (existing.variants.length < 24) existing.variants.push(row);
+      } else {
+        row.variants = [];
+        bySignature.set(signature, row);
+      }
+    }
+    merged.rows = [...bySignature.values()].slice(0, limit);
+    return merged;
+  }
+
   function searchCacheKey(version, options) {
     const numbers = values => [...(values || [])].sort((a, b) => a - b);
     const canonical = {
@@ -91,7 +115,9 @@
       ? 'Loaded from the in-memory result cache. '
       : result.cached === 'device'
         ? 'Loaded from this device\'s persistent result cache. '
-        : '';
+        : result.cached === 'precomputed'
+          ? 'Loaded from the precomputed landing result. '
+          : '';
     const statusHtml = result.cached
       ? `<span class="hit">cached</span>` +
         (result.truncated ? ' · <span class="cut">incomplete</span>' : '')
@@ -107,10 +133,12 @@
   }
 
   return {
+    algorithmVersion: ALGORITHM_VERSION,
     antiStack,
     breakpoints,
     comparator,
     isUnique,
+    mergeSearchResults,
     scoreFloor,
     scoringBreakpoints,
     scoresAt,

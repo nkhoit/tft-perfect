@@ -79,6 +79,8 @@ test('the application contains only Set 18', () => {
   assert.match(app, /indexedDB/);
   assert.match(app, /TFTSearchMetrics/);
   assert.match(app, /recordMetric\('cancellations'\)/);
+  assert.match(app, /function showPrecomputedLanding/);
+  assert.match(app, /cached: 'precomputed'/);
   assert.match(app, /function sharedSearchState/);
   assert.match(app, /function applySharedSearchState/);
   assert.match(app, /function renderSavedSearches/);
