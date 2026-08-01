@@ -900,27 +900,24 @@ function teamProfile(units, compact = false) {
     else if (role.startsWith('AD')) counts.AD++;
     else if (role.startsWith('AP')) counts.AP++;
   }
-  const others = units.length - counts.tanks;
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
-  const pills = [
-    `<span class="profilepill frontline" title="${plural(counts.tanks, 'tank')}, ` +
-      `${plural(others, 'other')}">${statIcon('scaleArmor')}<b>${counts.tanks}</b> ` +
-      `tank${counts.tanks === 1 ? '' : 's'}<i>/</i><b>${others}</b> ` +
-      `other${others === 1 ? '' : 's'}</span>`,
+  const parts = [
+    `<span class="profilepart tank" title="${plural(counts.tanks, 'tank')}">` +
+      `${statIcon('scaleArmor')}<b>${counts.tanks}</b> Tank</span>`,
   ];
   if (counts.AD) {
-    pills.push(`<span class="profilepill ad" title="${plural(counts.AD, 'AD unit')}">` +
+    parts.push(`<span class="profilepart ad" title="${plural(counts.AD, 'AD unit')}">` +
       `${statIcon('scaleAD')}<b>${counts.AD}</b> AD</span>`);
   }
   if (counts.AP) {
-    pills.push(`<span class="profilepill ap" title="${plural(counts.AP, 'AP unit')}">` +
+    parts.push(`<span class="profilepart ap" title="${plural(counts.AP, 'AP unit')}">` +
       `${statIcon('scaleAP')}<b>${counts.AP}</b> AP</span>`);
   }
   if (counts.Hybrid) {
-    pills.push(`<span class="profilepill hybrid" title="${plural(counts.Hybrid, 'hybrid unit')}">` +
-      `${statIcon('scaleAD')}${statIcon('scaleAP')}<b>${counts.Hybrid}</b> hybrid</span>`);
+    parts.push(`<span class="profilepart hybrid" title="${plural(counts.Hybrid, 'hybrid unit')}">` +
+      `${statIcon('scaleAD')}${statIcon('scaleAP')}<b>${counts.Hybrid}</b> Hybrid</span>`);
   }
-  return `<div class="teamprofile${compact ? ' compact' : ''}">${pills.join('')}</div>`;
+  return `<div class="teamprofile${compact ? ' compact' : ''}">${parts.join('')}</div>`;
 }
 
 function render(m) {

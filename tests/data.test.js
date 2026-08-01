@@ -65,7 +65,7 @@ test('the application contains only Set 18', () => {
   assert.match(app, /function teamProfile/);
   assert.match(app, /class="teamprofile/);
   assert.match(app, /endsWith\('Tank'\)/);
-  assert.match(css, /\.profilepill\{/);
+  assert.match(css, /\.profilepart\{/);
   assert.match(app, /function portraitRoleBadge/);
   assert.match(app, /class="rtype /);
   assert.match(app, /traits\.includes\('Adaptor'\)/);
@@ -84,6 +84,21 @@ test('required result portraits preserve their cost border', () => {
   assert.ok(requiredRule, 'missing required-unit portrait styling');
   assert.doesNotMatch(requiredRule[1], /\bborder(?:-[a-z]+)?\s*:/);
   assert.match(requiredRule[1], /\bbox-shadow\s*:/);
+});
+
+test('team composition renders as one segmented strip', () => {
+  const app = read('web/app.js');
+  const css = read('web/style.css');
+  const profile = app.match(/function teamProfile\(units, compact = false\) \{[\s\S]*?\n\}/)?.[0];
+
+  assert.ok(profile, 'missing team profile renderer');
+  assert.match(profile, /class="profilepart tank"/);
+  assert.match(profile, /class="profilepart ad"/);
+  assert.match(profile, /class="profilepart ap"/);
+  assert.match(profile, /class="profilepart hybrid"/);
+  assert.doesNotMatch(profile, /\bothers?\b/i);
+  assert.doesNotMatch(app + css, /profilepill/);
+  assert.match(css, /\.profilepart\+\.profilepart\{[^}]*border-left:/);
 });
 
 test('the generated data and checked-in roster are internally consistent', () => {
