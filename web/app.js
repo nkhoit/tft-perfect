@@ -379,8 +379,7 @@ function unitCard(key) {
       <div class="cstat"><span>Armor</span><b>${s.armor}</b></div>
       <div class="cstat"><span>MR</span><b>${s.mr}</b></div>
       <div class="cstat"><span>Range</span><b>${s.range} hex</b></div>
-      ${mana}</div>
-    <p class="cnote">Base stats at 1★. 2★ ≈ 1.8× · 3★ ≈ 3.24× Health and Damage.</p>` : mana;
+      ${mana}</div>` : mana;
   return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
       <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
     <div class="cchs">${traits}</div>${stats}${ability}`;
