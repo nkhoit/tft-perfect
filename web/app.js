@@ -515,8 +515,14 @@ function run() {
 }
 
 // ---------- render ----------
+const COPY_CODE_ICON = `<svg class="copyicon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+  <g class="copyglyph"><path d="M7 6V4.8C7 3.8 7.8 3 8.8 3h6.4c1 0 1.8.8 1.8 1.8v6.4c0 1-.8 1.8-1.8 1.8H14"/><rect x="3" y="7" width="10" height="10" rx="2"/></g>
+  <path class="checkglyph" d="m4.8 10.4 3.1 3.1 7.3-7.3"/>
+</svg>`;
+
 function copyCodeButton(units) {
-  return `<button class="copycode" data-units="${units.join(',')}" title="Copy for TFT Team Planner">Copy team code</button>`;
+  return `<button type="button" class="copycode" data-units="${units.join(',')}" ` +
+    `data-tip="Copy TFT Team Planner code" aria-label="Copy TFT Team Planner code">${COPY_CODE_ICON}</button>`;
 }
 
 function render(m) {
@@ -615,8 +621,16 @@ $('list').addEventListener('click', (e) => {
     const champions = copy.dataset.units.split(',').map(i => DB.champions[+i]);
     const code = TeamCode.encode(champions, DB.teamPlannerSet);
     const copied = () => {
-      copy.textContent = 'Copied';
-      setTimeout(() => { copy.textContent = 'Copy team code'; }, 1200);
+      clearTimeout(copy.copyReset);
+      copy.classList.add('copied');
+      copy.dataset.tip = 'Copied to clipboard';
+      copy.setAttribute('aria-label', 'Copied to clipboard');
+      copy.copyReset = setTimeout(() => {
+        if (!copy.isConnected) return;
+        copy.classList.remove('copied');
+        copy.dataset.tip = 'Copy TFT Team Planner code';
+        copy.setAttribute('aria-label', 'Copy TFT Team Planner code');
+      }, 1200);
     };
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(code).then(copied)

@@ -21,6 +21,9 @@ test('the application contains only Set 18', () => {
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
   assert.match(app, /descResolved \|\| a\.desc/);
+  assert.match(app, /aria-label="Copy TFT Team Planner code"/);
+  assert.match(app, /class="copyicon"/);
+  assert.doesNotMatch(app, />Copy team code<\/button>/);
 });
 
 test('the generated data and checked-in roster are internally consistent', () => {
