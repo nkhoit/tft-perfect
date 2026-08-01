@@ -143,7 +143,14 @@ def main():
             if tiles:
                 icon = ASSET + tiles[0]
 
-        champions.append({"key": api.replace("TFT18_", ""), "name": c["name"],
+        # Riot ships Lux's nine Origin forms as one concatenated token
+        # ("LuxBlossom"). Split the Origin back out so the UI can read
+        # "Lux (Blossom)" instead of a run-on word.
+        disp = c["name"]
+        if disp.startswith("Lux") and disp != "Lux":
+            disp = f"Lux ({disp[3:]})"
+
+        champions.append({"key": api.replace("TFT18_", ""), "name": disp,
                           "cost": c["cost"], "traits": keys, "icon": icon,
                           "mana": c.get("mana")})
 
