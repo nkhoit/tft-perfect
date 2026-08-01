@@ -28,6 +28,8 @@ test('the application contains only Set 18', () => {
   assert.match(app, /`<div class="compmeta">` \+\s*copyCodeButton\(r\.units\)/);
   assert.match(css, /\.compmeta>\.copycode\{[^}]*margin:0/);
   assert.match(css, /\.comp>\.vlist\{[^}]*grid-column:1\/-1/);
+  assert.match(css, /#traitGrid\{grid-template-columns:repeat\(5,1fr\)\}/);
+  assert.match(css, /#embGrid\{grid-template-columns:repeat\(6,1fr\)\}/);
   assert.match(app, /function unitPortrait/);
   assert.match(app, /class="un"/);
   assert.doesNotMatch(app, /class="kc"/);
