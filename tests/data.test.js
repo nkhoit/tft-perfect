@@ -25,6 +25,7 @@ test('the application contains only Set 18', () => {
   assert.match(app, /class="copyicon"/);
   assert.doesNotMatch(app, />Copy team code<\/button>/);
   assert.match(app, /function unitPortrait/);
+  assert.match(app, /class="un"/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

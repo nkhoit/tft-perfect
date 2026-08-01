@@ -525,7 +525,7 @@ function copyCodeButton(units) {
 function unitPortrait(c) {
   const req = state.get(c.key) === 1 ? ' req' : '';
   return `<span class="uc k${c.cost}${req}" data-key="${c.key}" title="${c.name}">` +
-    `<img loading="lazy" src="${c.icon}" alt="${c.name}"></span>`;
+    `<img loading="lazy" src="${c.icon}" alt="${c.name}"><span class="un">${c.name}</span></span>`;
 }
 
 function render(m) {
