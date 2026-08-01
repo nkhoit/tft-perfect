@@ -1,9 +1,13 @@
 // worker.js — combinatorial board search with wasted-trait pruning.
 // Runs off the main thread so the UI stays responsive while sliders move.
 
+importScripts('search-utils.js');
+
 let DB = null;
 let TK = [];        // trait keys, indexed
+let TI = null;      // trait key -> index
 let BP1 = null;     // Int16Array: first breakpoint per trait
+let SCORE1 = null;  // Int16Array: first breakpoint that earns score
 let UNIQ = null;    // Uint8Array: 1 = unique/1-unit trait, excluded from the active count
 let MUTE = null;    // Uint8Array: 1 = user muted this trait, excluded from the active count
 let BPS = [];       // per-trait breakpoint arrays
@@ -12,28 +16,21 @@ let CTR = [];       // per-champion array of trait indices
 // A trait is "unique" when it activates off a single unit (Avatar, Caustic,
 // Thornmaiden, ...). They're free with the unit, so counting them inflates the
 // active-trait score and drowns out genuinely wide boards. Still displayed.
-function isUnique(t) {
-  if ((t.styles || []).some(s => s.style === 'unique')) return true;
-  if ((t.bp || []).length === 1 && (t.bp[0] || 1) <= 1) return true;
-  // Anti-stacking traits ("Only active while fielding 1 Rival") activate off a
-  // single champion and can't be built toward, so they're uniques in all but
-  // name. Scoring them inflated any board that happened to include KhaZix or
-  // Rengar by a free trait point.
-  return /only active while fielding\s+1\b/i.test(t.desc || '');
-}
-
 function init(db) {
   DB = db;
   TK = Object.keys(db.traits);
-  const ti = new Map(TK.map((k, i) => [k, i]));
+  TI = new Map(TK.map((k, i) => [k, i]));
   BP1 = new Int16Array(TK.length);
+  SCORE1 = new Int16Array(TK.length);
   UNIQ = new Uint8Array(TK.length);
-  BPS = TK.map(k => db.traits[k].bp || [1]);
+  BPS = TK.map(k => SearchUtils.breakpoints(db.traits[k]));
   TK.forEach((k, i) => {
-    BP1[i] = db.traits[k].bp[0] || 1;
-    UNIQ[i] = isUnique(db.traits[k]) ? 1 : 0;
+    BP1[i] = BPS[i][0] || 1;
+    const floor = SearchUtils.scoreFloor(db.traits[k]);
+    SCORE1[i] = Number.isFinite(floor) ? floor : 32767;
+    UNIQ[i] = SearchUtils.isUnique(db.traits[k]) ? 1 : 0;
   });
-  CTR = db.champions.map(c => c.traits.map(t => ti.get(t)).filter(x => x !== undefined));
+  CTR = db.champions.map(c => c.traits.map(t => TI.get(t)).filter(x => x !== undefined));
 }
 
 // tier index for a trait at a given count (-1 = inactive)
@@ -59,15 +56,18 @@ function wasteOf(bp, n) {
 }
 
 function search(o) {
-  const { size, maxWaste, reqIdx, poolIdx, emblems, sortMode, limit, uniq } = o;
+  const { size, maxWaste, reqIdx, poolIdx, emblems, limit } = o;
   const reqTraits = o.reqTraits || [];   // [{t: traitIdx, n: minCount}]
 
   const nT = TK.length;
-  // muted traits still show on the board, they just stop earning score
+  // Muted traits still show on the board, but earn no score or waste.
   MUTE = new Uint8Array(nT);
   for (const t of (o.muted || [])) if (t >= 0 && t < nT) MUTE[t] = 1;
   const counts = new Int16Array(nT);
-  for (const e of emblems) counts[e]++;              // emblems are free trait points
+  for (const emblem of emblems) {
+    const trait = typeof emblem === 'string' ? TI.get(emblem) : emblem;
+    if (trait >= 0 && trait < nT) counts[trait]++;
+  }
 
   // seed required units
   for (const i of reqIdx) for (const t of CTR[i]) counts[t]++;
@@ -115,6 +115,7 @@ function search(o) {
   function wasteLB(slotsLeft) {
     let w = 0;
     for (let t = 0; t < nT; t++) {
+      if (MUTE[t]) continue;
       const c = counts[t];
       if (c) w += LBT[(t * MC1 + c) * S1 + slotsLeft];
     }
@@ -151,19 +152,8 @@ function search(o) {
   // Comparator is known up front, so instead of stopping at an arbitrary cap
   // (which biases results toward whatever DFS happened to reach first) we keep
   // the best RESULT_CAP boards seen and drop the worst half when we overflow.
-  const KEY = {
-    live:  (a, b) => b.live - a.live,
-    tier:  (a, b) => b.tierSum - a.tierSum,
-    waste: (a, b) => a.waste - b.waste,
-    cost:  (a, b) => a.gold - b.gold,
-    rich:  (a, b) => b.gold - a.gold,   // priciest first: proxy for unit quality
-  };
-  const order = [o.sortMode, o.sortMode2, 'live', 'tier', 'waste', 'cost']
-    .filter((k, i, arr) => KEY[k] && arr.indexOf(k) === i);
-  const cmp = (a, b) => {
-    for (const k of order) { const d = KEY[k](a, b); if (d) return d; }
-    return 0;
-  };
+  const order = SearchUtils.sortOrder(o.sortMode, o.sortMode2);
+  const cmp = SearchUtils.comparator(o.sortMode, o.sortMode2);
   let trimmed = false;   // true once we've discarded boards that ranked poorly
   let found = 0;         // total matching boards, including any we trimmed
   let worst = null;      // worst board currently kept, once we've trimmed once
@@ -220,9 +210,9 @@ function search(o) {
     for (let t = 0; t < nT; t++) {
       if (UNIQ[t] || MUTE[t]) continue;         // never scored
       const c = counts[t];
-      if (c >= BP1[t]) { ub++; continue; }      // already active
+      if (c >= SCORE1[t]) { ub++; continue; }   // already scoring
       const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
-      if (reach >= BP1[t]) ub++;                // could still activate
+      if (reach >= SCORE1[t]) ub++;             // could still score
     }
     return ub;
   }
@@ -234,6 +224,7 @@ function search(o) {
       if (UNIQ[t] || MUTE[t]) continue;
       const c = counts[t];
       const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
+      if (reach < SCORE1[t]) continue;
       const ti = tierOf(BPS[t], reach);
       if (ti >= 0) ub += ti + 1;
     }
@@ -280,12 +271,15 @@ function search(o) {
         if (!c) continue;
         const bp = BPS[t];
         const w = wasteOf(bp, c);
-        if (w) { waste += w; if (c >= BP1[t]) over.push([t, w]); else dead.push([t, c]); }
+        if (w) {
+          if (!MUTE[t]) waste += w;
+          if (c >= BP1[t]) over.push([t, w]); else dead.push([t, c]);
+        }
         if (c >= BP1[t]) {
           const ti = tierOf(bp, c);
           active.push([t, c, ti]);
-          if (UNIQ[t] || MUTE[t]) uniqN += UNIQ[t] ? 1 : 0;   // shown, but not scored
-          else { live++; tierSum += ti + 1; }
+          if (UNIQ[t]) uniqN++;
+          else if (!MUTE[t] && c >= SCORE1[t]) { live++; tierSum += ti + 1; }
         }
       }
       if (waste > maxWaste) return;
@@ -298,7 +292,7 @@ function search(o) {
       if (worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) return;
       const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
       // uniques last so the meaningful traits read first
-      const dim = x => (UNIQ[x] || MUTE[x]) ? 1 : 0;
+      const dim = x => (UNIQ[x] || MUTE[x] || counts[x] < SCORE1[x]) ? 1 : 0;
       active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
       results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold });
       if (results.length >= RESULT_CAP) {
@@ -325,6 +319,9 @@ function search(o) {
   }
 
   if (need < 0) return { error: 'More required units than board slots.' };
+  if (need === 0 && shard > 0) {
+    return { rows: [], total: 0, truncated: false, capped: false, nodes: 0 };
+  }
   if (wasteLB(need) <= maxWaste && !reqUnreachable(0, need)) dfs(0, 0);
 
   results.sort(cmp);

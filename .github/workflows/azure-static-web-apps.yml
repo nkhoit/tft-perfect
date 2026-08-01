@@ -20,6 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test
+        run: npm test
+
+      - name: Check JavaScript
+        run: npm run check
+
+      - name: Check Python
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m py_compile serve.py build_set18.py check_patch_notes.py
+
       - name: Stage static site
         run: |
           mkdir -p dist

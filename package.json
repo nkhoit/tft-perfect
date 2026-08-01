@@ -1,0 +1,8 @@
+{
+  "name": "tft-trait-explorer",
+  "private": true,
+  "scripts": {
+    "check": "node --check web/search-utils.js && node --check web/worker.js && node --check web/app.js",
+    "test": "node --test"
+  }
+}

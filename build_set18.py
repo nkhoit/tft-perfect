@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 """Build Set 18 (Enchanted Wilds) data.json for the TFT Trait Explorer.
 
-Set 18 is not on dakgg yet (dakgg currentSeason == set17), so this stitches:
-  - champion roster (cost + traits)  <- local reveal capture, refs/tft-moltbot/set18
+This stitches:
+  - champion roster (cost + traits)  <- checked-in reveal capture
   - trait breakpoints + display names <- CommunityDragon **pbe** branch (TFTSet18)
   - icons                             <- CommunityDragon pbe game assets, path-verified
                                          against cdragon/files.exported.txt
 
-Once dakgg publishes set18, `build_data.py --set set18` supersedes this.
-
-Usage: python3 build_set18.py
+Usage: python3 build_set18.py [--out web/data.json]
 """
-import json, os, re, sys, urllib.request, urllib.error, datetime, hashlib, concurrent.futures, html
+import argparse, json, os, re, sys, urllib.request, urllib.error, datetime, hashlib, concurrent.futures, html, tempfile
 import xxhash
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WS = os.path.abspath(os.path.join(HERE, "..", ".."))
-REVEAL = os.path.join(WS, "refs", "tft-moltbot", "set18", "champions.json")
-OUT = os.path.join(HERE, "web", "data-set18.json")
+REVEAL = os.path.join(HERE, "set18-roster.json")
+OUT = os.path.join(HERE, "web", "data.json")
 
 UA = {"User-Agent": "Mozilla/5.0 (kuro-tft-perfect)"}
 PBE = "https://raw.communitydragon.org/pbe"
@@ -25,9 +22,10 @@ CD_TFT = PBE + "/cdragon/tft/en_us.json"
 CD_FILES = PBE + "/cdragon/files.exported.txt"
 ASSET = PBE + "/"
 STRINGTABLE = PBE + "/game/en_us/data/menu/en_us/tft.stringtable.json"
-STRINGTABLE_CACHE = "/tmp/tft-pbe-en_us.stringtable.json"
+BUILD_CACHE = os.path.join(tempfile.gettempdir(), "tft-trait-explorer")
+STRINGTABLE_CACHE = os.path.join(BUILD_CACHE, "tft-pbe-en_us.stringtable.json")
 LOLCHESS = "https://lolchess.gg/champions/set18/yorick?hl=en-US"
-LOLCHESS_CACHE = "/tmp/lolchess-set18-champions.html"
+LOLCHESS_CACHE = os.path.join(BUILD_CACHE, "lolchess-set18-champions.html")
 LOLCHESS_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                              "AppleWebKit/537.36 (KHTML, like Gecko) "
                              "Chrome/131.0 Safari/537.36"}
@@ -133,6 +131,7 @@ def clean_lolchess(s):
 def lolchess_champions():
     """Load one cached Next.js payload; fetched HTML is parsed only as data."""
     if not os.path.exists(LOLCHESS_CACHE):
+        os.makedirs(os.path.dirname(LOLCHESS_CACHE), exist_ok=True)
         req = urllib.request.Request(LOLCHESS, headers=LOLCHESS_UA)
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
@@ -172,10 +171,14 @@ def stringtable():
     # This file is ~25MB. Cache it outside the repo so repeated builds do not
     # punish CommunityDragon (or us) with another download.
     if not os.path.exists(STRINGTABLE_CACHE):
+        os.makedirs(os.path.dirname(STRINGTABLE_CACHE), exist_ok=True)
         req = urllib.request.Request(STRINGTABLE, headers=UA)
-        with urllib.request.urlopen(req, timeout=300) as r, open(STRINGTABLE_CACHE, "wb") as f:
+        tmp = STRINGTABLE_CACHE + ".tmp"
+        with urllib.request.urlopen(req, timeout=300) as r, open(tmp, "wb") as f:
             f.write(r.read())
-    return json.load(open(STRINGTABLE_CACHE))["entries"]
+        os.replace(tmp, STRINGTABLE_CACHE)
+    with open(STRINGTABLE_CACHE, encoding="utf-8") as f:
+        return json.load(f)["entries"]
 
 
 def ability_from(doc, strings):
@@ -363,8 +366,14 @@ def fetch_champion_data(names, strings):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=OUT)
+    args = ap.parse_args()
+    os.makedirs(BUILD_CACHE, exist_ok=True)
+
     print("loading Set 18 reveal roster ...")
-    reveal = json.load(open(REVEAL))
+    with open(REVEAL, encoding="utf-8") as f:
+        reveal = json.load(f)
 
     print("fetching CommunityDragon PBE (TFTSet18) ...")
     cd = get(CD_TFT)
@@ -407,7 +416,7 @@ def main():
 
         # The lead paragraph is everything before the first <row>.
         lead = clean(render_row(
-            re.split(r"<row>", t.get("desc") or "", 1)[0],
+            re.split(r"<row>", t.get("desc") or "", maxsplit=1)[0],
             effs[0] if effs else {}))
 
         icon = None
@@ -540,6 +549,7 @@ def main():
     traits = {k: v for k, v in traits.items() if k in used}
 
     missing_icon = [c["name"] for c in champions if not c["icon"]]
+    missing_trait_icon = [t["name"] for t in traits.values() if not t["icon"]]
     missing_bp = [t["name"] for t in traits.values() if t["bp"] == [1] and not t["styles"]]
 
     # ---- integrity checks ---------------------------------------------
@@ -567,11 +577,13 @@ def main():
     # A unit with no ability text is usually a bad name guess on our side,
     # not missing upstream data -- that's exactly how Pebbles hid.
     no_ability = [c["name"] for c in champions if not c.get("ability")]
+    duplicate_champions = sorted({c["key"] for c in champions
+                                  if sum(x["key"] == c["key"] for x in champions) > 1})
 
 
     out = {"set": "set18", "setName": "Enchanted Wilds",
            "gameBuild": "PBE TFTSet18",
-           "source": "reveal roster + CommunityDragon PBE TFTSet18",
+           "source": "checked-in reveal roster + CommunityDragon PBE TFTSet18 + LoLChess",
            "note": "PBE data — breakpoints are live-PBE and may shift before 18.1 launch (2026-08-12).",
            "abilityNote": ("Ability numbers and structured stat lines sourced from "
                            "LoLChess championRefs en/set18 on "
@@ -580,26 +592,44 @@ def main():
            "builtAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
            "traits": traits, "champions": champions}
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    json.dump(out, open(OUT, "w"), separators=(",", ":"))
-    print(f"wrote {OUT}: {len(champions)} champions, {len(traits)} traits")
+    errors = []
     if unresolved:
-        print("  ! unresolved trait names:", sorted(unresolved))
+        errors.append(f"unresolved trait names: {sorted(unresolved)}")
     if missing_icon:
-        print(f"  ! {len(missing_icon)} champions without icons:", missing_icon[:12])
+        errors.append(f"{len(missing_icon)} champions without icons: {missing_icon[:12]}")
+    if missing_trait_icon:
+        errors.append(f"{len(missing_trait_icon)} traits without icons: {missing_trait_icon[:12]}")
     if missing_bp:
-        print(f"  ! {len(missing_bp)} traits without breakpoints:", missing_bp[:12])
+        errors.append(f"{len(missing_bp)} traits without breakpoints: {missing_bp[:12]}")
     if shared:
-        print(f"  !! {len(shared)} icon(s) shared by multiple units -- likely a bad")
-        print("     icon guess; a valid path is not proof of the right unit:")
-        for grp in shared:
-            print("      ", " == ".join(grp))
+        errors.append(f"{len(shared)} shared champion icons: " +
+                      "; ".join(" == ".join(group) for group in shared))
     if errs:
-        print(f"  ! {len(errs)} icon(s) failed to fetch:", errs[:6])
+        errors.append(f"{len(errs)} icons failed to fetch: {errs[:6]}")
     if no_ability:
-        print(f"  ! {len(no_ability)} champions without ability text", end="")
-        print(" (check for a wrong bin/spell-stem guess before blaming PBE):")
-        print("      ", no_ability)
+        errors.append(f"{len(no_ability)} champions without ability text: {no_ability}")
+    if duplicate_champions:
+        errors.append(f"duplicate champion keys: {duplicate_champions}")
+    if nostats:
+        errors.append(f"{len(nostats)} champions without stats: {nostats}")
+    if lol_failures:
+        errors.append(f"{len(lol_failures)} LoLChess joins failed: {lol_failures}")
+    if nresolved != len(champions):
+        errors.append(f"numeric ability descriptions resolved for only {nresolved}/{len(champions)} champions")
+
+    if errors:
+        print("data validation failed; existing output was not changed:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        raise SystemExit(1)
+
+    out_path = os.path.abspath(args.out)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tmp = out_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(out, f, separators=(",", ":"))
+    os.replace(tmp, out_path)
+    print(f"wrote {out_path}: {len(champions)} champions, {len(traits)} traits")
 
 
 if __name__ == "__main__":

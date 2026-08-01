@@ -11,28 +11,12 @@ const state = new Map();          // champ key -> 0 none / 1 required / 2 exclud
 const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
-const muted = new Set();          // trait keys that still show but earn no score
+const muted = new Set();          // trait keys that still show but earn no score or waste
 
-const STYLE_ORDER = ['bronze', 'silver', 'gold', 'chromatic', 'prismatic', 'unique'];
+const { antiStack, breakpoints, comparator, isUnique, scoreFloor, scoresAt,
+  scoringBreakpoints, summary, traitSignature } = SearchUtils;
 
-// Mirrors worker.js: traits that come free with a single unit.
-function antiStack(t) {
-  return /only active while fielding\s+1\b/i.test(t.desc || '');
-}
-function isUnique(t) {
-  if ((t.styles || []).some(s => s.style === 'unique')) return true;
-  if ((t.bp || []).length === 1 && (t.bp[0] || 1) <= 1) return true;
-  return antiStack(t);   // Rival: activates off one champion, scores zero
-}
-
-// Traits nobody can actually build toward. Uniques are the obvious case; the
-// other is Rival, which reads "Only active while fielding 1 Rival" -- an
-// anti-stacking trait can't be required or emblem'd, because a second copy
-// turns it OFF. That self-limiting clause is the real disqualifier, not the
-// champion count: Flora Fatalis also has only two champions but stacks
-// normally to 2 and has a real emblem.
-let CHAMPS_PER_TRAIT = {};
-function filterable(t) { return !isUnique(t); }
+function filterable(t) { return Number.isFinite(scoreFloor(t)); }
 
 function styleAt(tr, n) {
   let s = null;
@@ -47,24 +31,20 @@ function styleAt(tr, n) {
 }
 
 // ---------- boot ----------
-const SET_KEY = 'tftPerfectSet';
-
-function loadSet(file) {
+function loadData() {
   ready = false;
   W.forEach(w => w.terminate()); W = [];
-  state.clear(); emblems.length = 0; reqTraits.length = 0;
+  pending = false; dirty = false; inbox = []; reqId++;
+  state.clear(); emblems.length = 0; reqTraits.length = 0; muted.clear();
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
-  return fetch(file + '?v=' + Date.now()).then(r => r.json()).then(db => {
+  return fetch('data.json', { cache: 'no-cache' }).then(r => {
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }).then(db => {
     DB = db;
     db.champions.forEach(c => state.set(c.key, 0));
-    CHAMPS_PER_TRAIT = {};
-    db.champions.forEach(c => (c.traits || []).forEach(t => {
-      CHAMPS_PER_TRAIT[t] = (CHAMPS_PER_TRAIT[t] || 0) + 1;
-    }));
     const build = String(db.gameBuild || '').split('+')[0];
-    // The set dropdown already names the set; don't say it twice. One plain
-    // trait count -- the split was more precision than the header needs.
     const nUniq = Object.values(db.traits).filter(t => !filterable(t)).length;
     const nTr = Object.keys(db.traits).length;
     $('meta').innerHTML =
@@ -88,12 +68,7 @@ function loadSet(file) {
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
 
-$('setSel').value = localStorage.getItem(SET_KEY) || 'data-set18.json';
-$('setSel').onchange = () => {
-  localStorage.setItem(SET_KEY, $('setSel').value);
-  loadSet($('setSel').value);
-};
-loadSet($('setSel').value);
+loadData();
 
 function onWorker(e) {
   const m = e.data;
@@ -122,7 +97,7 @@ function onWorker(e) {
   {
     const by = new Map();
     for (const r of merged.rows) {
-      const sig = r.active.map(x => x[0] + ':' + x[1]).join('|');
+      const sig = traitSignature(r);
       const hit = by.get(sig);
       if (hit) { if (hit.variants.length < 24) hit.variants.push(r); }
       else { r.variants = []; by.set(sig, r); }
@@ -136,18 +111,7 @@ function onWorker(e) {
 
 // Mirrors the worker's comparator so merged shard results order identically.
 function mkCmp() {
-  const KEY = {
-    live: (a, b) => b.live - a.live,
-    tier: (a, b) => b.tierSum - a.tierSum,
-    waste: (a, b) => a.waste - b.waste,
-    cost: (a, b) => a.gold - b.gold,
-  };
-  const order = [$('sort').value, $('sort2').value, 'live', 'tier', 'waste', 'cost']
-    .filter((k, i, arr) => KEY[k] && arr.indexOf(k) === i);
-  return (a, b) => {
-    for (const k of order) { const d = KEY[k](a, b); if (d) return d; }
-    return 0;
-  };
+  return comparator($('sort').value, $('sort2').value);
 }
 
 // ---------- controls ----------
@@ -270,7 +234,7 @@ $('sel').addEventListener('click', e => {
 // Only traits with real breakpoints can exist as emblems -- a unique trait
 // belongs to exactly one champion and has no spatula version in game.
 function emblemable() {
-  return Object.values(DB.traits).filter(filterable)
+  return Object.values(DB.traits).filter(t => filterable(t) && !antiStack(t))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -294,8 +258,6 @@ function buildEmblemGrid() {
   });
   renderEmblems();
 }
-
-function filterEmblems() {}
 
 function renderEmblems() {
   // No chip list -- the grid tile itself carries the count, same as the
@@ -324,7 +286,7 @@ $('search').addEventListener('input', applyFilter);
 $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
   emblems.length = 0; renderEmblems();
-  reqTraits.length = 0; renderTraitGrid();
+  reqTraits.length = 0; muted.clear(); renderTraitGrid();
   for (const d of $('pool').children) d.classList.remove('req', 'exc');
   $('search').value = ''; applyFilter(); updPickN(); run();
 };
@@ -332,14 +294,14 @@ $('clear').onclick = () => {
 // ---------- required traits ----------
 // Click cycles through that trait's real breakpoints, then clears.
 function cycleTrait(key, back) {
-  const bp = DB.traits[key].bp || [1];
+  const bp = scoringBreakpoints(DB.traits[key]);
   const cur = reqTraits.find(r => r.key === key);
   if (!cur) {
     // right-click on an unrequired trait mutes it instead of stepping down
     if (back) return toggleMute(key);
     muted.delete(key);
-    // start at the first breakpoint that's actually interesting (>=2 if it exists)
-    const start = bp.find(n => n >= 2) ?? bp[0];
+    const start = bp[0];
+    if (start == null) return;
     reqTraits.push({ key, n: start });
   } else {
     const i = bp.indexOf(cur.n);
@@ -350,7 +312,7 @@ function cycleTrait(key, back) {
   renderTraitGrid(); run();
 }
 
-// Muted traits still appear on boards, they just stop counting toward the score.
+// Muted traits still appear on boards, but contribute neither score nor waste.
 function toggleMute(key) {
   if (muted.has(key)) muted.delete(key);
   else {
@@ -381,8 +343,6 @@ function buildTraitGrid() {
   renderTraitGrid();
 }
 
-function filterTraits() {}
-
 function renderTraitGrid() {
   for (const d of $('traitGrid').children) {
     const r = reqTraits.find(x => x.key === d.dataset.key);
@@ -396,7 +356,6 @@ function renderTraitGrid() {
     d.querySelector('.tgv').textContent = m ? '—' : (r ? r.n : '');
   }
   $('reqTN').textContent = reqTraits.length + (muted.size ? ` · ${muted.size} muted` : '');
-  filterTraits();
 }
 
 // ---------- hover cards ----------
@@ -462,7 +421,7 @@ function unitCard(key) {
   // until 18.1, so cleanText renders those as muted "?" like the trait cards.
   const a = c.ability;
   const ability = a
-    ? `<div class="cab"><b>${a.name}</b></div><p class="clead">${cleanText(a.desc)}</p>`
+    ? `<div class="cab"><b>${a.name}</b></div><p class="clead">${cleanText(a.descResolved || a.desc)}</p>`
     : `<p class="cnote">No ability text in the PBE data for this unit.</p>`;
   // Stats come from the raw character bins. Any given unit can be missing a
   // field (Kayle has no baseDamage -- she transforms), so each row is dropped
@@ -564,18 +523,10 @@ function render(m) {
     list.innerHTML = `<div class="empty">${m.error}</div>`;
     return;
   }
-  const secs = (m.ms / 1000).toFixed(1);
-  $('status').innerHTML = m.truncated && !m.capped
-    ? `<span class="cut" title="Hit the search limit — some boards were never checked. Narrow the pool, or require a trait.">stopped early</span> · ${secs}s`
-    : `searched in ${secs}s`;
-  // Branch-and-bound kills whole subtrees before they reach a leaf, so `total`
-  // is no longer "boards matching your filters" — it's boards actually scored.
-  // The top-100 is still exact; the count is a floor. Label it as one.
-  cnt.innerHTML = `best <b>${m.rows.length}</b> of ${m.total.toLocaleString()}+ scored` +
-    (m.truncated ? ' <span class="tag">pruned</span>' : '');
-  cnt.title = 'Ranking is exact. The search skips branches that provably '
-            + "can't beat what it's already holding, so the scored count is a "
-            + 'lower bound, not every possible board.';
+  const searchSummary = summary(m);
+  $('status').innerHTML = searchSummary.statusHtml;
+  cnt.innerHTML = searchSummary.countHtml;
+  cnt.title = searchSummary.title;
 
   if (!m.rows.length) {
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;
@@ -596,7 +547,7 @@ function render(m) {
     // legible at a glance ("3/4 Riftbeast" = one unit short).
     const deadBadges = (r.dead || []).map(([ti, n]) => {
       const key = tkeys[ti], t = DB.traits[key];
-      const bp = t.bp || [1];
+      const bp = breakpoints(t);
       const nxt = bp.find(x => x > n) || bp[bp.length - 1];
       return `<span class="tb dead" data-tk="${key}" data-tn="${n}" ` +
         `title="${t.name} ${n}/${nxt} — ${nxt - n} more to activate">` +
@@ -607,12 +558,15 @@ function render(m) {
       const key = tkeys[ti], t = DB.traits[key];
       const cls = styleAt(t, n);
       const isEmb = embCount[key] ? ' emb' : '';
-      const uq = (isUnique(t) || muted.has(key)) ? ' uq' : '';
+      const unique = isUnique(t);
+      const canScore = scoresAt(t, n);
+      const uq = unique ? ' uq' : '';
+      const ns = !unique && !canScore ? ' ns' : '';
       const mu = muted.has(key) ? ' mut' : '';
       const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} unit(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
       const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
-      const nop = filterable(t) ? '' : ' nopin';
-      return `<span class="tb ${cls}${isEmb}${uq}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
+      const nop = filterable(t) && canScore ? '' : ' nopin';
+      return `<span class="tb ${cls}${isEmb}${uq}${ns}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
     }).join('');
 
     const units = r.units.map(i => DB.champions[i])
@@ -658,7 +612,7 @@ $('list').addEventListener('click', (e) => {
   // Pinning a trait that has no grid tile strands the requirement: the count
   // goes up, nothing lights up, and there's no way to clear it. This is how
   // Rival produced an invisible "1 required" and an empty result set.
-  if (!filterable(DB.traits[key])) return;
+  if (b.classList.contains('dead') || !filterable(DB.traits[key]) || !scoresAt(DB.traits[key], n)) return;
   const cur = reqTraits.find(r => r.key === key);
   if (cur && cur.n === n) reqTraits.splice(reqTraits.indexOf(cur), 1);
   else if (cur) cur.n = n;

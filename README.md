@@ -2,80 +2,87 @@
 
 Find Teamfight Tactics boards where every trait actually does something.
 
-A **wasted-traits slider**, trait requirements (`Invoker 4`), live re-evaluation,
-and real game icons.
-
-Currently built for **Set 18 · Enchanted Wilds** (PBE data), with Set 17 available
-from the header dropdown.
+Built for **Set 18 · Enchanted Wilds** using PBE data.
 
 ## Features
 
-- **Board size** 2–10 and **wasted trait slots** 0–8 sliders, re-running live.
-- **Require traits** — click a trait to demand it, click again to step up its
-  breakpoints (`Invoker 2 → 3 → 4 → 5 → off`). Trait badges in the results are
-  clickable too, so you can pin what you see.
-- Click a unit to **require** it (green); **right-click** to exclude (red). Clicking
-  the same way again clears it.
-- Cost filter, emblems (free trait, no board slot), unit/trait search.
-- Sort by most active traits, highest trait tiers, fewest wasted, or cheapest board.
-- Unique 1-unit traits are shown but **not counted** toward the active-trait score,
-  so they don't drown out genuinely wide boards.
+- Board size 2-10 and wasted-trait allowance 0-10, re-running live.
+- Required trait breakpoints such as `Invoker 4`.
+- Required and excluded units, cost filters, and unit/trait search.
+- Stackable emblems that add trait points without using board slots.
+- Sorting by active traits, trait tiers, waste, or board cost.
+- Unique one-unit traits remain visible but do not inflate the active-trait score.
 
-### What counts as "wasted"
+### Waste
 
-Waste is measured in **trait contributions that buy nothing** — not units. A unit
-overshooting one trait can still fully earn its slot through another.
+Waste is measured in trait contributions that buy nothing, not units:
 
-- below a trait's first breakpoint → every carrier counts (2/3 Sprykin = 2 wasted)
-- past a breakpoint → only the overshoot (4/5 Riftbeast = 1 wasted)
+- Below the first breakpoint, every contribution is wasted.
+- Past a breakpoint, only the overshoot is wasted.
+- Muted traits remain visible but contribute neither score nor waste.
 
-`0` = perfect boards only.
+`0` finds perfect boards only.
 
-## Run locally
+## Run Locally
 
 ```bash
-python3 serve.py            # http://localhost:8808  (TFT_PORT to override)
+python3 serve.py
 ```
 
-No build step, no dependencies — it's static HTML/CSS/JS. The search runs in a Web
-Worker so slider drags stay smooth, and requests are coalesced so only the latest
-one renders.
+Open the [local app](http://localhost:8808). Set `TFT_PORT` to override port 8808.
+
+The deployed application is static HTML, CSS, and JavaScript with no runtime
+dependencies or build step. Searches run across Web Workers to keep the UI responsive.
+
+## Test
+
+```bash
+npm test
+npm run check
+```
 
 ## Data
 
-| Set | Source | Script |
-|---|---|---|
-| 18 Enchanted Wilds | reveal roster + CommunityDragon `pbe` `TFTSet18` | `python3 build_set18.py` |
-| 17 Space Gods | [dakgg.io](https://tft.dakgg.io) | `python3 build_data.py --set set17` |
-
-Set 18 is PBE data — breakpoints can shift before 18.1 goes live. Re-run
-`build_set18.py` to refresh.
-
-**Once dakgg publishes set18**, switch to the cleaner single-source path:
+`web/data.json` is generated from the checked-in `set18-roster.json`,
+[CommunityDragon](https://communitydragon.org), and [LoLChess](https://lolchess.gg).
 
 ```bash
-python3 build_data.py --set set18 --out web/data-set18.json
+python3 -m pip install -r requirements.txt
+python3 build_set18.py
 ```
 
-### Set 18 data caveats
+The builder caches large downloads under the operating system's temporary directory.
+It validates roster joins, trait breakpoints, icons, champion stats, and abilities before
+replacing `web/data.json`.
 
-The pre-PBE reveal capture drifted from what shipped to PBE; `build_set18.py` patches this:
+To compare a directory of archived patch-note JSON files with the generated data:
 
-- `Eldritch` was renamed **Blackthorn**
-- Solar/Lunar Lux use `sunbeam`/`moonbeam` art internally
-- `Pebbles` uses the `krugmini` asset; `AncientSentinel` uses `sentinel`
+```bash
+python3 check_patch_notes.py path/to/patch-notes
+```
 
-Icon paths are verified against CommunityDragon's `files.exported.txt` manifest, so a
-missing asset fails loudly at build time instead of rendering a broken image.
+The checker exits nonzero when values drift or referenced champions/traits are absent.
+
+### Data Caveats
+
+The reveal roster differs from PBE internals in a few places handled by the builder:
+
+- `Eldritch` was renamed `Blackthorn`.
+- Solar and Lunar Lux use `sunbeam` and `moonbeam` asset suffixes.
+- Pebbles is internally a Sentry; Ancient Sentinel uses a separate sentinel asset.
+
+Set 18 is PBE data and may change before release.
 
 ## Deploy
 
-Pushes to `main` deploy to Azure Static Web Apps via
-[`.github/workflows/azure-static-web-apps.yml`](.github/workflows/azure-static-web-apps.yml).
-The deployment token lives in the `AZURE_STATIC_WEB_APPS_API_TOKEN` repo secret.
+Pushes to `main` deploy to Azure Static Web Apps through
+[the deployment workflow](.github/workflows/azure-static-web-apps.yml). The workflow
+runs syntax checks and regression tests before staging the static site.
+
+The deployment token is stored in the `AZURE_STATIC_WEB_APPS_API_TOKEN` repository secret.
 
 ## Credits
 
-Game data and icons belong to Riot Games, retrieved via
-[CommunityDragon](https://communitydragon.org) and [dakgg](https://dakgg.io).
-Not endorsed by Riot Games.
+Game data and icons belong to Riot Games and are retrieved through
+[CommunityDragon](https://communitydragon.org). Ability values are sourced from
+[LoLChess](https://lolchess.gg). Not endorsed by Riot Games.
