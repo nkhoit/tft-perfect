@@ -326,6 +326,9 @@ const ICON_WORD = {
 function cleanText(s) {
   if (!s) return '';
   return s
+    // Riot's string table carries literal backslash-n (and \r\n) escapes, not
+    // real newlines — left alone they render as visible "\n" in the card.
+    .replace(/\\+[rn]/g, ' ')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, '')                                  // strip markup
     .replace(/%i:(\w+)%/g, (_, k) => ICON_WORD[k] ? ' ' + ICON_WORD[k] : '')
@@ -362,6 +365,12 @@ function unitCard(key) {
   // Mana reads as a cost, not a transition: 0/45 means "needs 45, starts at 0".
   const mana = c.mana
     ? `<div class="cstat"><span>Mana</span><b>${c.mana.start}/${c.mana.max}</b></div>` : '';
+  // Ability text is resolved from the game string table; numbers stay templated
+  // until 18.1, so cleanText renders those as muted "?" like the trait cards.
+  const a = c.ability;
+  const ability = a
+    ? `<div class="cab"><b>${a.name}</b></div><p class="clead">${cleanText(a.desc)}</p>`
+    : `<p class="cnote">No ability text in the PBE data for this unit.</p>`;
   const s = c.stats;
   const stats = s ? `<div class="cstats">
       <div class="cstat"><span>Health</span><b>${s.hp}</b></div>
@@ -374,8 +383,7 @@ function unitCard(key) {
     <p class="cnote">Base stats at 1★. 2★ ≈ 1.8× · 3★ ≈ 3.24× Health and Damage.</p>` : mana;
   return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
       <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
-    <div class="cchs">${traits}</div>${stats}
-    <p class="cnote">Ability text lands with the 18.1 patch.</p>`;
+    <div class="cchs">${traits}</div>${stats}${ability}`;
 }
 
 let cardEl = null;

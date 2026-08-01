@@ -208,6 +208,8 @@ button:hover{border-color:var(--acc2)}
 #card .cbp.unique{background:#1f5a44;color:#b6f5da}
 #card .ctx{flex:1}
 #card .ph{color:#7f8895;font-style:italic;cursor:help}
+#card .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
+#card .cab b{font-size:12px;color:#eef2f7}
 #card .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 #card .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
   border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}
