@@ -99,15 +99,16 @@ test('required units use check badges without replacing cost borders', () => {
   assert.match(css, /\.u\.req::before,\.uc\.req::before\{[^}]*top:[^;]+;right:/);
 });
 
-test('selection badges mirror role badge styling', () => {
+test('selection badges contrast with role badge styling', () => {
   const css = read('web/style.css');
   const badge = css.match(/\.u\.req::before,\.uc\.req::before\{([^}]*)\}/)?.[1];
 
   assert.ok(badge, 'missing selection badge styling');
   assert.match(badge, /top:2px;right:2px/);
   assert.match(badge, /width:16px;height:16px/);
-  assert.match(badge, /border:1px solid var\(--acc\)/);
-  assert.match(badge, /background:#090c12e8;color:var\(--acc\)/);
+  assert.match(badge, /border:1px solid #b7f7cb/);
+  assert.match(badge, /border-radius:50%/);
+  assert.match(badge, /background:var\(--acc\);color:#fff/);
   assert.match(badge, /box-shadow:0 1px 3px #000b/);
   assert.match(css,
     /\.(?:vrow|comprow\.alternate) \.uc\.req::before\{[^}]*transform:scale\(\.85\);transform-origin:top right/);

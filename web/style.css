@@ -123,7 +123,7 @@ button:hover{border-color:var(--acc2)}
 .u.req img{opacity:1}
 .u.req::before,.uc.req::before{content:"\2713";position:absolute;z-index:3;top:2px;right:2px;
   display:grid;place-items:center;width:16px;height:16px;box-sizing:border-box;
-  border:1px solid var(--acc);border-radius:5px;background:#090c12e8;color:var(--acc);
+  border:1px solid #b7f7cb;border-radius:50%;background:var(--acc);color:#fff;
   box-shadow:0 1px 3px #000b;font-size:10px;font-weight:900;line-height:1;pointer-events:none}
 .u.exc{border-color:var(--red);opacity:.35}
 .u.exc::after{content:"";position:absolute;inset:0;
