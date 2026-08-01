@@ -116,30 +116,31 @@ test('selection badges mirror role badge styling', () => {
 test('unit picker portraits include role badges', () => {
   const app = read('web/app.js');
   const addUnit = app.match(
-    /function addUnit\(el, c\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction applyFilter/);
+    /function addUnit\(el, c, group\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction applyFilter/);
 
   assert.ok(addUnit, 'missing unit picker renderer');
   assert.match(addUnit[1], /\$\{portraitRoleBadge\(c\)\}/);
 });
 
-test('unit trait lens dims nonmatching picker units', () => {
+test('unit picker switches between cost and trait groups', () => {
   const html = read('web/index.html');
   const app = read('web/app.js');
   const css = read('web/style.css');
 
-  assert.match(html, /id="traitLens"/);
-  assert.match(html, /id="traitLensSearch"/);
-  assert.match(html, /id="traitLensList"/);
-  assert.match(html, /id="traitLensClear"/);
-  assert.match(app, /let unitTraitLens = ''/);
-  assert.match(app, /function buildTraitLens\(/);
-  assert.match(app, /function renderTraitLens\(/);
-  assert.match(app, /function filterTraitLensOptions\(/);
-  assert.match(app, /c\.traits\.includes\(unitTraitLens\)/);
-  assert.match(app, /classList\.toggle\('traitdim', !lensMatch\)/);
-  assert.match(app, /if \(unitTraitLens\) shared\.f = unitTraitLens/);
-  assert.match(app, /DB\.traits\[shared\.f\]/);
-  assert.match(css, /\.u\.traitdim\{[^}]*filter:grayscale\(1\)[^}]*pointer-events:none/);
+  assert.match(html, /id="poolViewCost"/);
+  assert.match(html, /id="poolViewTrait"/);
+  assert.doesNotMatch(html + app + css, /traitLens|traitlens|unitTraitLens|traitdim/);
+  assert.match(app, /const POOL_VIEWS = new Set\(\['cost', 'trait'\]\)/);
+  assert.match(app, /let poolView = 'cost'/);
+  assert.match(app, /function buildPoolByCost\(/);
+  assert.match(app, /function buildPoolByTrait\(/);
+  assert.match(app, /function setUnitState\(/);
+  assert.match(app, /d\.dataset\.group = group/);
+  assert.match(app, /shown\.set\(d\.dataset\.group/);
+  assert.match(app, /if \(poolView !== 'cost'\) shared\.g = poolView/);
+  assert.match(app, /POOL_VIEWS\.has\(shared\.g\)/);
+  assert.match(css, /\.pooltabs\{/);
+  assert.match(css, /\.traithdr\{/);
 });
 
 test('main and alternate compositions share the roster row layout', () => {

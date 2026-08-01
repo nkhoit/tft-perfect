@@ -17,6 +17,7 @@ const DEFAULT_LEVEL = 8;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SORT = ['live', 'cost'];
 const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
+const POOL_VIEWS = new Set(['cost', 'trait']);
 const MAX_SHARED_EMBLEMS = 20;
 
 const $ = id => document.getElementById(id);
@@ -25,7 +26,7 @@ const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
 const muted = new Set();          // trait keys that still show but earn no score or waste
-let unitTraitLens = '';
+let poolView = 'cost';
 
 const { algorithmVersion, antiStack, breakpoints, isUnique, mergeSearchResults,
   scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey, summary } = SearchUtils;
@@ -218,7 +219,7 @@ function resetSearchState() {
   $('sort').value = DEFAULT_SORT[0];
   $('sort2').value = DEFAULT_SORT[1];
   $('search').value = '';
-  unitTraitLens = '';
+  poolView = 'cost';
 }
 
 function sharedSearchState() {
@@ -264,7 +265,7 @@ function sharedSearchState() {
   if (sort[0] !== DEFAULT_SORT[0] || sort[1] !== DEFAULT_SORT[1]) shared.s = sort;
   const query = $('search').value.trim();
   if (query) shared.q = query.slice(0, 100);
-  if (unitTraitLens) shared.f = unitTraitLens;
+  if (poolView !== 'cost') shared.g = poolView;
   return shared;
 }
 
@@ -334,26 +335,16 @@ function applySharedSearchState(shared) {
     $('sort2').value = shared.s[1];
   }
   if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
-  if (typeof shared.f === 'string' && DB.traits[shared.f]
-      && DB.champions.some(champion => champion.traits.includes(shared.f))) {
-    unitTraitLens = shared.f;
-  }
+  if (POOL_VIEWS.has(shared.g)) poolView = shared.g;
 }
 
 function refreshSearchControls() {
   for (const button of $('costs').children) {
     button.classList.toggle('on', costOn.has(+button.dataset.cost));
   }
-  for (const tile of $('pool').children) {
-    if (!tile.dataset.key) continue;
-    const value = state.get(tile.dataset.key);
-    tile.classList.toggle('req', value === 1);
-    tile.classList.toggle('exc', value === 2);
-  }
   renderEmblems();
   renderTraitGrid();
-  renderTraitLens();
-  applyFilter();
+  buildPool();
   updPickN();
 }
 
@@ -395,13 +386,13 @@ async function restoreSharedSearch() {
 function defaultSavedSearchName() {
   const query = $('search').value.trim();
   if (query) return query;
-  if (unitTraitLens) return `${DB.traits[unitTraitLens]?.name || unitTraitLens} units`;
   if (reqTraits.length) {
     const { key, n } = reqTraits[0];
     return `${DB.traits[key]?.name || key} ${n}`;
   }
   const champion = DB.champions.find(unit => state.get(unit.key) === 1);
   if (champion) return `${champion.name} team`;
+  if (poolView === 'trait') return 'Units by trait';
   return `Level ${$('size').value} search`;
 }
 
@@ -584,7 +575,7 @@ function loadData() {
   stopWorkers(false);
   memoryCache.clear();
   state.clear(); emblems.length = 0; reqTraits.length = 0; muted.clear();
-  unitTraitLens = '';
+  poolView = 'cost';
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
   return fetch('data.json', { cache: 'no-cache' }).then(r => {
@@ -603,8 +594,8 @@ function loadData() {
       `${nUniq} tied to a specific champion">${nTr} traits</span>` +
       (db.note ? ` <span class="tag" title="Data build ${build} — ${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
-    buildCosts(); buildPool(); buildEmblemGrid();
-    buildTraitGrid(); buildTraitLens(); updPickN();
+    buildCosts(); buildEmblemGrid();
+    buildTraitGrid(); updPickN();
     await restoreSharedSearch();
     refreshSearchControls();
     dataReady = true;
@@ -662,7 +653,13 @@ function buildCosts() {
 function buildPool() {
   const el = $('pool');
   el.innerHTML = '';
-  // group by cost, cheapest first, alphabetical within a tier
+  if (poolView === 'trait') buildPoolByTrait(el);
+  else buildPoolByCost(el);
+  renderPoolView();
+  applyFilter();
+}
+
+function buildPoolByCost(el) {
   const byCost = new Map();
   for (const c of DB.champions) {
     if (!byCost.has(c.cost)) byCost.set(c.cost, []);
@@ -670,116 +667,100 @@ function buildPool() {
   }
   const costs = [...byCost.keys()].sort((a, b) => a - b);
   for (const cost of costs) {
+    const group = `cost:${cost}`;
     const h = document.createElement('div');
-    h.className = 'costhdr c' + cost;
-    h.dataset.cost = cost;
+    h.className = 'poolhdr costhdr c' + cost;
+    h.dataset.group = group;
     h.innerHTML = `<span>${cost} cost</span><i>${byCost.get(cost).length}</i>`;
     el.appendChild(h);
-    byCost.get(cost).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => addUnit(el, c));
+    byCost.get(cost).sort((a, b) => a.name.localeCompare(b.name))
+      .forEach(c => addUnit(el, c, group));
+  }
+}
+
+function buildPoolByTrait(el) {
+  const groups = Object.entries(DB.traits).map(([key, trait]) => ({
+    key,
+    trait,
+    units: DB.champions.filter(champion => champion.traits.includes(key)),
+  })).filter(group => group.units.length)
+    .sort((a, b) => a.trait.name.localeCompare(b.trait.name));
+  for (const { key, trait, units } of groups) {
+    const group = `trait:${key}`;
+    const h = document.createElement('div');
+    h.className = 'poolhdr traithdr';
+    h.dataset.group = group;
+    h.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
+      `<span>${trait.name}</span><i>${units.length}</i>`;
+    el.appendChild(h);
+    units.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+      .forEach(champion => addUnit(el, champion, group));
+  }
+}
+
+function renderPoolView() {
+  for (const [view, id] of [['cost', 'poolViewCost'], ['trait', 'poolViewTrait']]) {
+    const active = poolView === view;
+    $(id).classList.toggle('active', active);
+    $(id).setAttribute('aria-selected', String(active));
+  }
+}
+
+function setPoolView(view) {
+  if (!POOL_VIEWS.has(view) || view === poolView) return;
+  poolView = view;
+  buildPool();
+  void syncSearchUrl(searchGeneration);
+}
+
+function setUnitState(key, value) {
+  state.set(key, value);
+  for (const tile of $('pool').children) {
+    if (tile.dataset.key !== key) continue;
+    tile.classList.toggle('req', value === 1);
+    tile.classList.toggle('exc', value === 2);
   }
   applyFilter();
+  updPickN();
+  run();
 }
 
-function traitLensOptions() {
-  const counts = new Map();
-  for (const champion of DB.champions) {
-    for (const key of champion.traits) counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  return [...counts].map(([key, count]) => ({ key, count, trait: DB.traits[key] }))
-    .filter(option => option.trait)
-    .sort((a, b) => a.trait.name.localeCompare(b.trait.name));
-}
-
-function buildTraitLens() {
-  const list = $('traitLensList');
-  list.replaceChildren();
-  for (const { key, count, trait } of traitLensOptions()) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'traitlensitem';
-    button.dataset.key = key;
-    button.dataset.search = trait.name.toLowerCase();
-    button.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
-      `<span>${trait.name}</span><b>${count}</b>`;
-    list.appendChild(button);
-  }
-  renderTraitLens();
-  filterTraitLensOptions();
-}
-
-function renderTraitLens() {
-  const selected = traitLensOptions().find(option => option.key === unitTraitLens);
-  const summary = $('traitLensSummary');
-  if (selected) {
-    const { count, trait } = selected;
-    summary.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
-      `<span>${trait.name}</span><i>·</i><b>${count}</b>`;
-    summary.title = `Highlighting ${trait.name} units`;
-  } else {
-    summary.textContent = 'Trait lens';
-    summary.title = 'Highlight units by trait';
-  }
-  $('traitLensControl').classList.toggle('active', Boolean(selected));
-  $('traitLensClear').hidden = !selected;
-  for (const button of $('traitLensList').children) {
-    const active = button.dataset.key === unitTraitLens;
-    button.classList.toggle('selected', active);
-    button.setAttribute('aria-pressed', String(active));
-  }
-}
-
-function filterTraitLensOptions() {
-  const query = $('traitLensSearch').value.trim().toLowerCase();
-  let shown = 0;
-  for (const button of $('traitLensList').children) {
-    const hide = Boolean(query && !button.dataset.search.includes(query));
-    button.hidden = hide;
-    if (!hide) shown++;
-  }
-  $('traitLensEmpty').hidden = shown > 0;
-}
-
-function addUnit(el, c) {
+function addUnit(el, c, group) {
     const d = document.createElement('div');
     d.className = 'u b' + c.cost;
     d.dataset.cost = c.cost;
     d.dataset.key = c.key;
+    d.dataset.group = group;
     d.dataset.search = (c.name + ' ' + c.traits.map(t => DB.traits[t]?.name || t).join(' ')).toLowerCase();
     d.title = c.name + ' — ' + c.traits.map(t => DB.traits[t]?.name || t).join(', ');
     d.innerHTML = `<img loading="lazy" src="${c.icon}" alt="">
       ${portraitRoleBadge(c)}<span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
-    // left click toggles require, right click toggles exclude
-    const set = s => {
-      if (unitTraitLens && !c.traits.includes(unitTraitLens)) return;
-      state.set(c.key, s);
-      d.classList.toggle('req', s === 1);
-      d.classList.toggle('exc', s === 2);
-      updPickN(); run();
+    const value = state.get(c.key) || 0;
+    d.classList.toggle('req', value === 1);
+    d.classList.toggle('exc', value === 2);
+    d.onclick = () => setUnitState(c.key, state.get(c.key) === 1 ? 0 : 1);
+    d.oncontextmenu = e => {
+      e.preventDefault();
+      setUnitState(c.key, state.get(c.key) === 2 ? 0 : 2);
     };
-    d.onclick = () => set(state.get(c.key) === 1 ? 0 : 1);
-    d.oncontextmenu = e => { e.preventDefault(); set(state.get(c.key) === 2 ? 0 : 2); };
     el.appendChild(d);
     state.set(c.key, state.get(c.key) || 0);
 }
 
 function applyFilter() {
   const q = $('search').value.trim().toLowerCase();
-  const shown = new Map();   // cost -> visible unit count
+  const shown = new Map();
   for (const d of $('pool').children) {
-    if (d.classList.contains('costhdr')) continue;
+    if (d.classList.contains('poolhdr')) continue;
     const c = DB.champions.find(x => x.key === d.dataset.key);
     const hide = (!costOn.has(c.cost) && state.get(c.key) !== 1) ||
                  (q && !d.dataset.search.includes(q));
-    const lensMatch = !unitTraitLens || c.traits.includes(unitTraitLens);
     d.classList.toggle('hide', hide);
-    d.classList.toggle('traitdim', !lensMatch);
-    d.setAttribute('aria-disabled', String(!lensMatch));
-    if (!hide) shown.set(c.cost, (shown.get(c.cost) || 0) + 1);
+    if (!hide) shown.set(d.dataset.group, (shown.get(d.dataset.group) || 0) + 1);
   }
-  // drop a tier header when nothing under it survived the filter
   for (const d of $('pool').children) {
-    if (!d.classList.contains('costhdr')) continue;
-    const n = shown.get(+d.dataset.cost) || 0;
+    if (!d.classList.contains('poolhdr')) continue;
+    const n = shown.get(d.dataset.group) || 0;
     d.classList.toggle('hide', n === 0);
     d.querySelector('i').textContent = n;
   }
@@ -818,10 +799,7 @@ function renderSel() {
 $('sel').addEventListener('click', e => {
   const c = e.target.closest('.selc');
   if (!c) return;
-  state.set(c.dataset.key, 0);
-  const tile = [...$('pool').children].find(d => d.dataset.key === c.dataset.key);
-  if (tile) tile.classList.remove('req', 'exc');
-  applyFilter(); updPickN(); run();
+  setUnitState(c.dataset.key, 0);
 });
 
 // Only traits with real breakpoints can exist as emblems -- a unique trait
@@ -879,33 +857,8 @@ $('search').addEventListener('input', () => {
   applyFilter();
   void syncSearchUrl(searchGeneration);
 });
-$('traitLensSearch').addEventListener('input', filterTraitLensOptions);
-$('traitLens').addEventListener('toggle', () => {
-  if ($('traitLens').open) {
-    $('traitLensSearch').focus();
-    $('traitLensSearch').select();
-  }
-});
-$('traitLensList').addEventListener('click', event => {
-  const button = event.target.closest('.traitlensitem');
-  if (!button) return;
-  unitTraitLens = button.dataset.key;
-  $('traitLensSearch').value = '';
-  filterTraitLensOptions();
-  renderTraitLens();
-  applyFilter();
-  $('traitLens').open = false;
-  void syncSearchUrl(searchGeneration);
-});
-$('traitLensClear').onclick = () => {
-  unitTraitLens = '';
-  $('traitLensSearch').value = '';
-  filterTraitLensOptions();
-  renderTraitLens();
-  applyFilter();
-  $('traitLens').open = false;
-  void syncSearchUrl(searchGeneration);
-};
+$('poolViewCost').onclick = () => setPoolView('cost');
+$('poolViewTrait').onclick = () => setPoolView('trait');
 $('saveSearch').onclick = () => {
   void saveCurrentSearch();
 };
@@ -950,12 +903,11 @@ $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
   emblems.length = 0; renderEmblems();
   reqTraits.length = 0; muted.clear(); renderTraitGrid();
-  for (const d of $('pool').children) d.classList.remove('req', 'exc');
-  unitTraitLens = '';
-  $('traitLensSearch').value = '';
-  renderTraitLens();
-  filterTraitLensOptions();
-  $('search').value = ''; applyFilter(); updPickN(); run();
+  poolView = 'cost';
+  $('search').value = '';
+  buildPool();
+  updPickN();
+  run();
 };
 
 readSavedSearches();
