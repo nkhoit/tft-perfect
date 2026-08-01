@@ -233,6 +233,7 @@ button:hover{border-color:var(--acc2)}
 
 /* search stopped short of a full sweep */
 .status .cut{color:#ffb454;font-weight:700;cursor:help}
+.status .hit{color:var(--acc);font-weight:700}
 .tag.warn{background:#3a2a12;border-color:#7a5a1e;color:#ffb454}
 
 /* ---- hover cards ---- */

@@ -64,16 +64,45 @@
       .join('|');
   }
 
+  function searchCacheKey(version, options) {
+    const numbers = values => [...(values || [])].sort((a, b) => a - b);
+    const canonical = {
+      version,
+      size: options.size,
+      maxWaste: options.maxWaste,
+      reqIdx: numbers(options.reqIdx),
+      poolIdx: numbers(options.poolIdx),
+      emblems: [...(options.emblems || [])].sort(),
+      reqTraits: [...(options.reqTraits || [])]
+        .map(({ t, n }) => ({ t, n }))
+        .sort((a, b) => a.t - b.t || a.n - b.n),
+      muted: numbers(options.muted),
+      sortMode: options.sortMode,
+      sortMode2: options.sortMode2,
+      limit: options.limit,
+      returnN: options.returnN,
+    };
+    return JSON.stringify(canonical);
+  }
+
   function summary(result) {
     const seconds = (result.ms / 1000).toFixed(1);
-    const statusHtml = result.truncated
-      ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
-      : `searched in ${seconds}s`;
+    const cachedTitle = result.cached === 'memory'
+      ? 'Loaded from the in-memory result cache. '
+      : result.cached === 'device'
+        ? 'Loaded from this device\'s persistent result cache. '
+        : '';
+    const statusHtml = result.cached
+      ? `<span class="hit">cached</span>` +
+        (result.truncated ? ' · <span class="cut">incomplete</span>' : '')
+      : result.truncated
+        ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
+        : `searched in ${seconds}s`;
     const countHtml = `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
       (result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
-    const title = result.truncated
+    const title = cachedTitle + (result.truncated
       ? 'Search hit its node limit. These are the best boards found, but unseen boards may rank higher.'
-      : 'Search completed without hitting its node limit. The scored count is a lower bound because noncompetitive branches are skipped.';
+      : 'Search completed without hitting its node limit. The scored count is a lower bound because noncompetitive branches are skipped.');
     return { statusHtml, countHtml, title };
   }
 
@@ -85,6 +114,7 @@
     scoreFloor,
     scoringBreakpoints,
     scoresAt,
+    searchCacheKey,
     sortOrder,
     summary,
     traitSignature,

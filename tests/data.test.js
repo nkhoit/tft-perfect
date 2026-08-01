@@ -70,6 +70,10 @@ test('the application contains only Set 18', () => {
   assert.match(app, /class="rtype /);
   assert.match(app, /traits\.includes\('Adaptor'\)/);
   assert.match(css, /\.rtype\{/);
+  assert.match(app, /DEBOUNCE_MS/);
+  assert.match(app, /indexedDB/);
+  assert.match(app, /TFTSearchMetrics/);
+  assert.match(app, /recordMetric\('cancellations'\)/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

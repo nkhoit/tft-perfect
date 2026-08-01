@@ -11,6 +11,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Required and excluded units, cost filters, and unit/trait search.
 - Stackable emblems that add trait points without using board slots.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
+- Debounced, cancellable searches with versioned memory and device caches.
 - Sorting by active traits, trait tiers, waste, or board cost.
 - Copyable codes for importing any result into TFT's Team Planner.
 - Unique one-unit traits remain visible but do not inflate the active-trait score.
@@ -35,6 +36,8 @@ Open the [local app](http://localhost:8808). Set `TFT_PORT` to override port 880
 
 The deployed application is static HTML, CSS, and JavaScript with no runtime
 dependencies or build step. Searches run across Web Workers to keep the UI responsive.
+Complete results are cached in IndexedDB; truncated results stay in the current
+session's memory cache. Local counters are available at `window.TFTSearchMetrics`.
 
 ## Team Planner Codes
 

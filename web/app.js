@@ -1,10 +1,18 @@
 // app.js — TFT Trait Explorer
-let DB = null, W = [], ready = false;
-let reqId = 0, pending = false, dirty = false;
+let DB = null, W = [], dataReady = false, workersReady = false;
+let reqId = 0, pending = false, workerEpoch = 0, searchGeneration = 0;
 let inbox = [];                   // shard results for the in-flight request
+let debounceTimer = null, queuedDispatch = null, activeSearch = null;
 // One worker per core, minus one so the UI thread keeps a lane. Capped at 8:
 // past that the merge cost outweighs the split on this search size.
 const NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+const DEBOUNCE_MS = 200;
+const SEARCH_ALGORITHM_VERSION = 'weighted-v2';
+const MEMORY_CACHE_LIMIT = 24;
+const DEVICE_CACHE_LIMIT = 50;
+const DEVICE_CACHE_DB = 'tft-trait-search-cache';
+const DEVICE_CACHE_STORE = 'results';
+const METRICS_KEY = 'tft-search-metrics-v1';
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
@@ -14,7 +22,143 @@ const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
 const muted = new Set();          // trait keys that still show but earn no score or waste
 
 const { antiStack, breakpoints, comparator, isUnique, scoreFloor, scoresAt,
-  scoringBreakpoints, summary, traitSignature } = SearchUtils;
+  scoringBreakpoints, searchCacheKey, summary, traitSignature } = SearchUtils;
+
+const memoryCache = new Map();
+let cacheDbPromise = null, metricsStorageWarned = false;
+
+function loadMetrics() {
+  const empty = {
+    requests: 0, memoryHits: 0, deviceHits: 0, workerRuns: 0,
+    cancellations: 0, truncated: 0, workerMs: 0, cacheErrors: 0,
+  };
+  try {
+    return { ...empty, ...JSON.parse(localStorage.getItem(METRICS_KEY) || '{}') };
+  } catch (error) {
+    console.warn('Could not load local search metrics.', error);
+    return empty;
+  }
+}
+
+const searchMetrics = loadMetrics();
+window.TFTSearchMetrics = searchMetrics;
+
+function recordMetric(name, amount = 1) {
+  searchMetrics[name] = (searchMetrics[name] || 0) + amount;
+  try {
+    localStorage.setItem(METRICS_KEY, JSON.stringify(searchMetrics));
+  } catch (error) {
+    if (!metricsStorageWarned) {
+      metricsStorageWarned = true;
+      console.warn('Could not persist local search metrics.', error);
+    }
+  }
+}
+
+function cacheFailure(action, error) {
+  recordMetric('cacheErrors');
+  console.warn(`Search cache ${action} failed.`, error);
+}
+
+function memoryCacheGet(key) {
+  const result = memoryCache.get(key);
+  if (!result) return null;
+  memoryCache.delete(key);
+  memoryCache.set(key, result);
+  return result;
+}
+
+function memoryCacheSet(key, result) {
+  const value = { ...result };
+  delete value.cached;
+  memoryCache.delete(key);
+  memoryCache.set(key, value);
+  while (memoryCache.size > MEMORY_CACHE_LIMIT) {
+    memoryCache.delete(memoryCache.keys().next().value);
+  }
+}
+
+function openCacheDb() {
+  if (!('indexedDB' in window)) return Promise.resolve(null);
+  if (cacheDbPromise) return cacheDbPromise;
+  cacheDbPromise = new Promise(resolve => {
+    const request = indexedDB.open(DEVICE_CACHE_DB, 1);
+    request.onupgradeneeded = () => {
+      const store = request.result.createObjectStore(DEVICE_CACHE_STORE, { keyPath: 'key' });
+      store.createIndex('storedAt', 'storedAt');
+    };
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      cacheFailure('open', request.error);
+      resolve(null);
+    };
+    request.onblocked = () => {
+      cacheFailure('upgrade', new Error('IndexedDB upgrade was blocked.'));
+      resolve(null);
+    };
+  });
+  return cacheDbPromise;
+}
+
+async function deviceCacheGet(key) {
+  const db = await openCacheDb();
+  if (!db) return null;
+  return new Promise(resolve => {
+    const tx = db.transaction(DEVICE_CACHE_STORE, 'readonly');
+    const request = tx.objectStore(DEVICE_CACHE_STORE).get(key);
+    request.onsuccess = () => resolve(request.result?.result || null);
+    request.onerror = () => {
+      cacheFailure('read', request.error);
+      resolve(null);
+    };
+  });
+}
+
+async function pruneDeviceCache(db) {
+  return new Promise(resolve => {
+    const tx = db.transaction(DEVICE_CACHE_STORE, 'readwrite');
+    const store = tx.objectStore(DEVICE_CACHE_STORE);
+    const count = store.count();
+    count.onsuccess = () => {
+      let excess = count.result - DEVICE_CACHE_LIMIT;
+      if (excess <= 0) return;
+      const cursor = store.index('storedAt').openCursor();
+      cursor.onsuccess = () => {
+        if (!cursor.result || excess-- <= 0) return;
+        cursor.result.delete();
+        cursor.result.continue();
+      };
+    };
+    tx.oncomplete = resolve;
+    tx.onerror = () => {
+      cacheFailure('prune', tx.error);
+      resolve();
+    };
+  });
+}
+
+async function deviceCacheSet(key, result) {
+  if (result.truncated) return;
+  const db = await openCacheDb();
+  if (!db) return;
+  const value = { ...result };
+  delete value.cached;
+  await new Promise(resolve => {
+    const tx = db.transaction(DEVICE_CACHE_STORE, 'readwrite');
+    tx.objectStore(DEVICE_CACHE_STORE).put({
+      key, result: value, storedAt: Date.now(),
+    });
+    tx.oncomplete = resolve;
+    tx.onerror = () => {
+      cacheFailure('write', tx.error);
+      resolve();
+    };
+  });
+  await pruneDeviceCache(db);
+}
 
 function filterable(t) { return Number.isFinite(scoreFloor(t)); }
 
@@ -31,10 +175,62 @@ function styleAt(tr, n) {
 }
 
 // ---------- boot ----------
+function stopWorkers(cancellation = false) {
+  if (cancellation && pending) recordMetric('cancellations');
+  workerEpoch++;
+  W.forEach(worker => worker.terminate());
+  W = [];
+  workersReady = false;
+  queuedDispatch = null;
+  pending = false;
+  inbox = [];
+  activeSearch = null;
+  reqId++;
+}
+
+function ensureWorkers(callback) {
+  queuedDispatch = callback;
+  if (workersReady) {
+    queuedDispatch = null;
+    callback();
+    return;
+  }
+  if (W.length) return;
+
+  const epoch = ++workerEpoch;
+  let started = 0;
+  for (let i = 0; i < NW; i++) {
+    const worker = new Worker('worker.js');
+    worker.onmessage = event => {
+      if (epoch !== workerEpoch) return;
+      if (event.data.type === 'ready') {
+        if (++started === NW) {
+          workersReady = true;
+          const dispatch = queuedDispatch;
+          queuedDispatch = null;
+          if (dispatch) dispatch();
+        }
+        return;
+      }
+      onWorker(event);
+    };
+    worker.onerror = event => {
+      if (epoch !== workerEpoch) return;
+      console.error('Search worker failed.', event.error || event.message);
+      stopWorkers(false);
+      render({ error: 'Search worker failed. Reload the page and try again.' });
+    };
+    worker.postMessage({ type: 'init', db: DB });
+    W.push(worker);
+  }
+}
+
 function loadData() {
-  ready = false;
-  W.forEach(w => w.terminate()); W = [];
-  pending = false; dirty = false; inbox = []; reqId++;
+  dataReady = false;
+  clearTimeout(debounceTimer);
+  searchGeneration++;
+  stopWorkers(false);
+  memoryCache.clear();
   state.clear(); emblems.length = 0; reqTraits.length = 0; muted.clear();
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
@@ -55,16 +251,8 @@ function loadData() {
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
     buildTraitGrid(); updPickN();
-    let up = 0;
-    for (let i = 0; i < NW; i++) {
-      const w = new Worker('worker.js');
-      w.onmessage = e => {
-        if (e.data.type === 'ready') { if (++up === NW) { ready = true; run(); } return; }
-        onWorker(e);
-      };
-      w.postMessage({ type: 'init', db });
-      W.push(w);
-    }
+    dataReady = true;
+    run(true);
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
 
@@ -75,17 +263,24 @@ function onWorker(e) {
   if (m.type !== 'result') return;
   if (m.id !== reqId) return;            // stale shard from a superseded search
   inbox.push(m);
-  if (inbox.length < NW) return;         // still waiting on other shards
+  if (inbox.length < W.length) return;   // still waiting on other shards
 
   pending = false;
   const parts = inbox; inbox = [];
   const err = parts.find(p => p.error);
-  if (err) { render({ error: err.error }); if (dirty) { dirty = false; run(); } return; }
+  if (err) {
+    activeSearch = null;
+    render({ error: err.error });
+    return;
+  }
 
   // Each shard returns its own sorted top slice; merge, re-sort, then dedup
   // globally — a trait signature can appear in more than one shard.
+  const search = activeSearch;
+  if (!search) return;
   const merged = {
-    rows: [].concat(...parts.map(p => p.rows)).sort(mkCmp()),
+    rows: [].concat(...parts.map(p => p.rows))
+      .sort(comparator(search.opts.sortMode, search.opts.sortMode2)),
     total: parts.reduce((n, p) => n + p.total, 0),
     truncated: parts.some(p => p.truncated),
     capped: parts.some(p => p.capped),
@@ -105,13 +300,12 @@ function onWorker(e) {
     merged.rows = [...by.values()];
   }
   merged.rows = merged.rows.slice(0, 100);
+  activeSearch = null;
+  recordMetric('workerMs', merged.ms);
+  if (merged.truncated) recordMetric('truncated');
+  memoryCacheSet(search.key, merged);
+  void deviceCacheSet(search.key, merged);
   render(merged);
-  if (dirty) { dirty = false; run(); }
-}
-
-// Mirrors the worker's comparator so merged shard results order identically.
-function mkCmp() {
-  return comparator($('sort').value, $('sort2').value);
 }
 
 // ---------- controls ----------
@@ -573,10 +767,8 @@ document.addEventListener('mouseover', e => {
 document.addEventListener('mouseleave', hideCard);
 document.addEventListener('scroll', hideCard, true);
 
-// ---------- search dispatch (coalesced) ----------
-function run() {
-  if (!ready) return;
-  if (pending) { dirty = true; return; }
+// ---------- search dispatch ----------
+function buildSearchOptions() {
   const size = +$('size').value;
   const reqIdx = [], poolIdx = [];
   DB.champions.forEach((c, i) => {
@@ -585,13 +777,9 @@ function run() {
     else if (s === 2) return;
     else if (costOn.has(c.cost)) poolIdx.push(i);
   });
-  pending = true;
-  inbox = [];
-  $('status').textContent = 'searching…';
   const tkeys = Object.keys(DB.traits);
-  const id = ++reqId;
-  const opts = {
-    size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems,
+  return {
+    size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems: [...emblems],
     reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
                         .filter(r => r.t >= 0),
     muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
@@ -600,9 +788,63 @@ function run() {
     // Shards over-return so the global dedup has spare rows to draw from,
     // and so collapsed rows have real alternates to offer.
     returnN: 800,
-    shards: W.length,
+    shards: NW,
   };
-  W.forEach((w, i) => w.postMessage({ type: 'search', id, opts: { ...opts, shard: i } }));
+}
+
+function dispatchSearch(generation, opts, key) {
+  if (generation !== searchGeneration || !workersReady) return;
+  pending = true;
+  inbox = [];
+  $('status').textContent = 'searching…';
+  const id = ++reqId;
+  activeSearch = { generation, key, opts };
+  recordMetric('workerRuns');
+  W.forEach((worker, shard) =>
+    worker.postMessage({ type: 'search', id, opts: { ...opts, shard } }));
+}
+
+async function executeSearch(generation) {
+  if (!dataReady || generation !== searchGeneration) return;
+  recordMetric('requests');
+  const opts = buildSearchOptions();
+  const version = `${SEARCH_ALGORITHM_VERSION}:${DB.builtAt || DB.gameBuild || DB.set}`;
+  const key = searchCacheKey(version, opts);
+
+  const memoryResult = memoryCacheGet(key);
+  if (memoryResult) {
+    recordMetric('memoryHits');
+    render({ ...memoryResult, cached: 'memory' });
+    return;
+  }
+
+  const deviceResult = await deviceCacheGet(key);
+  if (generation !== searchGeneration) return;
+  if (deviceResult) {
+    recordMetric('deviceHits');
+    memoryCacheSet(key, deviceResult);
+    render({ ...deviceResult, cached: 'device' });
+    return;
+  }
+
+  ensureWorkers(() => dispatchSearch(generation, opts, key));
+}
+
+function run(immediate = false) {
+  if (!dataReady) return;
+  const generation = ++searchGeneration;
+  clearTimeout(debounceTimer);
+  if (pending) {
+    stopWorkers(true);
+    $('status').textContent = 'updating…';
+  }
+  if (immediate) {
+    void executeSearch(generation);
+  } else {
+    debounceTimer = setTimeout(() => {
+      void executeSearch(generation);
+    }, DEBOUNCE_MS);
+  }
 }
 
 // ---------- render ----------

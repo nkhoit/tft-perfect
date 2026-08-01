@@ -437,3 +437,41 @@ test('Set 18 Avatar and Apex Predator rules reach the worker', () => {
     traitKeys[trait] === 'Riftbeast' && count === 3));
   assert.match(conflictingAvatars.error, /mutually exclusive/i);
 });
+
+test('search cache keys normalize unordered options', () => {
+  const { searchCacheKey } = require('../web/search-utils.js');
+  const base = {
+    size: 8,
+    maxWaste: 2,
+    reqIdx: [5, 1],
+    poolIdx: [3, 2],
+    emblems: ['Beta', 'Alpha', 'Alpha'],
+    reqTraits: [{ t: 4, n: 2 }, { t: 1, n: 3 }],
+    muted: [7, 6],
+    sortMode: 'live',
+    sortMode2: 'cost',
+  };
+  const reordered = {
+    ...base,
+    reqIdx: [1, 5],
+    poolIdx: [2, 3],
+    emblems: ['Alpha', 'Beta', 'Alpha'],
+    reqTraits: [{ t: 1, n: 3 }, { t: 4, n: 2 }],
+    muted: [6, 7],
+  };
+
+  assert.equal(searchCacheKey('data-v1', base), searchCacheKey('data-v1', reordered));
+  assert.notEqual(searchCacheKey('data-v1', base),
+    searchCacheKey('data-v1', { ...base, sortMode: 'tier' }));
+  assert.notEqual(searchCacheKey('data-v1', base), searchCacheKey('data-v2', base));
+});
+
+test('cached search status identifies its source', () => {
+  const { summary } = require('../web/search-utils.js');
+  const memory = summary({ rows: [{}], total: 1, ms: 1000, truncated: false, cached: 'memory' });
+  const disk = summary({ rows: [{}], total: 1, ms: 1000, truncated: false, cached: 'device' });
+
+  assert.match(memory.statusHtml, /cached/);
+  assert.match(memory.title, /memory/i);
+  assert.match(disk.title, /device/i);
+});
