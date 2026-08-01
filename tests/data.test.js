@@ -93,6 +93,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.deepEqual(data.traits.Riftbeast.teamSize, [{ min: 10, slots: 2 }]);
   assert.ok(data.traits.Adaptor.tiers.every(tier =>
     tier.includes('%i:scaleAD%') && tier.includes('%i:scaleAP%')));
+  assert.ok(data.traits.Defender.tiers.every(tier =>
+    tier.includes('%i:scaleArmor%') && tier.includes('%i:scaleMR%')));
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

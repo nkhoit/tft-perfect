@@ -472,6 +472,12 @@ def main():
             stat_choice = "%i:scaleAD% or %i:scaleAP%"
             tiers = [re.sub(r"\bOR\b", stat_choice, tier) for tier in tiers]
             desc = re.sub(r"\bOR\b", stat_choice, desc)
+        elif key == "Defender":
+            resist_icons = "%i:scaleArmor%%i:scaleMR%"
+            tiers = [f"{tier} {resist_icons}" for tier in tiers]
+            desc = desc.replace(
+                "@DefenderDefenseGain@",
+                f"@DefenderDefenseGain@ {resist_icons}")
 
         icon = None
         # CommunityDragon gives the authoritative asset path in `icon`; the
