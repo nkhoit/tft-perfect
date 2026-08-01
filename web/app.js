@@ -431,6 +431,7 @@ function unitCard(key) {
     v == null ? '' : `<div class="cstat"><span>${label}</span><b>${v}</b></div>`;
   const n1 = v => (v == null ? null : Math.round(v * 100) / 100);
   const body =
+    row('Team Slots', c.slots > 1 ? c.slots : null) +
     row('Health', n1(s.hp)) +
     row('Damage', n1(s.ad)) +
     row('Atk Spd', n1(s.as)) +
@@ -490,10 +491,6 @@ function run() {
     else if (s === 2) return;
     else if (costOn.has(c.cost)) poolIdx.push(i);
   });
-  if (reqIdx.length > size) {
-    render({ error: `${reqIdx.length} required units won't fit on a board of ${size}.` });
-    return;
-  }
   pending = true;
   inbox = [];
   $('status').textContent = 'searching…';
@@ -563,7 +560,7 @@ function render(m) {
       const uq = unique ? ' uq' : '';
       const ns = !unique && !canScore ? ' ns' : '';
       const mu = muted.has(key) ? ' mut' : '';
-      const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} unit(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
+      const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} trait point(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
       const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
       const nop = filterable(t) && canScore ? '' : ' nopin';
       return `<span class="tb ${cls}${isEmb}${uq}${ns}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
@@ -573,6 +570,10 @@ function render(m) {
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
       .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
       .join('');
+    const occupiedSlots = r.slots ?? r.units.length;
+    const slotTag = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
+      ? `<span title="Occupied team slots">${occupiedSlots} slots</span> · `
+      : '';
 
 
     // Same trait signature, different roster. Offered per-board instead of as a
@@ -595,7 +596,7 @@ function render(m) {
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
       (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
-      `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div>`;
+      slotTag + `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div>`;
     frag.appendChild(d);
   }
   list.innerHTML = '';
