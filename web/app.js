@@ -63,15 +63,14 @@ function loadSet(file) {
       CHAMPS_PER_TRAIT[t] = (CHAMPS_PER_TRAIT[t] || 0) + 1;
     }));
     const build = String(db.gameBuild || '').split('+')[0];
-    // The set dropdown already names the set; don't say it twice. Split the
-    // trait count -- 10 of them are 1-unit uniques you can't build around.
+    // The set dropdown already names the set; don't say it twice. One plain
+    // trait count -- the split was more precision than the header needs.
     const nUniq = Object.values(db.traits).filter(t => !filterable(t)).length;
     const nTr = Object.keys(db.traits).length;
     $('meta').innerHTML =
       `${db.champions.length} units · ` +
-      `<span title="${nTr} total: ${nTr - nUniq} you can build around, ` +
-      `${nUniq} tied to one or two specific champions">${nTr - nUniq} traits ` +
-      `<i class="u">+${nUniq} fixed</i></span>` +
+      `<span title="${nTr - nUniq} you can build around, ` +
+      `${nUniq} tied to a specific champion">${nTr} traits</span>` +
       (db.note ? ` <span class="tag" title="Data build ${build} — ${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
