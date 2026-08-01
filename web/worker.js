@@ -14,7 +14,12 @@ let CTR = [];       // per-champion array of trait indices
 // active-trait score and drowns out genuinely wide boards. Still displayed.
 function isUnique(t) {
   if ((t.styles || []).some(s => s.style === 'unique')) return true;
-  return (t.bp || []).length === 1 && (t.bp[0] || 1) <= 1;
+  if ((t.bp || []).length === 1 && (t.bp[0] || 1) <= 1) return true;
+  // Anti-stacking traits ("Only active while fielding 1 Rival") activate off a
+  // single champion and can't be built toward, so they're uniques in all but
+  // name. Scoring them inflated any board that happened to include KhaZix or
+  // Rengar by a free trait point.
+  return /only active while fielding\s+1\b/i.test(t.desc || '');
 }
 
 function init(db) {

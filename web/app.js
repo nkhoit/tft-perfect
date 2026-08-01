@@ -16,9 +16,13 @@ const muted = new Set();          // trait keys that still show but earn no scor
 const STYLE_ORDER = ['bronze', 'silver', 'gold', 'chromatic', 'prismatic', 'unique'];
 
 // Mirrors worker.js: traits that come free with a single unit.
+function antiStack(t) {
+  return /only active while fielding\s+1\b/i.test(t.desc || '');
+}
 function isUnique(t) {
   if ((t.styles || []).some(s => s.style === 'unique')) return true;
-  return (t.bp || []).length === 1 && (t.bp[0] || 1) <= 1;
+  if ((t.bp || []).length === 1 && (t.bp[0] || 1) <= 1) return true;
+  return antiStack(t);   // Rival: activates off one champion, scores zero
 }
 
 // Traits nobody can actually build toward. Uniques are the obvious case; the
@@ -28,12 +32,7 @@ function isUnique(t) {
 // champion count: Flora Fatalis also has only two champions but stacks
 // normally to 2 and has a real emblem.
 let CHAMPS_PER_TRAIT = {};
-function antiStack(t) {
-  return /only active while fielding\s+1\b/i.test(t.desc || '');
-}
-function filterable(t) {
-  return !isUnique(t) && !antiStack(t);
-}
+function filterable(t) { return !isUnique(t); }
 
 function styleAt(tr, n) {
   let s = null;
