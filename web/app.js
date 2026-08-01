@@ -21,14 +21,18 @@ function isUnique(t) {
   return (t.bp || []).length === 1 && (t.bp[0] || 1) <= 1;
 }
 
-// Traits nobody can actually build toward. Uniques are the obvious case, but
-// Rival is the trap: bp [1,1,2] looks like a real trait, yet only KhaZix and
-// Rengar have it and it reads "only active while fielding 1 Rival". Requiring
-// it is requiring a specific unit, so it belongs in the picker, not here.
-// Counting champions catches this without hardcoding a trait name.
+// Traits nobody can actually build toward. Uniques are the obvious case; the
+// other is Rival, which reads "Only active while fielding 1 Rival" -- an
+// anti-stacking trait can't be required or emblem'd, because a second copy
+// turns it OFF. That self-limiting clause is the real disqualifier, not the
+// champion count: Flora Fatalis also has only two champions but stacks
+// normally to 2 and has a real emblem.
 let CHAMPS_PER_TRAIT = {};
+function antiStack(t) {
+  return /only active while fielding\s+1\b/i.test(t.desc || '');
+}
 function filterable(t) {
-  return !isUnique(t) && (CHAMPS_PER_TRAIT[t.key] || 0) >= 3;
+  return !isUnique(t) && !antiStack(t);
 }
 
 function styleAt(tr, n) {
@@ -611,7 +615,7 @@ function render(m) {
     const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
       `<div class="vrow">` + v.units.map(i => DB.champions[i])
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-        .map(c => `<span class="uc k${c.cost}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
+        .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
         .join('') +
       `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span></div>`).join('') + `</div>` : '';
 

@@ -24,7 +24,13 @@ CD_TFT = PBE + "/cdragon/tft/en_us.json"
 CD_FILES = PBE + "/cdragon/files.exported.txt"
 ASSET = PBE + "/"
 
-STYLE_NAMES = {1: "bronze", 2: "silver", 3: "gold", 4: "unique", 5: "prismatic", 6: "prismatic"}
+# Riot's style enum is NOT a 1..n colour ramp. Verified against Blossom, whose
+# in-game pips are 3 bronze / 5 silver / 7+9 gold / 11 prismatic and whose raw
+# values are 1,3,5,5,6. Int 2 never appears anywhere in Set 18, which is the
+# tell that the naive 1=bronze,2=silver,3=gold reading is wrong: it renders
+# every silver tier as gold and every gold as prismatic.
+STYLE_NAMES = {1: "bronze", 2: "silver", 3: "silver", 4: "unique",
+               5: "gold", 6: "prismatic"}
 
 # The pre-PBE reveal capture used names Riot has since changed on PBE.
 TRAIT_ALIAS = {"Eldritch": "Blackthorn"}

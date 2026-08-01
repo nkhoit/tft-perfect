@@ -134,7 +134,8 @@ button:hover{border-color:var(--acc2)}
 /* ---- trait requirement grid (replaces the 90-option dropdown) ---- */
 /* Hex tiles: TFT renders traits as hexes, and icon-only kills the scrollbar.
    Name lives in the hover card, which already exists for these elements. */
-.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:5px}
+/* fixed 6 columns: 24 filterable traits lands as a clean 4x6 block */
+.tgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
 .tg{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;
   aspect-ratio:1/1;background:#181d27;border:1px solid #232a36;border-radius:7px;
   user-select:none;transition:background .1s,border-color .1s,transform .1s}
