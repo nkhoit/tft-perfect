@@ -50,7 +50,7 @@ function loadSet(file) {
       `${Object.keys(db.traits).length} traits` +
       (db.note ? ` <span class="tag" title="${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
-    buildCosts(); buildPool(); buildEmblemSelect(); renderEmblems();
+    buildCosts(); buildPool(); buildEmblemGrid();
     buildTraitGrid(); updPickN();
     let up = 0;
     for (let i = 0; i < NW; i++) {
@@ -205,12 +205,42 @@ function updPickN() {
   $('pickN').textContent = `${r} required · ${x} excluded`;
 }
 
-function buildEmblemSelect() {
-  const s = $('embSel');
-  s.innerHTML = '<option value="">+ add emblem…</option>';
-  Object.values(DB.traits).sort((a, b) => a.name.localeCompare(b.name))
-    .forEach(t => s.insertAdjacentHTML('beforeend', `<option value="${t.key}">${t.name}</option>`));
-  s.onchange = () => { if (s.value) { emblems.push(s.value); s.value = ''; renderEmblems(); run(); } };
+// Only traits with real breakpoints can exist as emblems -- a unique trait
+// belongs to exactly one champion and has no spatula version in game.
+function emblemable() {
+  return Object.values(DB.traits)
+    .filter(t => (t.bp || [1]).length > 1 || (t.bp || [1])[0] > 1)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function buildEmblemGrid() {
+  const el = $('embGrid');
+  el.innerHTML = '';
+  emblemable().forEach(t => {
+    const d = document.createElement('div');
+    d.className = 'tg';
+    d.dataset.key = t.key;
+    d.dataset.search = t.name.toLowerCase();
+    d.innerHTML = (t.icon ? `<img src="${t.icon}">` : '<span class="noimg"></span>') +
+      `<span class="tgn">${t.name}</span><span class="tgv"></span>`;
+    d.onclick = () => { emblems.push(t.key); renderEmblems(); run(); };
+    d.oncontextmenu = (e) => {
+      e.preventDefault();
+      const i = emblems.lastIndexOf(t.key);
+      if (i >= 0) { emblems.splice(i, 1); renderEmblems(); run(); }
+    };
+    el.appendChild(d);
+  });
+  $('embSearch').oninput = filterEmblems;
+  renderEmblems();
+}
+
+function filterEmblems() {
+  const q = $('embSearch').value.trim().toLowerCase();
+  for (const d of $('embGrid').children) {
+    const on = emblems.includes(d.dataset.key);
+    d.classList.toggle('hide', !!q && !on && !d.dataset.search.includes(q));
+  }
 }
 
 function renderEmblems() {
@@ -224,11 +254,23 @@ function renderEmblems() {
     el.appendChild(d);
   });
   $('embN').textContent = emblems.length;
+  // Stacked emblems show as xN on the grid tile so three of a kind is legible.
+  const n = {};
+  emblems.forEach(k => n[k] = (n[k] || 0) + 1);
+  for (const d of $('embGrid').children) {
+    const c = n[d.dataset.key] || 0;
+    d.classList.toggle('req', c > 0);
+    d.querySelector('.tgv').textContent = c > 1 ? '\u00d7' + c : (c ? '\u2713' : '');
+  }
 }
 
 // live-bind every control
 ['size', 'waste'].forEach(id => {
-  $(id).addEventListener('input', () => { $(id + 'V').textContent = $(id).value; run(); });
+  $(id).addEventListener('input', () => {
+    $(id + 'V').textContent = $(id).value;
+    if (id === 'size') $('sizeU').textContent = $(id).value;
+    run();
+  });
 });
 $('sort').addEventListener('change', run);
 $('sort2').addEventListener('change', run);
@@ -236,7 +278,7 @@ $('uniq').addEventListener('change', run);
 $('search').addEventListener('input', applyFilter);
 $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
-  emblems.length = 0; renderEmblems();
+  emblems.length = 0; $('embSearch').value = ''; filterEmblems(); renderEmblems();
   reqTraits.length = 0; renderTraitGrid();
   $('traitSearch').value = '';
   for (const d of $('pool').children) d.classList.remove('req', 'exc');

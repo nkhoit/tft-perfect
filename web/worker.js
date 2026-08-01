@@ -151,6 +151,7 @@ function search(o) {
     tier:  (a, b) => b.tierSum - a.tierSum,
     waste: (a, b) => a.waste - b.waste,
     cost:  (a, b) => a.gold - b.gold,
+    rich:  (a, b) => b.gold - a.gold,   // priciest first: proxy for unit quality
   };
   const order = [o.sortMode, o.sortMode2, 'live', 'tier', 'waste', 'cost']
     .filter((k, i, arr) => KEY[k] && arr.indexOf(k) === i);
@@ -170,6 +171,7 @@ function search(o) {
       if (k === 'live') d = b.live - live;
       else if (k === 'tier') d = b.tierSum - tierSum;
       else if (k === 'waste') d = waste - b.waste;
+      else if (k === 'rich') d = b.gold - gold;
       else d = gold - b.gold;
       if (d) return d;
     }
@@ -180,14 +182,21 @@ function search(o) {
   // cheapK[start * (size+1) + k] = gold for the k cheapest units in pool[start..].
   // Used for an admissible lower bound on a board's final cost.
   const cheapK = new Int32Array((P + 1) * (size + 1));
+  // Mirror of cheapK for the 'rich' sort, which maximises gold instead of
+  // minimising it -- there the admissible bound is the *most* the remaining
+  // slots could still add.
+  const dearK = new Int32Array((P + 1) * (size + 1));
   {
     const costs = poolIdx.map(i => DB.champions[i].cost * 3);
     for (let s = P - 1; s >= 0; s--) {
       const tail = costs.slice(s).sort((a, b) => a - b);
-      let acc = 0;
+      const desc = tail.slice().reverse();
+      let acc = 0, accD = 0;
       for (let k = 1; k <= size; k++) {
         acc += (k <= tail.length ? tail[k - 1] : 0);
         cheapK[s * (size + 1) + k] = acc;
+        accD += (k <= desc.length ? desc[k - 1] : 0);
+        dearK[s * (size + 1) + k] = accD;
       }
     }
   }
@@ -232,6 +241,12 @@ function search(o) {
     return g + cheapK[start * (size + 1) + slotsLeft];
   }
 
+  function boundGoldMax(start, slotsLeft, depth) {
+    let g = baseGold;
+    for (let d = 0; d < depth; d++) g += DB.champions[pick[d]].cost * 3;
+    return g + dearK[start * (size + 1) + slotsLeft];
+  }
+
   // Prune only on the primary sort key. Deeper keys are tie-breakers, and a
   // bound that's optimistic on key 1 says nothing about key 2, so comparing
   // past the first strict decision would not be admissible.
@@ -242,6 +257,7 @@ function search(o) {
     if (primary === 'tier')  return boundTier(start, slotsLeft) >= worst.tierSum;
     if (primary === 'waste') return wasteLB(slotsLeft) <= worst.waste;
     if (primary === 'cost')  return boundGold(start, slotsLeft, depth) <= worst.gold;
+    if (primary === 'rich')  return boundGoldMax(start, slotsLeft, depth) >= worst.gold;
     return true;
   }
 

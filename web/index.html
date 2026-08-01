@@ -21,11 +21,13 @@
 <div class="wrap">
   <aside class="side">
     <section>
-      <h2>Board size</h2>
+      <h2>Level</h2>
       <div class="slider">
-        <input type="range" id="size" min="2" max="10" value="8">
+        <input type="range" id="size" min="2" max="10" value="8"
+          title="Your level is your board size — one unit slot per level.">
         <output id="sizeV">8</output>
       </div>
+      <p class="hint">Board size = level. <b id="sizeU">8</b> units.</p>
     </section>
 
     <section>
@@ -58,10 +60,12 @@
         <option value="tier">Highest trait tiers</option>
         <option value="waste">Fewest wasted</option>
         <option value="cost">Cheapest board</option>
+        <option value="rich">Most expensive board</option>
       </select>
       <label class="sub">then by
         <select id="sort2">
           <option value="cost">Cheapest board</option>
+          <option value="rich">Most expensive board</option>
           <option value="waste">Fewest wasted</option>
           <option value="tier">Highest trait tiers</option>
           <option value="live">Most active traits</option>
@@ -73,8 +77,11 @@
 
     <section>
       <h2>Emblems <span class="tag" id="embN">0</span></h2>
-      <p class="hint">Adds a free trait to the board without using a unit slot.</p>
-      <select id="embSel"></select>
+      <p class="hint">Each adds a free trait point without using a unit slot.
+      <b class="g">Click</b> to add · <b class="r">right click</b> to remove.
+      Built for the <b>Trait Tree</b> encounter — add your three and search.</p>
+      <input type="search" id="embSearch" placeholder="filter emblems…">
+      <div class="tgrid" id="embGrid"></div>
       <div class="chips" id="embList"></div>
     </section>
   </aside>
