@@ -71,24 +71,47 @@ function search(o) {
   const pool = poolIdx;
   const results = [];
   let nodes = 0, truncated = false, capped = false;
+  // Shards split the top-level branch round-robin across workers. Each owns a
+  // slice of the node budget so total work matches the single-threaded ceiling.
+  const shards = o.shards || 1, shard = o.shard || 0;
+  // Budget is per shard, not a split of one global pot. Top-level branches are
+  // wildly uneven in size, so dividing the budget starves whichever shard drew
+  // the fat branches and silently truncates boards the serial search finds.
   const NODE_BUDGET = 40e6;
-  const RESULT_CAP = 120000;
+  const RESULT_CAP = Math.max(20000, Math.ceil(120000 / shards));
 
   // lower bound on wasted traits: any trait already started that cannot
   // possibly reach its first breakpoint with `slotsLeft` more units.
   // Lower bound on wasted units. Adding more units can only raise a trait's
   // count, so any overshoot past the highest breakpoint still reachable with
   // `slotsLeft` spare slots is already locked in.
+  // wasteLB runs at every node, so the per-trait breakpoint scan is precomputed.
+  // Counts and spare slots are both tiny and bounded, so the whole function
+  // collapses into a flat table lookup: LBT[trait][count][slotsLeft].
+  const MAXC = size + emblems.length + 1;   // a trait can't exceed board size + its emblems
+  const MC1 = MAXC + 1, S1 = size + 1;
+  const LBT = new Int16Array(nT * MC1 * S1);
+  for (let t = 0; t < nT; t++) {
+    const bp = BPS[t];
+    for (let c = 0; c <= MAXC; c++) {
+      for (let s = 0; s < S1; s++) {
+        let v = 0;
+        if (c) {
+          const ceiling = c + s;
+          let best = 0;
+          for (let i = 0; i < bp.length; i++) if (bp[i] <= ceiling) best = bp[i];
+          if (best <= c) v = c - best;   // can't reach the next tier from here
+        }
+        LBT[(t * MC1 + c) * S1 + s] = v;
+      }
+    }
+  }
+
   function wasteLB(slotsLeft) {
     let w = 0;
     for (let t = 0; t < nT; t++) {
       const c = counts[t];
-      if (!c) continue;
-      const bp = BPS[t];
-      const ceiling = c + slotsLeft;
-      let best = 0;
-      for (let i = 0; i < bp.length; i++) if (bp[i] <= ceiling) best = bp[i];
-      if (best <= c) w += c - best;   // can't reach the next tier from here
+      if (c) w += LBT[(t * MC1 + c) * S1 + slotsLeft];
     }
     return w;
   }
@@ -198,6 +221,7 @@ function search(o) {
     }
     const slotsLeft = need - depth;
     for (let i = start; i <= pool.length - slotsLeft; i++) {
+      if (depth === 0 && shards > 1 && i % shards !== shard) continue;
       if (++nodes > NODE_BUDGET) { truncated = true; return; }
       const ci = pool[i];
       const ts = CTR[ci];
@@ -213,23 +237,12 @@ function search(o) {
   if (wasteLB(need) <= maxWaste && !reqUnreachable(0, need)) dfs(0, 0);
 
   results.sort(cmp);
-
-  let out = results;
-  if (uniq) {
-    const seen = new Set();
-    out = [];
-    for (const r of results) {
-      const sig = r.active.map(x => x[0] + ':' + x[1]).join('|');
-      if (seen.has(sig)) continue;
-      seen.add(sig);
-      out.push(r);
-      if (out.length >= limit) break;
-    }
-  } else {
-    out = results.slice(0, limit);
-  }
-
-  return { rows: out, total: found, truncated, capped: trimmed, nodes };
+  // Dedup happens at the merge step: a signature can span shards, so a worker
+  // can't know whether its board is a duplicate of one another worker found.
+  return {
+    rows: results.slice(0, o.returnN || limit),
+    total: found, truncated, capped: trimmed, nodes,
+  };
 }
 
 onmessage = (e) => {

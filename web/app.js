@@ -1,6 +1,10 @@
 // app.js — TFT Perfect Traits Explorer
-let DB = null, W = null, ready = false;
+let DB = null, W = [], ready = false;
 let reqId = 0, pending = false, dirty = false;
+let inbox = [];                   // shard results for the in-flight request
+// One worker per core, minus one so the UI thread keeps a lane. Capped at 8:
+// past that the merge cost outweighs the split on this search size.
+const NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
@@ -34,7 +38,7 @@ const SET_KEY = 'tftPerfectSet';
 
 function loadSet(file) {
   ready = false;
-  if (W) { W.terminate(); W = null; }
+  W.forEach(w => w.terminate()); W = [];
   state.clear(); emblems.length = 0; reqTraits.length = 0;
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
@@ -48,9 +52,16 @@ function loadSet(file) {
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemSelect(); renderEmblems();
     buildTraitGrid(); updPickN();
-    W = new Worker('worker.js');
-    W.onmessage = onWorker;
-    W.postMessage({ type: 'init', db });
+    let up = 0;
+    for (let i = 0; i < NW; i++) {
+      const w = new Worker('worker.js');
+      w.onmessage = e => {
+        if (e.data.type === 'ready') { if (++up === NW) { ready = true; run(); } return; }
+        onWorker(e);
+      };
+      w.postMessage({ type: 'init', db });
+      W.push(w);
+    }
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
 
@@ -63,13 +74,51 @@ loadSet($('setSel').value);
 
 function onWorker(e) {
   const m = e.data;
-  if (m.type === 'ready') { ready = true; run(); return; }
-  if (m.type === 'result') {
-    pending = false;
-    if (m.id !== reqId) { if (dirty) { dirty = false; run(); } return; }
-    render(m);
-    if (dirty) { dirty = false; run(); }
+  if (m.type !== 'result') return;
+  if (m.id !== reqId) return;            // stale shard from a superseded search
+  inbox.push(m);
+  if (inbox.length < NW) return;         // still waiting on other shards
+
+  pending = false;
+  const parts = inbox; inbox = [];
+  const err = parts.find(p => p.error);
+  if (err) { render({ error: err.error }); if (dirty) { dirty = false; run(); } return; }
+
+  // Each shard returns its own sorted top slice; merge, re-sort, then dedup
+  // globally — a trait signature can appear in more than one shard.
+  const merged = {
+    rows: [].concat(...parts.map(p => p.rows)).sort(mkCmp()),
+    total: parts.reduce((n, p) => n + p.total, 0),
+    truncated: parts.some(p => p.truncated),
+    capped: parts.some(p => p.capped),
+    ms: Math.max(...parts.map(p => p.ms)),
+  };
+  if ($('uniq').checked) {
+    const seen = new Set();
+    merged.rows = merged.rows.filter(r => {
+      const sig = r.active.map(x => x[0] + ':' + x[1]).join('|');
+      return seen.has(sig) ? false : (seen.add(sig), true);
+    });
   }
+  merged.rows = merged.rows.slice(0, 100);
+  render(merged);
+  if (dirty) { dirty = false; run(); }
+}
+
+// Mirrors the worker's comparator so merged shard results order identically.
+function mkCmp() {
+  const KEY = {
+    live: (a, b) => b.live - a.live,
+    tier: (a, b) => b.tierSum - a.tierSum,
+    waste: (a, b) => a.waste - b.waste,
+    cost: (a, b) => a.gold - b.gold,
+  };
+  const order = [$('sort').value, $('sort2').value, 'live', 'tier', 'waste', 'cost']
+    .filter((k, i, arr) => KEY[k] && arr.indexOf(k) === i);
+  return (a, b) => {
+    for (const k of order) { const d = KEY[k](a, b); if (d) return d; }
+    return 0;
+  };
 }
 
 // ---------- controls ----------
@@ -372,19 +421,22 @@ function run() {
     return;
   }
   pending = true;
+  inbox = [];
   $('status').textContent = 'searching…';
   const tkeys = Object.keys(DB.traits);
-  W.postMessage({
-    type: 'search', id: ++reqId,
-    opts: {
-      size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems,
-      reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
-                          .filter(r => r.t >= 0),
-      muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
-      sortMode: $('sort').value, sortMode2: $('sort2').value,
-      limit: 100, uniq: $('uniq').checked,
-    }
-  });
+  const id = ++reqId;
+  const opts = {
+    size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems,
+    reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
+                        .filter(r => r.t >= 0),
+    muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
+    sortMode: $('sort').value, sortMode2: $('sort2').value,
+    limit: 100, uniq: $('uniq').checked,
+    // Shards over-return so the global dedup has spare rows to draw from.
+    returnN: $('uniq').checked ? 800 : 100,
+    shards: W.length,
+  };
+  W.forEach((w, i) => w.postMessage({ type: 'search', id, opts: { ...opts, shard: i } }));
 }
 
 // ---------- render ----------
