@@ -21,39 +21,38 @@
 <div class="wrap">
   <aside class="side">
     <section>
-      <h2>Level</h2>
+      <h2>Level <i class="q" tabindex="0" data-tip="Board size = level — one unit slot per level.">?</i></h2>
       <div class="slider">
         <input type="range" id="size" min="2" max="10" value="8"
           title="Your level is your board size — one unit slot per level.">
         <output id="sizeV">8</output>
       </div>
-      <p class="hint">Board size = level. <b id="sizeU">8</b> units.</p>
     </section>
 
     <section>
-      <h2>Wasted trait slots allowed</h2>
+      <h2>Wasted trait slots allowed <i class="q" tabindex="0" data-tip="Trait slots that aren't paying off. 0 = perfect boards only.
+Counted per trait, not per unit: 2/3 Sprykin = 2 wasted.">?</i></h2>
       <div class="slider">
         <input type="range" id="waste" min="0" max="10" value="10"
           title="Counted per trait, not per unit — a unit overshooting one trait still counts toward its others.&#10;2/3 Sprykin = 2 wasted · 4/5 Riftbeast = 1 wasted">
         <output id="wasteV">10</output>
       </div>
-      <p class="hint">Trait slots that aren't paying off. <b>0</b> = perfect boards only.</p>
     </section>
 
     <section>
-      <h2>Require traits <span class="tag" id="reqTN">0</span></h2>
-      <p class="hint"><b class="g">Click</b> to require · again for the next tier ·
-      <b class="r">right click</b> to mute (shown, but not scored).</p>
+      <h2>Require traits <span class="tag" id="reqTN">0</span> <i class="q" tabindex="0" data-tip="Click to require · again for the next tier.
+Right click to mute: still shown on boards, but scores nothing.
+Unique traits are excluded — require the unit instead.">?</i></h2>
       <div class="tgrid" id="traitGrid"></div>
     </section>
 
     <section>
-      <h2>Cost filter</h2>
+      <h2>Cost filter <i class="q" tabindex="0" data-tip="Which unit costs the search may draw from. Required units are always allowed.">?</i></h2>
       <div class="costs" id="costs"></div>
     </section>
 
     <section>
-      <h2>Sort</h2>
+      <h2>Sort <i class="q" tabindex="0" data-tip="Board cost assumes every unit at 2★ (3 copies each).">?</i></h2>
       <select id="sort">
         <option value="live">Most active traits</option>
         <option value="tier">Highest trait tiers</option>
@@ -70,13 +69,12 @@
           <option value="live">Most active traits</option>
         </select>
       </label>
-      <p class="hint">Board cost assumes every unit at <b>2★</b> (3 copies each).</p>
     </section>
 
     <section>
-      <h2>Emblems <span class="tag" id="embN">0</span></h2>
-      <p class="hint">Each adds a free trait point without using a unit slot.
-      <b class="g">Click</b> to add · <b class="r">right click</b> to remove.</p>
+      <h2>Emblems <span class="tag" id="embN">0</span> <i class="q" tabindex="0" data-tip="Each emblem adds a free trait point without using a unit slot.
+Click to add · right click to remove one.
+Built for the Trait Tree encounter.">?</i></h2>
       <div class="tgrid" id="embGrid"></div>
     </section>
   </aside>
@@ -84,13 +82,12 @@
   <main class="main">
     <div class="picker">
       <div class="pickhead">
-        <h2>Units <span class="tag" id="pickN">0 required · 0 excluded</span></h2>
+        <h2>Units <span class="tag" id="pickN">0 required · 0 excluded</span> <i class="q" tabindex="0" data-tip="Left click to require · right click to exclude · click again to clear.">?</i></h2>
         <div class="pickctl">
           <input type="search" id="search" placeholder="filter units or traits…">
           <button id="clear">Clear</button>
         </div>
       </div>
-      <p class="hint"><b class="g">Left click</b> to require · <b class="r">right click</b> to exclude · click again to clear.</p>
       <div class="grid" id="pool"></div>
     </div>
 

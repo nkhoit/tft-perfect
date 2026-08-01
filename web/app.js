@@ -260,7 +260,6 @@ function renderEmblems() {
 ['size', 'waste'].forEach(id => {
   $(id).addEventListener('input', () => {
     $(id + 'V').textContent = $(id).value;
-    if (id === 'size') $('sizeU').textContent = $(id).value;
     run();
   });
 });
@@ -434,6 +433,10 @@ function showCard(html, ev) {
 }
 
 document.addEventListener('mouseover', e => {
+  // "?" header affordance: same card, plain text, newlines become breaks
+  const q = e.target.closest('.q[data-tip]');
+  if (q) return showCard(q.dataset.tip.split('\n')
+    .map(l => `<div class="qline">${l}</div>`).join(''), e);
   const tEl = e.target.closest('.tg[data-key], .tb[data-tk]');
   if (tEl) return showCard(traitCard(tEl.dataset.key || tEl.dataset.tk), e);
   const uEl = e.target.closest('.u[data-key], .uc[data-key]');

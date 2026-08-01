@@ -249,3 +249,12 @@ label.sub select{margin-top:3px}
 .tg.s-gold .tgv{background:var(--gold);color:#1a1405}
 .tg.s-chromatic,.tg.s-prismatic{border-color:var(--prism);background:#10262b}
 .tg.s-chromatic .tgv,.tg.s-prismatic .tgv{background:var(--prism);color:#062026}
+
+/* ---- "?" info affordance on panel headers ---- */
+h2 .q{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;
+  margin-left:5px;border-radius:50%;border:1px solid #3a4354;background:#181d27;
+  color:#7f8895;font-size:9px;font-weight:800;font-style:normal;line-height:1;
+  cursor:help;vertical-align:middle;user-select:none;transition:color .1s,border-color .1s}
+h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
+#card .qline{margin:0 0 4px}
+#card .qline:last-child{margin:0}
