@@ -64,10 +64,30 @@ button:hover{border-color:var(--acc2)}
 .picker{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;margin-bottom:14px}
 .pickhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pickhead h2{margin:0}
-.pickctl{margin-left:auto;display:flex;gap:6px}
+.pickctl{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;
+  flex-wrap:wrap;gap:6px}
 .pickctl input{background:var(--panel2);color:var(--txt);border:1px solid var(--edge);
   border-radius:6px;padding:5px 9px;font-size:12px;width:180px}
 .pickctl button:disabled{opacity:.55;cursor:wait}
+.savedmenu{position:relative}
+.savedmenu>summary{list-style:none;cursor:pointer;padding:6px 9px;background:var(--panel2);
+  color:var(--txt);border:1px solid var(--edge);border-radius:6px;font-size:12px;
+  line-height:1.2;user-select:none;white-space:nowrap}
+.savedmenu>summary::-webkit-details-marker{display:none}
+.savedmenu[open]>summary{border-color:#48556a}
+.savedlist{position:absolute;z-index:50;top:calc(100% + 6px);right:0;width:230px;
+  max-height:280px;overflow:auto;padding:5px;background:#10141c;
+  border:1px solid #333c4d;border-radius:7px;box-shadow:0 10px 28px #000b}
+.saveditem{display:flex;align-items:center;gap:3px;border-bottom:1px solid #202735}
+.saveditem:last-child{border-bottom:0}
+.savedload{min-width:0;flex:1;border:0;background:transparent;text-align:left;
+  padding:7px 6px;color:#d9dee7}
+.savedload:hover,.savedload:focus-visible{background:#1b2230;color:#fff}
+.savedname{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.saveddelete{flex:none;width:27px;height:27px;padding:0;border:0;background:transparent;
+  color:#778191;font-size:18px;line-height:1}
+.saveddelete:hover,.saveddelete:focus-visible{color:var(--red);background:#2a171b}
+.savedempty{padding:12px 9px;color:var(--dim);font-size:11px;text-align:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;margin-top:10px}
 .u{position:relative;border:2px solid var(--edge);border-radius:7px;overflow:hidden;
   cursor:pointer;background:var(--panel2);aspect-ratio:1;transition:border-color .1s,transform .06s}

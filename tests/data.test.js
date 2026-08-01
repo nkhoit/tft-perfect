@@ -20,6 +20,9 @@ test('the application contains only Set 18', () => {
   assert.equal(data.teamPlannerSet, 'TFTSet18');
   assert.match(html, /Set 18/);
   assert.match(html, /id="share"/);
+  assert.match(html, /id="saveSearch"/);
+  assert.match(html, /id="savedList"/);
+  assert.match(html, /src="saved-searches\.js"/);
   assert.match(html, /src="share-state\.js"/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
@@ -78,7 +81,10 @@ test('the application contains only Set 18', () => {
   assert.match(app, /recordMetric\('cancellations'\)/);
   assert.match(app, /function sharedSearchState/);
   assert.match(app, /function applySharedSearchState/);
+  assert.match(app, /function renderSavedSearches/);
+  assert.match(app, /function restoreSavedEntry/);
   assert.match(app, /history\.replaceState/);
+  assert.match(css, /\.savedlist\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

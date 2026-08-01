@@ -13,6 +13,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
 - Debounced, cancellable searches with versioned memory and device caches.
 - Compact shareable URLs that restore every search control.
+- Named saved searches stored privately on the current device.
 - Sorting by active traits, trait tiers, waste, or board cost.
 - Copyable codes for importing any result into TFT's Team Planner.
 - Unique one-unit traits remain visible but do not inflate the active-trait score.

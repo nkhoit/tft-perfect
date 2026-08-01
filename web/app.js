@@ -33,6 +33,7 @@ const { antiStack, breakpoints, comparator, isUnique, scoreFloor, scoresAt,
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
 let urlSyncGeneration = 0;
+let savedSearches = [], savedSearchesAvailable = true;
 
 function loadMetrics() {
   const empty = {
@@ -350,6 +351,127 @@ async function restoreSharedSearch() {
   }
 }
 
+function defaultSavedSearchName() {
+  const query = $('search').value.trim();
+  if (query) return query;
+  if (reqTraits.length) {
+    const { key, n } = reqTraits[0];
+    return `${DB.traits[key]?.name || key} ${n}`;
+  }
+  const champion = DB.champions.find(unit => state.get(unit.key) === 1);
+  if (champion) return `${champion.name} team`;
+  return `Level ${$('size').value} search`;
+}
+
+function renderSavedSearches() {
+  const list = $('savedList');
+  list.replaceChildren();
+  $('savedN').textContent = savedSearches.length;
+  $('saveSearch').disabled = !savedSearchesAvailable || !dataReady;
+
+  if (!savedSearchesAvailable || !savedSearches.length) {
+    const empty = document.createElement('div');
+    empty.className = 'savedempty';
+    empty.textContent = savedSearchesAvailable
+      ? 'No saved searches yet.'
+      : 'Saved searches are unavailable.';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const saved of savedSearches) {
+    const row = document.createElement('div');
+    row.className = 'saveditem';
+
+    const load = document.createElement('button');
+    load.type = 'button';
+    load.className = 'savedload';
+    load.dataset.id = saved.id;
+    load.disabled = !dataReady;
+    load.title = `Load ${saved.name}`;
+    const name = document.createElement('span');
+    name.className = 'savedname';
+    name.textContent = saved.name;
+    load.appendChild(name);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'saveddelete';
+    remove.dataset.id = saved.id;
+    remove.setAttribute('aria-label', `Delete ${saved.name}`);
+    remove.title = `Delete ${saved.name}`;
+    remove.textContent = '\u00d7';
+
+    row.append(load, remove);
+    list.appendChild(row);
+  }
+}
+
+function readSavedSearches() {
+  try {
+    savedSearches = SavedSearches.load(localStorage);
+    savedSearchesAvailable = true;
+  } catch (error) {
+    console.error('Could not read saved searches.', error);
+    savedSearches = [];
+    try {
+      localStorage.removeItem(SavedSearches.STORAGE_KEY);
+      savedSearchesAvailable = true;
+    } catch (cleanupError) {
+      console.error('Could not reset saved-search storage.', cleanupError);
+      savedSearchesAvailable = false;
+    }
+  }
+  renderSavedSearches();
+}
+
+async function saveCurrentSearch() {
+  if (!dataReady) return;
+  const proposed = window.prompt('Name this search:', defaultSavedSearchName());
+  if (proposed == null) return;
+  const name = proposed.trim();
+  if (!name) return;
+  try {
+    const token = await ShareState.encode(sharedSearchState());
+    savedSearches = SavedSearches.upsert(localStorage, { name, token });
+    renderSavedSearches();
+    const button = $('saveSearch');
+    clearTimeout(button.savedReset);
+    button.textContent = 'Saved';
+    button.savedReset = setTimeout(() => {
+      button.textContent = 'Save';
+    }, 1200);
+  } catch (error) {
+    console.error('Could not save the search.', error);
+    window.alert('This search could not be saved on this device.');
+  }
+}
+
+async function restoreSavedEntry(id) {
+  if (!dataReady) return;
+  const saved = savedSearches.find(entry => entry.id === id);
+  if (!saved) return;
+  try {
+    applySharedSearchState(await ShareState.decode(saved.token));
+    refreshSearchControls();
+    $('savedMenu').open = false;
+    run(true);
+  } catch (error) {
+    console.error('Could not restore the saved search.', error);
+    window.alert('This saved search is invalid or no longer supported.');
+  }
+}
+
+function deleteSavedEntry(id) {
+  try {
+    savedSearches = SavedSearches.remove(localStorage, id);
+    renderSavedSearches();
+  } catch (error) {
+    console.error('Could not delete the saved search.', error);
+    window.alert('This saved search could not be deleted.');
+  }
+}
+
 function styleAt(tr, n) {
   let s = null;
   for (const st of (tr.styles || [])) {
@@ -443,6 +565,7 @@ function loadData() {
     await restoreSharedSearch();
     refreshSearchControls();
     dataReady = true;
+    renderSavedSearches();
     run(true);
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
@@ -672,6 +795,18 @@ $('search').addEventListener('input', () => {
   applyFilter();
   void syncSearchUrl(searchGeneration);
 });
+$('saveSearch').onclick = () => {
+  void saveCurrentSearch();
+};
+$('savedList').addEventListener('click', event => {
+  const load = event.target.closest('.savedload');
+  if (load) {
+    void restoreSavedEntry(load.dataset.id);
+    return;
+  }
+  const remove = event.target.closest('.saveddelete');
+  if (remove) deleteSavedEntry(remove.dataset.id);
+});
 $('share').onclick = async () => {
   const button = $('share');
   button.disabled = true;
@@ -707,6 +842,8 @@ $('clear').onclick = () => {
   for (const d of $('pool').children) d.classList.remove('req', 'exc');
   $('search').value = ''; applyFilter(); updPickN(); run();
 };
+
+readSavedSearches();
 
 // ---------- required traits ----------
 // Click cycles through that trait's real breakpoints, then clears.
