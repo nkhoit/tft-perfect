@@ -113,6 +113,16 @@ button:hover{border-color:var(--acc2)}
   background:linear-gradient(transparent,rgba(0,0,0,.94) 55%);color:#fff;
   font-size:8.5px;line-height:1.1;text-align:center;text-shadow:0 1px 2px #000;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.teamprofile{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
+.profilepill{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;
+  border:1px solid #303a49;border-radius:10px;background:#171d28;color:#9da7b6;
+  font-size:9.5px;line-height:1.25;white-space:nowrap}
+.profilepill .si{width:11px;height:11px;margin:0;object-fit:contain}
+.profilepill b{color:#dce2ea;font-size:10px;font-variant-numeric:tabular-nums}
+.profilepill i{padding:0 1px;color:#566071;font-style:normal}
+.profilepill.ad{border-color:#66512c}.profilepill.ap{border-color:#443f72}
+.profilepill.hybrid{border-color:#3c6170}.profilepill.frontline{border-color:#405064}
+.teamprofile.compact{flex:none;flex-wrap:nowrap;margin:0 0 0 auto}
 .score{text-align:right;font-size:11px;color:var(--dim);line-height:1.7;white-space:nowrap}
 .score b{font-size:15px;color:var(--acc);display:block;font-variant-numeric:tabular-nums}
 .score .w{color:var(--red)}
@@ -327,7 +337,7 @@ label.sub select{margin-top:3px}
 .vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .vrow .uc{width:42px;height:42px;border-radius:7px}
 .vrow .uc .un{padding:7px 1px 1px;font-size:7.5px}
-.vg{font-size:11px;color:var(--dim);margin-left:auto;padding-left:8px;white-space:nowrap}
+.vg{font-size:11px;color:var(--dim);margin-left:4px;padding-left:4px;white-space:nowrap}
 
 /* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
 .tg.s-bronze{border-color:var(--bronze);background:#2a1c14}

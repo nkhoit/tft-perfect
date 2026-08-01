@@ -622,6 +622,38 @@ function unitPortrait(c) {
     `<img loading="lazy" src="${c.icon}" alt="${c.name}"><span class="un">${c.name}</span></span>`;
 }
 
+function teamProfile(units, compact = false) {
+  const counts = { tanks: 0, AD: 0, AP: 0, Hybrid: 0 };
+  for (const index of units) {
+    const role = DB.champions[index].role || '';
+    if (role.endsWith('Tank')) counts.tanks++;
+    else if (role.startsWith('AD')) counts.AD++;
+    else if (role.startsWith('AP')) counts.AP++;
+    else if (role.startsWith('Hybrid')) counts.Hybrid++;
+  }
+  const others = units.length - counts.tanks;
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const pills = [
+    `<span class="profilepill frontline" title="${plural(counts.tanks, 'tank')}, ` +
+      `${plural(others, 'other')}">${statIcon('scaleArmor')}<b>${counts.tanks}</b> ` +
+      `tank${counts.tanks === 1 ? '' : 's'}<i>/</i><b>${others}</b> ` +
+      `other${others === 1 ? '' : 's'}</span>`,
+  ];
+  if (counts.AD) {
+    pills.push(`<span class="profilepill ad" title="${plural(counts.AD, 'AD unit')}">` +
+      `${statIcon('scaleAD')}<b>${counts.AD}</b> AD</span>`);
+  }
+  if (counts.AP) {
+    pills.push(`<span class="profilepill ap" title="${plural(counts.AP, 'AP unit')}">` +
+      `${statIcon('scaleAP')}<b>${counts.AP}</b> AP</span>`);
+  }
+  if (counts.Hybrid) {
+    pills.push(`<span class="profilepill hybrid" title="${plural(counts.Hybrid, 'hybrid unit')}">` +
+      `${statIcon('scaleAD')}${statIcon('scaleAP')}<b>${counts.Hybrid}</b> hybrid</span>`);
+  }
+  return `<div class="teamprofile${compact ? ' compact' : ''}">${pills.join('')}</div>`;
+}
+
 function render(m) {
   const list = $('list'), cnt = $('count');
   if (m.error) {
@@ -680,6 +712,7 @@ function render(m) {
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
       .map(unitPortrait)
       .join('');
+    const profile = teamProfile(r.units);
     const occupiedSlots = r.slots ?? r.units.length;
     const slotTag = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
       ? `<span title="Occupied team slots">${occupiedSlots} slots</span> · `
@@ -701,13 +734,15 @@ function render(m) {
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
         .map(unitPortrait)
         .join('') +
+      teamProfile(v.units, true) +
       `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
       copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
 
     const d = document.createElement('div');
     d.className = 'comp';
     d.innerHTML =
-      `<div class="left"><div class="tline">${badges}${deadBadges}</div><div class="uline">${units}${varTag}</div></div>` +
+      `<div class="left"><div class="tline">${badges}${deadBadges}</div>` +
+      `<div class="uline">${units}${varTag}</div>${profile}</div>` +
       `<div class="compmeta">` + copyCodeButton(r.units) +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
