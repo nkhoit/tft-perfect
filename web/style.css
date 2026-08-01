@@ -239,3 +239,13 @@ label.sub select{margin-top:3px}
 .comp.vopen .vlist{display:flex;flex-direction:column}
 .vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .vg{font-size:11px;color:var(--dim);margin-left:auto;padding-left:8px;white-space:nowrap}
+
+/* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
+.tg.s-bronze{border-color:var(--bronze);background:#2a1c14}
+.tg.s-bronze .tgv{background:var(--bronze);color:#1a0f08}
+.tg.s-silver{border-color:var(--silver);background:#1c2129}
+.tg.s-silver .tgv{background:var(--silver);color:#12161c}
+.tg.s-gold{border-color:var(--gold);background:#2a2210}
+.tg.s-gold .tgv{background:var(--gold);color:#1a1405}
+.tg.s-chromatic,.tg.s-prismatic{border-color:var(--prism);background:#10262b}
+.tg.s-chromatic .tgv,.tg.s-prismatic .tgv{background:var(--prism);color:#062026}

@@ -310,7 +310,10 @@ function toggleMute(key) {
 function buildTraitGrid() {
   const el = $('traitGrid');
   el.innerHTML = '';
-  Object.values(DB.traits).sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
+  // Unique traits activate off a single champion, so requiring one is just
+  // requiring that unit -- the unit picker already does that better.
+  Object.values(DB.traits).filter(t => !isUnique(t))
+    .sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
     const d = document.createElement('div');
     d.className = 'tg';
     d.dataset.key = t.key;
@@ -332,6 +335,10 @@ function renderTraitGrid() {
     const m = muted.has(d.dataset.key);
     d.classList.toggle('on', !!r);
     d.classList.toggle('muted', m);
+    // tier colour (bronze/silver/gold/prismatic) so the badge reads like the
+    // in-game trait pip instead of a flat green count
+    d.classList.remove('s-bronze', 's-silver', 's-gold', 's-chromatic', 's-prismatic', 's-unique');
+    if (r && !m) d.classList.add('s-' + styleAt(DB.traits[r.key], r.n));
     d.querySelector('.tgv').textContent = m ? '—' : (r ? r.n : '');
   }
   $('reqTN').textContent = reqTraits.length + (muted.size ? ` · ${muted.size} muted` : '');
