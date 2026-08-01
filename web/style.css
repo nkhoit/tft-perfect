@@ -115,9 +115,9 @@ button:hover{border-color:var(--acc2)}
 .rhead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
 .count{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
 .comp{background:var(--panel);border:1px solid var(--edge);border-radius:9px;
-  padding:10px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
-.comp .left{min-width:0}
-.tline{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+  padding:10px 12px;margin-bottom:8px}
+.comphead{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px}
+.tline{display:flex;flex:1;flex-wrap:wrap;gap:5px;min-width:0}
 .tb{display:flex;align-items:center;gap:4px;border-radius:11px;padding:2px 8px 2px 5px;
   font-size:11px;background:var(--panel2);border:1px solid var(--edge);white-space:nowrap}
 .tb img{width:14px;height:14px;filter:brightness(1.6)}
@@ -126,13 +126,13 @@ button:hover{border-color:var(--acc2)}
 .tb.gold{border-color:var(--gold);color:#f5d789} .tb.chromatic,.tb.prismatic{border-color:var(--prism);color:#c4f2f9}
 .tb.unique{border-color:#7c6cf5;color:#c3bbff}
 .tb.emb{border-style:dashed}
-.uline{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.comprow{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.comprow.alternate{gap:4px}
 .uc{position:relative;display:block;flex:none;width:56px;height:56px;overflow:hidden;
   background:var(--panel2);border:2px solid var(--edge);border-radius:8px;cursor:help;
   transition:filter .1s,transform .1s}
 .uc:hover{filter:brightness(1.12);transform:translateY(-1px)}
 .uc img{display:block;width:100%;height:100%;border-radius:5px;object-fit:cover}
-.compmeta{display:flex;align-items:center;gap:10px;justify-self:end}
 .uc .un{position:absolute;left:0;right:0;bottom:0;padding:9px 2px 2px;
   background:linear-gradient(transparent,rgba(0,0,0,.94) 55%);color:#fff;
   font-size:8.5px;line-height:1.1;text-align:center;text-shadow:0 1px 2px #000;
@@ -153,9 +153,14 @@ button:hover{border-color:var(--acc2)}
 .profilepart .si{width:11px;height:11px;margin:0;object-fit:contain}
 .profilepart b{color:#dce2ea;font-size:10px;font-variant-numeric:tabular-nums}
 .teamprofile.compact{flex:none;margin:0 0 0 auto}
-.score{text-align:right;font-size:11px;color:var(--dim);line-height:1.7;white-space:nowrap}
-.score b{font-size:15px;color:var(--acc);display:block;font-variant-numeric:tabular-nums}
-.score .w{color:var(--red)}
+.score{display:flex;flex:none;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+  gap:5px;font-size:10px;color:var(--dim);white-space:nowrap}
+.score>span{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+  border:1px solid #303a49;border-radius:10px;background:var(--panel2)}
+.score b{font-size:10.5px;color:inherit;font-variant-numeric:tabular-nums}
+.score .active{color:var(--acc);border-color:#2c6242}
+.score .w{color:var(--red);border-color:#66343d}
+.score .u,.score .slots{color:#9aa4b2}
 .copycode{position:relative;display:grid;place-items:center;width:28px;height:28px;
   margin:7px 0 0 auto;padding:0;border:1px solid #344052;border-radius:7px;
   background:#171d28;color:var(--dim);line-height:1;transition:color .1s,border-color .1s,background .1s}
@@ -167,8 +172,6 @@ button:hover{border-color:var(--acc2)}
 .copycode.copied{color:var(--acc);border-color:var(--acc);background:#12301f}
 .copycode.copied .copyglyph{display:none}
 .copycode.copied .checkglyph{display:block}
-.compmeta>.copycode{flex:none;width:36px;height:36px;margin:0}
-.compmeta>.copycode .copyicon{width:19px;height:19px}
 .copycode::after{content:attr(data-tip);position:absolute;z-index:30;right:-1px;
   bottom:calc(100% + 8px);width:max-content;max-width:190px;padding:6px 8px;
   border:1px solid #30394a;border-radius:5px;background:#080b10;color:var(--txt);
@@ -177,7 +180,7 @@ button:hover{border-color:var(--acc2)}
   transition:opacity .1s,transform .1s,visibility .1s}
 .copycode:hover::after,.copycode:focus-visible::after,.copycode.copied::after{
   visibility:visible;opacity:1;transform:translateY(0)}
-.vrow .copycode{flex:none;width:25px;height:25px;margin:0 0 0 4px}
+.comprow>.copycode{flex:none;width:25px;height:25px;margin:0 0 0 4px}
 .wasted{font-size:10.5px;color:var(--red);opacity:.85;margin-top:6px}
 .empty{color:var(--dim);padding:26px;text-align:center;border:1px dashed var(--edge);border-radius:9px}
 
@@ -186,9 +189,8 @@ button:hover{border-color:var(--acc2)}
   .side{position:static;max-height:none;border:none;border-radius:0;margin:0;
     border-bottom:1px solid var(--edge)}
   .grid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr))}
-  .comp{grid-template-columns:1fr}
-  .compmeta{justify-self:start}
-  .score{text-align:left}
+  .comphead{flex-direction:column;gap:5px}
+  .score{justify-content:flex-start}
   .pickctl input{width:130px}
 }
 
@@ -198,7 +200,6 @@ button:hover{border-color:var(--acc2)}
 .tb.ns{opacity:.62}
 /* overshoot marker, e.g. 4/5 Riftbeast */
 .tb .ov{font-style:normal;color:#ff9f6b;font-weight:700;font-size:10px;margin-left:3px}
-.score .u{color:#9aa4b2}
 .chips .emb.req{border-color:#3ddc84;color:#3ddc84}
 
 /* ---- trait requirement grid (replaces the 90-option dropdown) ---- */
@@ -362,13 +363,12 @@ label.sub select{margin-top:3px}
   transition:transform .12s,margin-top .12s}
 .comp.vopen .vchev{transform:rotate(225deg);margin-top:3px}
 .vlist{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed #232a36;gap:5px}
-.comp>.vlist{grid-column:1/-1;margin-top:0}
+.comp>.vlist{margin-top:0}
 .comp.vopen .vlist{display:flex;flex-direction:column}
-.vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
-.vrow .uc{width:42px;height:42px;border-radius:7px}
-.vrow .uc .un{padding:7px 1px 1px;font-size:7.5px}
-.vrow .rtype{top:1px;left:1px;transform:scale(.85);transform-origin:top left}
-.vrow .uc.req::before{top:1px;right:1px;transform:scale(.85);transform-origin:top right}
+.comprow.alternate .uc{width:42px;height:42px;border-radius:7px}
+.comprow.alternate .uc .un{padding:7px 1px 1px;font-size:7.5px}
+.comprow.alternate .rtype{top:1px;left:1px;transform:scale(.85);transform-origin:top left}
+.comprow.alternate .uc.req::before{top:1px;right:1px;transform:scale(.85);transform-origin:top right}
 .vg{font-size:11px;color:var(--dim);margin-left:4px;padding-left:4px;white-space:nowrap}
 
 /* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
@@ -424,4 +424,4 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 /* display:flex beats the hidden attribute; without this the empty
    REQUIRED/EXCLUDED labels render with no chips under them */
 .sel[hidden],.selgrp[hidden]{display:none}
-@media(max-width:820px){.uline>.uc{width:50px;height:50px}}
+@media(max-width:820px){.comprow.primary>.uc{width:50px;height:50px}}

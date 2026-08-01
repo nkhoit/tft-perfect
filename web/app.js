@@ -1350,10 +1350,10 @@ function render(m) {
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
       .map(unitPortrait)
       .join('');
-    const profile = teamProfile(r.units);
+    const profile = teamProfile(r.units, true);
     const occupiedSlots = r.slots ?? r.units.length;
-    const slotTag = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
-      ? `<span title="Occupied team slots">${occupiedSlots} slots</span> · `
+    const slotMeta = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
+      ? `<span class="slots" title="Occupied team slots">${occupiedSlots} slots</span>`
       : '';
 
 
@@ -1368,7 +1368,7 @@ function render(m) {
         `<i class="vchev" aria-hidden="true"></i></button>`
       : '';
     const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
-      `<div class="vrow">` + v.units.map(i => DB.champions[i])
+      `<div class="comprow alternate">` + v.units.map(i => DB.champions[i])
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
         .map(unitPortrait)
         .join('') +
@@ -1379,13 +1379,13 @@ function render(m) {
     const d = document.createElement('div');
     d.className = 'comp';
     d.innerHTML =
-      `<div class="left"><div class="tline">${badges}${deadBadges}</div>` +
-      `<div class="uline">${units}${varTag}</div>${profile}</div>` +
-      `<div class="compmeta">` + copyCodeButton(r.units) +
-      `<div class="score"><b>${r.live}</b>traits active<br>` +
-      (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
-      (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
-      slotTag + `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div></div>` +
+      `<div class="comphead"><div class="tline">${badges}${deadBadges}</div>` +
+      `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
+      (r.uniqN ? `<span class="u">+${r.uniqN} unique</span>` : '') +
+      `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
+      `<div class="comprow primary">${units}${varTag}${profile}` +
+      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
+      copyCodeButton(r.units) + `</div>` +
       varRows;
     frag.appendChild(d);
   }
