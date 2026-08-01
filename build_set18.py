@@ -11,7 +11,8 @@ Once dakgg publishes set18, `build_data.py --set set18` supersedes this.
 
 Usage: python3 build_set18.py
 """
-import json, os, re, sys, urllib.request, datetime, hashlib, concurrent.futures
+import json, os, re, sys, urllib.request, urllib.error, datetime, hashlib, concurrent.futures, html
+import xxhash
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WS = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -23,6 +24,13 @@ PBE = "https://raw.communitydragon.org/pbe"
 CD_TFT = PBE + "/cdragon/tft/en_us.json"
 CD_FILES = PBE + "/cdragon/files.exported.txt"
 ASSET = PBE + "/"
+STRINGTABLE = PBE + "/game/en_us/data/menu/en_us/tft.stringtable.json"
+STRINGTABLE_CACHE = "/tmp/tft-pbe-en_us.stringtable.json"
+LOLCHESS = "https://lolchess.gg/champions/set18/yorick?hl=en-US"
+LOLCHESS_CACHE = "/tmp/lolchess-set18-champions.html"
+LOLCHESS_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                             "AppleWebKit/537.36 (KHTML, like Gecko) "
+                             "Chrome/131.0 Safari/537.36"}
 
 # Riot's style enum is NOT a 1..n colour ramp. Verified against Blossom, whose
 # in-game pips are 3 bronze / 5 silver / 7+9 gold / 11 prismatic and whose raw
@@ -111,6 +119,116 @@ def clean(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+def clean_lolchess(s):
+    # LoLChess embeds Riot stat icons inline; retaining `%i:scaleAD%` would
+    # expose transport markup rather than player-readable ability text.
+    s = re.sub(r"<br\s*/?>", " ", s or "", flags=re.I)
+    s = re.sub(r"%i:\w+%", "", s, flags=re.I)
+    # Icons often sit inside parens ("320(%i:scaleAD%)"); stripping the icon
+    # alone would leave bare "()" litter in player-facing text.
+    s = re.sub(r"\(\s*\)", "", s)
+    return clean(html.unescape(s))
+
+
+def lolchess_champions():
+    """Load one cached Next.js payload; fetched HTML is parsed only as data."""
+    if not os.path.exists(LOLCHESS_CACHE):
+        req = urllib.request.Request(LOLCHESS, headers=LOLCHESS_UA)
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                body = r.read()
+        except urllib.error.HTTPError as e:
+            retry = e.headers.get("Retry-After")
+            if e.code == 429:
+                raise RuntimeError("LoLChess rate limited the single request"
+                                   + (f" (Retry-After: {retry})" if retry else "")) from e
+            raise
+        tmp = LOLCHESS_CACHE + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(body)
+        os.replace(tmp, LOLCHESS_CACHE)
+
+    raw = open(LOLCHESS_CACHE, encoding="utf-8").read()
+    match = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+                      raw, re.S | re.I)
+    if not match:
+        raise RuntimeError("LoLChess __NEXT_DATA__ payload not found")
+    queries = (json.loads(match.group(1))["props"]["pageProps"]
+               ["dehydratedState"]["queries"])
+    for query in queries:
+        key = query.get("queryKey") or []
+        if "championRefs" in key and "en" in key:
+            data = query.get("state", {}).get("data", {})
+            return data.get("champions") or []
+    raise RuntimeError("LoLChess English championRefs query not found")
+
+
+def rst_hash(key):
+    """PBE uses RST v5: lowercase XXH3-64, retaining the low 38 bits."""
+    return "{%010x}" % (xxhash.xxh3_64_intdigest(key.lower()) & ((1 << 38) - 1))
+
+
+def stringtable():
+    # This file is ~25MB. Cache it outside the repo so repeated builds do not
+    # punish CommunityDragon (or us) with another download.
+    if not os.path.exists(STRINGTABLE_CACHE):
+        req = urllib.request.Request(STRINGTABLE, headers=UA)
+        with urllib.request.urlopen(req, timeout=300) as r, open(STRINGTABLE_CACHE, "wb") as f:
+            f.write(r.read())
+    return json.load(open(STRINGTABLE_CACHE))["entries"]
+
+
+def ability_from(doc, strings):
+    """Find the castable SpellObject, then resolve its generated RST keys."""
+    spells = []
+    for v in (doc or {}).values():
+        if not isinstance(v, dict) or v.get("__type") != "SpellObject":
+            continue
+        script = v.get("mScriptName") or ""
+        spell = v.get("mSpell") or {}
+        tip = ((spell.get("mClientData") or {}).get("mTooltipData") or {})
+        if tip and script.lower().endswith("spell"):
+            spells.append((script, spell))
+    if not spells:
+        return None
+
+    # Missile/helper SpellObjects can also have tooltip metadata. The player
+    # ability is the shortest script ending in exactly "Spell".
+    script, spell = min(spells, key=lambda x: len(x[0]))
+    base = "generatedtip_spelltft_" + script.lower()
+    name = strings.get(rst_hash(base + "_displayname"))
+    raw = strings.get(rst_hash(base + "_tooltip"))
+    if not name or not raw:
+        return None
+
+    m = re.search(r"<mainText>(.*?)</mainText>", raw, re.S | re.I)
+    text = m.group(1) if m else raw
+    values = {v.get("name", "").lower(): (v.get("values") or [])[1:4]
+              for v in spell.get("DataValues") or []}
+
+    def sub(match):
+        token = match.group(1)
+        mm = re.fullmatch(r"([A-Za-z0-9_]+)(?:\*(\d+(?:\.\d+)?))?", token)
+        if not mm:
+            return match.group(0)
+        vals = values.get(mm.group(1).lower())
+        if vals and len(vals) == 3:
+            mult = float(mm.group(2) or 1)
+            return "/".join(fmt_num(v * mult) for v in vals)
+        # Runtime-only values are intentionally left visible; app.js renders
+        # them as a '?' rather than inventing live PBE balance numbers.
+        if token == "SpellModifierDescriptionAppend":
+            return ""
+        return match.group(0)
+
+    text = re.sub(r"@([^@]+)@", sub, text)
+    text = re.sub(r"%i:[^%]+%", "", text)
+    # Stringtable JSON sometimes preserves Riot's literal "\\n" markup.
+    text = text.replace("\\r", " ").replace("\\n", " ")
+    text = html.unescape(text)
+    return {"name": clean(name), "desc": clean(text)}
+
+
 # Champion stats live in the raw character bins, NOT in cdragon/tft/en_us.json.
 # That feed's Set 18 block only carries the 19 mock/encounter units. The real
 # roster is filed under DA_18_<name> (plus a pile of one-off stems), which is
@@ -134,6 +252,8 @@ def bin_candidates(name):
     out = []
     if name in BIN_OVERRIDE:
         out.append(BIN_OVERRIDE[name])
+    if name == "Gnar":
+        out.append("da_18_gnarsmall")       # big form owns stats; small owns the real tooltip
     if name.startswith("Lux") and name != "Lux":
         art = LUX_BIN.get(name[3:], name[3:].lower())
         out += [f"da_18_lux_{art}", f"da_lux18_{art}"]
@@ -141,6 +261,32 @@ def bin_candidates(name):
     out += [f"da_18_{st}", f"tft18_{st}", f"da_18_{st}_ad",
             f"da_{st}18", f"da_{st}18_ad", f"da_{st}18_ap"]
     return out
+
+
+def join_lolchess(names, refs):
+    """Join Riot bin stems first; only Raptor needs a key-based escape hatch."""
+    by_ingame = {(c.get("ingameKey") or "").lower(): c for c in refs
+                 if c.get("ingameKey")}
+    by_key = {c.get("key"): c for c in refs}
+    joined, failures = {}, {}
+    for name in names:
+        candidates = bin_candidates(name)
+        if name.startswith("Lux") and name != "Lux":
+            # LoLChess keys the art variant by its display name (Lux_Lunar),
+            # while Riot's bin stem uses the VFX name (moonbeam) -- try both.
+            candidates.append("tft18_lux_" + LUX_BIN.get(
+                name[3:], name[3:].lower()))
+            candidates.append("tft18_lux_" + name[3:].lower())
+        ref = next((by_ingame.get(stem.lower()) for stem in candidates
+                    if by_ingame.get(stem.lower())), None)
+        if not ref and name == "Raptor":
+            # This hidden summon alone ships ingameKey=null on LoLChess.
+            ref = by_key.get("CrimsonRaptorMini")
+        if ref:
+            joined[name] = ref
+        else:
+            failures[name] = "no LoLChess ingameKey matched bin candidates"
+    return joined, failures
 
 
 def char_record(doc):
@@ -179,26 +325,40 @@ def stats_from(rec):
     return {k: v for k, v in out.items() if v is not None}
 
 
-def fetch_stats(names):
-    """Resolve + download every champion bin in parallel. Returns {name: stats}."""
+def fetch_champion_data(names, strings):
+    """Resolve every champion bin once. Returns {name: {stats, ability}}."""
     import concurrent.futures
 
     def one(name):
+        stats = ability = None
         for stem in bin_candidates(name):
             url = f"{PBE}/game/characters/{stem}.cdtb.bin.json"
             try:
-                rec = char_record(get(url, timeout=120))
+                doc = get(url, timeout=120)
+                rec = char_record(doc)
             except Exception:
                 continue
-            if rec:
-                return name, stats_from(rec)
-        return name, None
+            if rec and not stats:
+                stats = stats_from(rec)
+            candidate = ability_from(doc, strings)
+            if candidate and (not ability or ability["name"] == "Placeholder Name"):
+                ability = candidate
+            if stats and ability and ability["name"] != "Placeholder Name":
+                break
+        # Lux's nine Origin records contain stats only; one shared base bin
+        # owns the spell and localization keys.
+        if not ability and name.startswith("Lux"):
+            try:
+                doc = get(f"{PBE}/game/characters/da_lux18_base.cdtb.bin.json", timeout=120)
+                ability = ability_from(doc, strings)
+            except Exception:
+                pass
+        return name, {"stats": stats, "ability": ability}
 
     out = {}
     with concurrent.futures.ThreadPoolExecutor(10) as ex:
-        for name, st in ex.map(one, names):
-            if st:
-                out[name] = st
+        for name, data in ex.map(one, names):
+            out[name] = data
     return out
 
 
@@ -312,13 +472,64 @@ def main():
                           "cost": c["cost"], "traits": keys, "icon": icon,
                           "mana": c.get("mana")})
 
-    print("fetching champion stat bins (73 requests) ...")
-    stats = fetch_stats([c["key"] for c in champions])
+    print("loading cached PBE string table (~25MB) ...")
+    strings = stringtable()
+    print("fetching champion stat + ability bins (73 requests) ...")
+    champion_data = fetch_champion_data([c["key"] for c in champions], strings)
+
+    print("loading cached LoLChess Set 18 champion payload ...")
+    lol_refs = lolchess_champions()
+    lol_joined, lol_failures = join_lolchess(
+        [c["key"] for c in champions], lol_refs)
+    mana_disagreements = []
     for c in champions:
-        st = stats.get(c["key"])
-        if st:
-            c["stats"] = st
-    print(f"  stats resolved for {len(stats)}/{len(champions)} champions")
+        data = champion_data.get(c["key"]) or {}
+        if data.get("stats"):
+            c["stats"] = data["stats"]
+        if data.get("ability"):
+            c["ability"] = data["ability"]
+            c["ability"]["source"] = "communitydragon"
+
+        ref = lol_joined.get(c["key"])
+        skill = (ref or {}).get("skill") or {}
+        resolved = clean_lolchess(skill.get("desc"))
+        if resolved:
+            ability = c.setdefault("ability", {"name": skill.get("name") or "",
+                                                "desc": ""})
+            # Name and desc remain first-party even while PBE spell values are
+            # placeholders; numeric fields are explicitly third-party.
+            ability.update({"descResolved": resolved,
+                            "stats": [clean_lolchess(x)
+                                      for x in skill.get("stats") or []],
+                            "startingMana": skill.get("startingMana"),
+                            "skillMana": skill.get("skillMana"),
+                            "source": "lolchess"})
+            expected = ((c.get("mana") or {}).get("start"),
+                        (c.get("mana") or {}).get("max"))
+            actual = (skill.get("startingMana"), skill.get("skillMana"))
+            if None not in actual and actual != expected:
+                mana_disagreements.append((c["key"], expected, actual))
+                # The reveal capture is a fixed Jul-12 snapshot while mana is
+                # tuned heavily through PBE, so prefer the live scrape and keep
+                # the stale pair as provenance rather than silently dropping it.
+                c["manaReveal"] = c.get("mana")
+                c["mana"] = {"start": actual[0], "max": actual[1]}
+                c["manaSource"] = "lolchess"
+
+    nstats = sum("stats" in c for c in champions)
+    nability = sum("ability" in c for c in champions)
+    nresolved = sum(bool((c.get("ability") or {}).get("descResolved"))
+                    for c in champions)
+    print(f"  stats resolved for {nstats}/{len(champions)} champions")
+    print(f"  abilities resolved for {nability}/{len(champions)} champions")
+    print(f"  LoLChess numeric descriptions for {nresolved}/{len(champions)} champions")
+    if lol_failures:
+        for name, reason in sorted(lol_failures.items()):
+            print(f"  ! LoLChess join failed: {name}: {reason}")
+    if mana_disagreements:
+        print("  ! mana disagreements (roster start/max vs LoLChess start/max):")
+        for name, expected, actual in mana_disagreements:
+            print(f"      {name}: {expected} vs {actual}")
     nostats = [c["key"] for c in champions if "stats" not in c]
     if nostats:
         print("  ! no stat bin found:", nostats)
@@ -362,6 +573,10 @@ def main():
            "gameBuild": "PBE TFTSet18",
            "source": "reveal roster + CommunityDragon PBE TFTSet18",
            "note": "PBE data — breakpoints are live-PBE and may shift before 18.1 launch (2026-08-12).",
+           "abilityNote": ("Ability numbers and structured stat lines sourced from "
+                           "LoLChess championRefs en/set18 on "
+                           f"{datetime.date.today().isoformat()}; bin-derived ability "
+                           "name and token-placeholder desc are retained."),
            "builtAt": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
            "traits": traits, "champions": champions}
 
