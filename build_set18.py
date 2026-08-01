@@ -48,6 +48,12 @@ TRAIT_TEAM_SIZE = {
     "Riftbeast": [{"min": 10, "slots": 2}],
 }
 
+UNIT_ROLES = {
+    f"{damage}{role}"
+    for damage in ("AD", "AP", "Hybrid")
+    for role in ("Carry", "Caster", "Fighter", "Reaper", "Specialist", "Tank")
+}
+
 # Units whose art doesn't follow the tft18_<name>/tft18_<name>_square.png rule.
 ICON_OVERRIDE = {
     # Pebbles is internally DA_18_Sentry, NOT a krug. Its ability is "Azure Laser".
@@ -610,7 +616,13 @@ def main():
 
         ref = lol_joined.get(c["key"])
         skill = (ref or {}).get("skill") or {}
-        resolved = clean_lolchess(skill.get("desc"))
+        role = (ref or {}).get("role")
+        if role:
+            if role in UNIT_ROLES:
+                c["role"] = role
+            else:
+                mechanic_errors.append(f"{c['key']} has unknown unit role {role!r}")
+        resolved = clean_lolchess(skill.get("desc"), keep_icons=True)
         if resolved:
             ability = c.setdefault("ability", {"name": skill.get("name") or "",
                                                 "desc": ""})
@@ -658,6 +670,7 @@ def main():
         for name, expected, actual in mana_disagreements:
             print(f"      {name}: {expected} vs {actual}")
     nostats = [c["key"] for c in champions if "stats" not in c]
+    missing_roles = [c["key"] for c in champions if "role" not in c]
     if nostats:
         print("  ! no stat bin found:", nostats)
 
@@ -738,6 +751,8 @@ def main():
         errors.append(f"duplicate champion keys: {duplicate_champions}")
     if nostats:
         errors.append(f"{len(nostats)} champions without stats: {nostats}")
+    if missing_roles:
+        errors.append(f"{len(missing_roles)} champions without roles: {missing_roles}")
     if lol_failures:
         errors.append(f"{len(lol_failures)} LoLChess joins failed: {lol_failures}")
     if planner_failures:

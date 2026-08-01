@@ -47,6 +47,11 @@ test('the application contains only Set 18', () => {
   assert.match(app, /THREE_STAR_ICON/);
   assert.match(app, /class="tupgrade"/);
   assert.match(css, /\.tupgrade\{/);
+  assert.match(app, /ROLE_ICON_BASE/);
+  assert.match(app, /function roleBadge/);
+  assert.match(app, /class="crole"/);
+  assert.match(app, /scaleDA:/);
+  assert.match(css, /\.crole\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -63,6 +68,7 @@ test('the generated data and checked-in roster are internally consistent', () =>
     assert.equal(champion.cost, source.cost);
     assert.ok(champion.icon, `${key} has no icon`);
     assert.ok(champion.stats, `${key} has no stats`);
+    assert.ok(champion.role, `${key} has no unit role`);
     assert.ok(champion.ability?.descResolved, `${key} has no resolved ability text`);
     assert.ok(Number.isInteger(champion.teamPlannerCode), `${key} has no team-planner code`);
     assert.deepEqual(champion.manaReveal || champion.mana, source.mana);
@@ -100,6 +106,9 @@ test('the generated data and checked-in roster are internally consistent', () =>
     tier.includes('%i:scaleArmor%') && tier.includes('%i:scaleMR%')));
   assert.deepEqual(data.traits.Solar.upgrades.map(upgrade => upgrade.count), [1, 3, 5, 8]);
   assert.doesNotMatch(data.traits.Solar.tiers[0], /\b1\s*:/);
+  assert.equal(champions.get('Shen').role, 'APTank');
+  assert.match(champions.get('Shen').ability.descResolved, /%i:scaleAP%/);
+  assert.equal(data.champions.filter(champion => champion.role).length, 73);
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

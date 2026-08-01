@@ -378,6 +378,7 @@ const STAT_ICONS = {
   scaleManaRegen: ['Mana Regen', 'Mana Regeneration'],
   scaleDR: ['Damage Reduction', 'Damage Reduction'],
   scaleCrit: ['Crit', 'Critical Strike Chance'],
+  scaleDA: ['Damage Amp', 'Damage Amplification'],
 };
 
 function statIcon(token) {
@@ -386,6 +387,26 @@ function statIcon(token) {
   const [label, title] = stat;
   return `<img class="si" src="${STAT_ICON_BASE}/${token.toLowerCase()}.png" ` +
     `alt="${label}" title="${title}">`;
+}
+
+const ROLE_ICON_BASE =
+  'https://raw.communitydragon.org/pbe/plugins/rcp-be-lol-game-data/global/default/' +
+  'assets/ux/fonts/texticons/tft/characterroles';
+const ROLE_DAMAGE = {
+  AD: ['Attack', 'attack'],
+  AP: ['Magic', 'magic'],
+  Hybrid: ['Hybrid', 'hybrid'],
+};
+
+function roleBadge(role) {
+  const match = /^(AD|AP|Hybrid)(Carry|Caster|Fighter|Reaper|Specialist|Tank)$/.exec(role || '');
+  if (!match) return '';
+  const [, damage, unitType] = match;
+  const [damageName, assetName] = ROLE_DAMAGE[damage];
+  const label = `${damageName} ${unitType}`;
+  const icon = `${ROLE_ICON_BASE}/tft_${assetName}_${unitType.toLowerCase()}.png`;
+  return `<div class="crole" title="Unit role: ${label}">` +
+    `<img src="${icon}" alt=""><span>${label}</span></div>`;
 }
 
 function cleanText(s) {
@@ -458,6 +479,7 @@ function unitCard(key) {
     const t = DB.traits[k];
     return `<span class="cch">${t?.icon ? `<img src="${t.icon}">` : ''}${t?.name || k}</span>`;
   }).join('');
+  const role = roleBadge(c.role);
   // Mana reads as a cost, not a transition: 0/45 means "needs 45, starts at 0".
   const mana = c.mana
     ? `<div class="cstat"><span>Mana</span><b>${c.mana.start}/${c.mana.max}</b></div>` : '';
@@ -488,7 +510,7 @@ function unitCard(key) {
   const stats = body ? `<div class="cstats">${body}</div>` : '';
   return `<div class="chd">${c.icon ? `<img class="sq" src="${c.icon}">` : ''}
       <div><b>${c.name}</b><span class="csub k${c.cost}">${c.cost} cost</span></div></div>
-    <div class="cchs">${traits}</div>${stats}${ability}`;
+    <div class="cchs">${traits}</div>${role}${stats}${ability}`;
 }
 
 let cardEl = null;
