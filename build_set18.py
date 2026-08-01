@@ -11,7 +11,7 @@ Once dakgg publishes set18, `build_data.py --set set18` supersedes this.
 
 Usage: python3 build_set18.py
 """
-import json, os, re, sys, urllib.request, datetime
+import json, os, re, sys, urllib.request, datetime, hashlib, concurrent.futures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WS = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -31,7 +31,9 @@ TRAIT_ALIAS = {"Eldritch": "Blackthorn"}
 
 # Units whose art doesn't follow the tft18_<name>/tft18_<name>_square.png rule.
 ICON_OVERRIDE = {
-    "TFT18_Pebbles": "game/assets/characters/tft18_krugmini/hud/tft18_krugmini_square.png",
+    # Pebbles is internally DA_18_Sentry, NOT a krug. Its ability is "Azure Laser".
+    # The krugmini guess was wrong art AND cost us the ability join.
+    "TFT18_Pebbles": "game/assets/characters/tft18_sentry/tft18_sentry_square.png",
     "TFT18_AncientSentinel": "game/assets/characters/tft18_sentinel/tft18_sentinel_square.png",
 }
 # Lux has one form per Origin; PBE art uses its own suffixes.
@@ -147,6 +149,33 @@ def main():
     missing_icon = [c["name"] for c in champions if not c["icon"]]
     missing_bp = [t["name"] for t in traits.values() if t["bp"] == [1] and not t["styles"]]
 
+    # ---- integrity checks ---------------------------------------------
+    # Pebbles shipped with Krug's art for a while because the icon guess
+    # (tft18_krugmini) resolved to a real, valid, *wrong* file. A 200 OK
+    # proves the path exists, not that it belongs to this unit -- so also
+    # compare image bytes and flag any two units sharing one portrait.
+    print("verifying icon uniqueness ...")
+
+    def digest(c):
+        try:
+            return c["name"], hashlib.md5(get(c["icon"], raw=True, timeout=60)).hexdigest()
+        except Exception as e:
+            return c["name"], f"ERROR {e}"
+
+    dupes, errs = {}, []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+        for name, h in ex.map(digest, [c for c in champions if c["icon"]]):
+            if h.startswith("ERROR"):
+                errs.append(f"{name}: {h}")
+            else:
+                dupes.setdefault(h, []).append(name)
+    shared = [v for v in dupes.values() if len(v) > 1]
+
+    # A unit with no ability text is usually a bad name guess on our side,
+    # not missing upstream data -- that's exactly how Pebbles hid.
+    no_ability = [c["name"] for c in champions if not c.get("ability")]
+
+
     out = {"set": "set18", "setName": "Enchanted Wilds",
            "gameBuild": "PBE TFTSet18",
            "source": "reveal roster + CommunityDragon PBE TFTSet18",
@@ -163,6 +192,17 @@ def main():
         print(f"  ! {len(missing_icon)} champions without icons:", missing_icon[:12])
     if missing_bp:
         print(f"  ! {len(missing_bp)} traits without breakpoints:", missing_bp[:12])
+    if shared:
+        print(f"  !! {len(shared)} icon(s) shared by multiple units -- likely a bad")
+        print("     icon guess; a valid path is not proof of the right unit:")
+        for grp in shared:
+            print("      ", " == ".join(grp))
+    if errs:
+        print(f"  ! {len(errs)} icon(s) failed to fetch:", errs[:6])
+    if no_ability:
+        print(f"  ! {len(no_ability)} champions without ability text", end="")
+        print(" (check for a wrong bin/spell-stem guess before blaming PBE):")
+        print("      ", no_ability)
 
 
 if __name__ == "__main__":
