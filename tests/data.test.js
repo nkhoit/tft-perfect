@@ -29,6 +29,7 @@ test('the application contains only Set 18', () => {
   assert.match(css, /\.compmeta>\.copycode\{[^}]*margin:0/);
   assert.match(css, /\.comp>\.vlist\{[^}]*grid-column:1\/-1/);
   assert.match(app, /function unitPortrait/);
+  assert.match(app, /class="un"/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
