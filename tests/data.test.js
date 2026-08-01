@@ -134,13 +134,21 @@ test('unit picker switches between cost and trait groups', () => {
   assert.match(app, /let poolView = 'cost'/);
   assert.match(app, /function buildPoolByCost\(/);
   assert.match(app, /function buildPoolByTrait\(/);
+  assert.match(app, /section\.className = 'traitgroup'/);
+  assert.match(app, /unitGrid\.className = 'traitunits'/);
   assert.match(app, /function setUnitState\(/);
+  assert.match(app, /querySelectorAll\('\.u\[data-key\]'\)/);
   assert.match(app, /d\.dataset\.group = group/);
   assert.match(app, /shown\.set\(d\.dataset\.group/);
+  assert.match(app, /closest\('\.traitgroup'\)/);
   assert.match(app, /if \(poolView !== 'cost'\) shared\.g = poolView/);
   assert.match(app, /POOL_VIEWS\.has\(shared\.g\)/);
   assert.match(css, /\.pooltabs\{/);
   assert.match(css, /\.traithdr\{/);
+  assert.match(css, /\.picker\{[^}]*container-type:inline-size/);
+  assert.match(css, /@container \(min-width:620px\)\{[^}]*repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /@container \(min-width:930px\)\{[^}]*repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.traitunits\{[^}]*repeat\(auto-fill,minmax\(64px,1fr\)\)/);
 });
 
 test('group exclusions collapse all champion forms into one control', () => {

@@ -723,6 +723,7 @@ function setGroupExcluded(group, excluded) {
 function buildPool() {
   const el = $('pool');
   el.innerHTML = '';
+  el.classList.toggle('traitview', poolView === 'trait');
   if (poolView === 'trait') buildPoolByTrait(el);
   else buildPoolByCost(el);
   renderPoolView();
@@ -757,14 +758,20 @@ function buildPoolByTrait(el) {
     .sort((a, b) => a.trait.name.localeCompare(b.trait.name));
   for (const { key, trait, units } of groups) {
     const group = `trait:${key}`;
+    const section = document.createElement('section');
+    section.className = 'traitgroup';
+    section.dataset.group = group;
     const h = document.createElement('div');
     h.className = 'poolhdr traithdr';
     h.dataset.group = group;
     h.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
       `<span>${trait.name}</span><i>${units.length}</i>`;
-    el.appendChild(h);
+    const unitGrid = document.createElement('div');
+    unitGrid.className = 'traitunits';
+    section.append(h, unitGrid);
+    el.appendChild(section);
     units.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .forEach(champion => addUnit(el, champion, group));
+      .forEach(champion => addUnit(unitGrid, champion, group));
   }
 }
 
@@ -787,7 +794,7 @@ function setUnitState(key, value) {
   const champion = DB.champions.find(unit => unit.key === key);
   if (champion && isGroupExcluded(champion)) return;
   state.set(key, value);
-  for (const tile of $('pool').children) {
+  for (const tile of $('pool').querySelectorAll('.u[data-key]')) {
     if (tile.dataset.key !== key) continue;
     tile.classList.toggle('req', value === 1);
     tile.classList.toggle('exc', value === 2);
@@ -822,19 +829,19 @@ function addUnit(el, c, group) {
 function applyFilter() {
   const q = $('search').value.trim().toLowerCase();
   const shown = new Map();
-  for (const d of $('pool').children) {
-    if (d.classList.contains('poolhdr')) continue;
+  for (const d of $('pool').querySelectorAll('.u[data-key]')) {
     const c = DB.champions.find(x => x.key === d.dataset.key);
     const hide = (!costOn.has(c.cost) && state.get(c.key) !== 1) ||
                  (q && !d.dataset.search.includes(q));
     d.classList.toggle('hide', hide);
     if (!hide) shown.set(d.dataset.group, (shown.get(d.dataset.group) || 0) + 1);
   }
-  for (const d of $('pool').children) {
-    if (!d.classList.contains('poolhdr')) continue;
+  for (const d of $('pool').querySelectorAll('.poolhdr')) {
     const n = shown.get(d.dataset.group) || 0;
     d.classList.toggle('hide', n === 0);
     d.querySelector('i').textContent = n;
+    const section = d.closest('.traitgroup');
+    if (section) section.classList.toggle('hide', n === 0);
   }
 }
 

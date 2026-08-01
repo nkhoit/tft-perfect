@@ -69,7 +69,8 @@ button:hover{border-color:var(--acc2)}
 .chips .emb img{width:13px;height:13px}
 
 /* unit picker */
-.picker{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.picker{container-type:inline-size;background:var(--panel);border:1px solid var(--edge);
+  border-radius:10px;padding:12px 14px;margin-bottom:14px}
 .pickhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pickhead h2{margin:0}
 .pooltabs{display:inline-flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
@@ -103,6 +104,13 @@ button:hover{border-color:var(--acc2)}
 .saveddelete:hover,.saveddelete:focus-visible{color:var(--red);background:#2a171b}
 .savedempty{padding:12px 9px;color:var(--dim);font-size:11px;text-align:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;margin-top:10px}
+.grid.traitview{grid-template-columns:minmax(0,1fr);align-items:start;gap:10px}
+.traitgroup{min-width:0;padding:8px;border:1px solid #252e3d;border-radius:8px;background:#10151e}
+.traitgroup.hide{display:none}
+.traitgroup .poolhdr{margin:0 0 7px}
+.traitunits{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+@container (min-width:620px){.grid.traitview{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container (min-width:930px){.grid.traitview{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .u{position:relative;border:2px solid var(--edge);border-radius:7px;overflow:hidden;
   cursor:pointer;background:var(--panel2);aspect-ratio:1;transition:border-color .1s,transform .06s}
 .u:hover{transform:translateY(-1px)}
