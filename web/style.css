@@ -108,6 +108,7 @@ button:hover{border-color:var(--acc2)}
   transition:filter .1s,transform .1s}
 .uc:hover{filter:brightness(1.12);transform:translateY(-1px)}
 .uc img{display:block;width:100%;height:100%;border-radius:5px;object-fit:cover}
+.compmeta{display:flex;align-items:center;gap:10px;justify-self:end}
 .score{text-align:right;font-size:11px;color:var(--dim);line-height:1.7;white-space:nowrap}
 .score b{font-size:15px;color:var(--acc);display:block;font-variant-numeric:tabular-nums}
 .score .w{color:var(--red)}
@@ -122,6 +123,8 @@ button:hover{border-color:var(--acc2)}
 .copycode.copied{color:var(--acc);border-color:var(--acc);background:#12301f}
 .copycode.copied .copyglyph{display:none}
 .copycode.copied .checkglyph{display:block}
+.compmeta>.copycode{flex:none;width:36px;height:36px;margin:0}
+.compmeta>.copycode .copyicon{width:19px;height:19px}
 .copycode::after{content:attr(data-tip);position:absolute;z-index:30;right:-1px;
   bottom:calc(100% + 8px);width:max-content;max-width:190px;padding:6px 8px;
   border:1px solid #30394a;border-radius:5px;background:#080b10;color:var(--txt);
@@ -131,7 +134,6 @@ button:hover{border-color:var(--acc2)}
 .copycode:hover::after,.copycode:focus-visible::after,.copycode.copied::after{
   visibility:visible;opacity:1;transform:translateY(0)}
 .vrow .copycode{flex:none;width:25px;height:25px;margin:0 0 0 4px}
-@media(max-width:820px){.score>.copycode{margin-left:0}}
 .wasted{font-size:10.5px;color:var(--red);opacity:.85;margin-top:6px}
 .empty{color:var(--dim);padding:26px;text-align:center;border:1px dashed var(--edge);border-radius:9px}
 
@@ -141,6 +143,7 @@ button:hover{border-color:var(--acc2)}
     border-bottom:1px solid var(--edge)}
   .grid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr))}
   .comp{grid-template-columns:1fr}
+  .compmeta{justify-self:start}
   .score{text-align:left}
   .pickctl input{width:130px}
 }
@@ -266,6 +269,7 @@ label.sub select{margin-top:3px}
 .vtag:hover{color:#3ddc84;border-color:#3ddc84}
 .comp.vopen .vtag{color:#3ddc84;border-style:solid;border-color:#3ddc84}
 .vlist{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed #232a36;gap:5px}
+.comp>.vlist{grid-column:1/-1;margin-top:0}
 .comp.vopen .vlist{display:flex;flex-direction:column}
 .vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .vrow .uc{width:42px;height:42px;border-radius:7px}

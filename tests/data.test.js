@@ -13,6 +13,7 @@ test('the application contains only Set 18', () => {
   const data = JSON.parse(read('web/data.json'));
   const html = read('web/index.html');
   const app = read('web/app.js');
+  const css = read('web/style.css');
   const readme = read('README.md');
 
   assert.equal(data.set, 'set18');
@@ -24,6 +25,9 @@ test('the application contains only Set 18', () => {
   assert.match(app, /aria-label="Copy TFT Team Planner code"/);
   assert.match(app, /class="copyicon"/);
   assert.doesNotMatch(app, />Copy team code<\/button>/);
+  assert.match(app, /`<div class="compmeta">` \+\s*copyCodeButton\(r\.units\)/);
+  assert.match(css, /\.compmeta>\.copycode\{[^}]*margin:0/);
+  assert.match(css, /\.comp>\.vlist\{[^}]*grid-column:1\/-1/);
   assert.match(app, /function unitPortrait/);
   assert.doesNotMatch(app, /class="kc"/);
 });

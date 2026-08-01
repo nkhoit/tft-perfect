@@ -608,13 +608,13 @@ function render(m) {
     const d = document.createElement('div');
     d.className = 'comp';
     d.innerHTML =
-      `<div class="left"><div class="tline">${badges}${deadBadges}</div><div class="uline">${units}${varTag}</div>` +
-      varRows + `</div>` +
+      `<div class="left"><div class="tline">${badges}${deadBadges}</div><div class="uline">${units}${varTag}</div></div>` +
+      `<div class="compmeta">` + copyCodeButton(r.units) +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
       (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
-      slotTag + `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
-      copyCodeButton(r.units) + `</div>`;
+      slotTag + `<span title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span></div></div>` +
+      varRows;
     frag.appendChild(d);
   }
   list.innerHTML = '';
