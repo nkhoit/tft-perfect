@@ -99,10 +99,10 @@ button:hover{border-color:var(--acc2)}
 /* cost is already carried by the tile border + the cost-bucket header */
 .u .cst{display:none}
 .u.req img{opacity:1}
-.u.req::before,.uc.req::before{content:"\2713";position:absolute;z-index:3;top:3px;right:3px;
-  display:grid;place-items:center;width:18px;height:18px;border:1px solid #b7f7cb;
-  border-radius:5px;background:var(--acc);color:#08120b;box-shadow:0 1px 4px #000d;
-  font-size:12px;font-weight:900;line-height:1;pointer-events:none}
+.u.req::before,.uc.req::before{content:"\2713";position:absolute;z-index:3;top:2px;right:2px;
+  display:grid;place-items:center;width:16px;height:16px;box-sizing:border-box;
+  border:1px solid var(--acc);border-radius:5px;background:#090c12e8;color:var(--acc);
+  box-shadow:0 1px 3px #000b;font-size:10px;font-weight:900;line-height:1;pointer-events:none}
 .u.exc{border-color:var(--red);opacity:.35}
 .u.exc::after{content:"";position:absolute;inset:0;
   background:linear-gradient(to bottom right,transparent 47%,var(--red) 47%,var(--red) 53%,transparent 53%)}
@@ -368,7 +368,7 @@ label.sub select{margin-top:3px}
 .vrow .uc{width:42px;height:42px;border-radius:7px}
 .vrow .uc .un{padding:7px 1px 1px;font-size:7.5px}
 .vrow .rtype{top:1px;left:1px;transform:scale(.85);transform-origin:top left}
-.vrow .uc.req::before{top:2px;right:2px;width:15px;height:15px;border-radius:4px;font-size:10px}
+.vrow .uc.req::before{top:1px;right:1px;transform:scale(.85);transform-origin:top right}
 .vg{font-size:11px;color:var(--dim);margin-left:4px;padding-left:4px;white-space:nowrap}
 
 /* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
