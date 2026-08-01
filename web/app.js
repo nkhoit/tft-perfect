@@ -25,6 +25,7 @@ const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
 const muted = new Set();          // trait keys that still show but earn no score or waste
+let unitTraitLens = '';
 
 const { algorithmVersion, antiStack, breakpoints, isUnique, mergeSearchResults,
   scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey, summary } = SearchUtils;
@@ -217,6 +218,7 @@ function resetSearchState() {
   $('sort').value = DEFAULT_SORT[0];
   $('sort2').value = DEFAULT_SORT[1];
   $('search').value = '';
+  unitTraitLens = '';
 }
 
 function sharedSearchState() {
@@ -262,6 +264,7 @@ function sharedSearchState() {
   if (sort[0] !== DEFAULT_SORT[0] || sort[1] !== DEFAULT_SORT[1]) shared.s = sort;
   const query = $('search').value.trim();
   if (query) shared.q = query.slice(0, 100);
+  if (unitTraitLens) shared.f = unitTraitLens;
   return shared;
 }
 
@@ -331,6 +334,10 @@ function applySharedSearchState(shared) {
     $('sort2').value = shared.s[1];
   }
   if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
+  if (typeof shared.f === 'string' && DB.traits[shared.f]
+      && DB.champions.some(champion => champion.traits.includes(shared.f))) {
+    unitTraitLens = shared.f;
+  }
 }
 
 function refreshSearchControls() {
@@ -345,6 +352,7 @@ function refreshSearchControls() {
   }
   renderEmblems();
   renderTraitGrid();
+  renderTraitLens();
   applyFilter();
   updPickN();
 }
@@ -387,6 +395,7 @@ async function restoreSharedSearch() {
 function defaultSavedSearchName() {
   const query = $('search').value.trim();
   if (query) return query;
+  if (unitTraitLens) return `${DB.traits[unitTraitLens]?.name || unitTraitLens} units`;
   if (reqTraits.length) {
     const { key, n } = reqTraits[0];
     return `${DB.traits[key]?.name || key} ${n}`;
@@ -575,6 +584,7 @@ function loadData() {
   stopWorkers(false);
   memoryCache.clear();
   state.clear(); emblems.length = 0; reqTraits.length = 0; muted.clear();
+  unitTraitLens = '';
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
   return fetch('data.json', { cache: 'no-cache' }).then(r => {
@@ -594,7 +604,7 @@ function loadData() {
       (db.note ? ` <span class="tag" title="Data build ${build} — ${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
-    buildTraitGrid(); updPickN();
+    buildTraitGrid(); buildTraitLens(); updPickN();
     await restoreSharedSearch();
     refreshSearchControls();
     dataReady = true;
@@ -670,6 +680,65 @@ function buildPool() {
   applyFilter();
 }
 
+function traitLensOptions() {
+  const counts = new Map();
+  for (const champion of DB.champions) {
+    for (const key of champion.traits) counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts].map(([key, count]) => ({ key, count, trait: DB.traits[key] }))
+    .filter(option => option.trait)
+    .sort((a, b) => a.trait.name.localeCompare(b.trait.name));
+}
+
+function buildTraitLens() {
+  const list = $('traitLensList');
+  list.replaceChildren();
+  for (const { key, count, trait } of traitLensOptions()) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'traitlensitem';
+    button.dataset.key = key;
+    button.dataset.search = trait.name.toLowerCase();
+    button.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
+      `<span>${trait.name}</span><b>${count}</b>`;
+    list.appendChild(button);
+  }
+  renderTraitLens();
+  filterTraitLensOptions();
+}
+
+function renderTraitLens() {
+  const selected = traitLensOptions().find(option => option.key === unitTraitLens);
+  const summary = $('traitLensSummary');
+  if (selected) {
+    const { count, trait } = selected;
+    summary.innerHTML = (trait.icon ? `<img src="${trait.icon}" alt="">` : '') +
+      `<span>${trait.name}</span><i>·</i><b>${count}</b>`;
+    summary.title = `Highlighting ${trait.name} units`;
+  } else {
+    summary.textContent = 'Trait lens';
+    summary.title = 'Highlight units by trait';
+  }
+  $('traitLensControl').classList.toggle('active', Boolean(selected));
+  $('traitLensClear').hidden = !selected;
+  for (const button of $('traitLensList').children) {
+    const active = button.dataset.key === unitTraitLens;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+}
+
+function filterTraitLensOptions() {
+  const query = $('traitLensSearch').value.trim().toLowerCase();
+  let shown = 0;
+  for (const button of $('traitLensList').children) {
+    const hide = Boolean(query && !button.dataset.search.includes(query));
+    button.hidden = hide;
+    if (!hide) shown++;
+  }
+  $('traitLensEmpty').hidden = shown > 0;
+}
+
 function addUnit(el, c) {
     const d = document.createElement('div');
     d.className = 'u b' + c.cost;
@@ -681,6 +750,7 @@ function addUnit(el, c) {
       ${portraitRoleBadge(c)}<span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
     // left click toggles require, right click toggles exclude
     const set = s => {
+      if (unitTraitLens && !c.traits.includes(unitTraitLens)) return;
       state.set(c.key, s);
       d.classList.toggle('req', s === 1);
       d.classList.toggle('exc', s === 2);
@@ -700,7 +770,10 @@ function applyFilter() {
     const c = DB.champions.find(x => x.key === d.dataset.key);
     const hide = (!costOn.has(c.cost) && state.get(c.key) !== 1) ||
                  (q && !d.dataset.search.includes(q));
+    const lensMatch = !unitTraitLens || c.traits.includes(unitTraitLens);
     d.classList.toggle('hide', hide);
+    d.classList.toggle('traitdim', !lensMatch);
+    d.setAttribute('aria-disabled', String(!lensMatch));
     if (!hide) shown.set(c.cost, (shown.get(c.cost) || 0) + 1);
   }
   // drop a tier header when nothing under it survived the filter
@@ -806,6 +879,33 @@ $('search').addEventListener('input', () => {
   applyFilter();
   void syncSearchUrl(searchGeneration);
 });
+$('traitLensSearch').addEventListener('input', filterTraitLensOptions);
+$('traitLens').addEventListener('toggle', () => {
+  if ($('traitLens').open) {
+    $('traitLensSearch').focus();
+    $('traitLensSearch').select();
+  }
+});
+$('traitLensList').addEventListener('click', event => {
+  const button = event.target.closest('.traitlensitem');
+  if (!button) return;
+  unitTraitLens = button.dataset.key;
+  $('traitLensSearch').value = '';
+  filterTraitLensOptions();
+  renderTraitLens();
+  applyFilter();
+  $('traitLens').open = false;
+  void syncSearchUrl(searchGeneration);
+});
+$('traitLensClear').onclick = () => {
+  unitTraitLens = '';
+  $('traitLensSearch').value = '';
+  filterTraitLensOptions();
+  renderTraitLens();
+  applyFilter();
+  $('traitLens').open = false;
+  void syncSearchUrl(searchGeneration);
+};
 $('saveSearch').onclick = () => {
   void saveCurrentSearch();
 };
@@ -851,6 +951,10 @@ $('clear').onclick = () => {
   emblems.length = 0; renderEmblems();
   reqTraits.length = 0; muted.clear(); renderTraitGrid();
   for (const d of $('pool').children) d.classList.remove('req', 'exc');
+  unitTraitLens = '';
+  $('traitLensSearch').value = '';
+  renderTraitLens();
+  filterTraitLensOptions();
   $('search').value = ''; applyFilter(); updPickN(); run();
 };
 

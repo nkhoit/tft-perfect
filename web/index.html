@@ -83,6 +83,19 @@ Built for the Trait Tree encounter.">?</i></h2>
         <h2>Units <span class="tag" id="pickN">0 required · 0 excluded</span> <i class="q" tabindex="0" data-tip="Left click to require · right click to exclude · click again to clear.">?</i></h2>
         <div class="pickctl">
           <input type="search" id="search" placeholder="filter units or traits…">
+          <div class="traitlensctl" id="traitLensControl">
+            <details class="traitlens" id="traitLens">
+              <summary id="traitLensSummary" title="Highlight units by trait">Trait lens</summary>
+              <div class="traitlenspop">
+                <input class="traitlenssearch" type="search" id="traitLensSearch"
+                  placeholder="Find a trait…" autocomplete="off">
+                <div class="traitlenslist" id="traitLensList"></div>
+                <div class="traitlensempty" id="traitLensEmpty" hidden>No traits match.</div>
+              </div>
+            </details>
+            <button class="traitlensclear" id="traitLensClear" type="button"
+              title="Clear trait lens" aria-label="Clear trait lens" hidden>&times;</button>
+          </div>
           <button id="saveSearch" type="button" title="Save this search on this device">Save</button>
           <details class="savedmenu" id="savedMenu">
             <summary>Saved <span id="savedN">0</span></summary>
