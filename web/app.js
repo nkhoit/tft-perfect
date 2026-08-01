@@ -511,10 +511,14 @@ function unitCard(key) {
   const row = (label, v) =>
     v == null ? '' : `<div class="cstat"><span>${label}</span><b>${v}</b></div>`;
   const n1 = v => (v == null ? null : Math.round(v * 100) / 100);
+  const starValues = (values, fallback) => Array.isArray(values)
+    ? `<span class="stars" title="1-star / 2-star / 3-star">` +
+      values.map(n1).join('<i>/</i>') + `</span>`
+    : n1(fallback);
   const body =
     row('Team Slots', c.slots > 1 ? c.slots : null) +
-    row('Health', n1(s.hp)) +
-    row('Damage', n1(s.ad)) +
+    row('Health', starValues(s.hpStars, s.hp)) +
+    row('Damage', starValues(s.adStars, s.ad)) +
     row('Atk Spd', n1(s.as)) +
     row('Armor', n1(s.armor)) +
     row('MR', n1(s.mr)) +

@@ -299,6 +299,8 @@ label.sub select{margin-top:3px}
 .cstat{display:flex;justify-content:space-between;font-size:11px;line-height:1.6}
 .cstat span{color:#8b94a3}
 .cstat b{color:#e6e9ef;font-weight:600}
+#card .stars{color:#e6e9ef;font-variant-numeric:tabular-nums;white-space:nowrap}
+#card .stars i{padding:0 2px;color:#687080;font-style:normal}
 
 /* ---- per-board variants: same trait signature, different roster ---- */
 .vtag{appearance:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;

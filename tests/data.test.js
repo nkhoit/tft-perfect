@@ -57,6 +57,8 @@ test('the application contains only Set 18', () => {
   assert.match(css, /\.apara\{/);
   assert.match(app, /class="tdetails"/);
   assert.match(css, /\.tdetail\{/);
+  assert.match(app, /class="stars"/);
+  assert.match(css, /\.stars\{/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 
@@ -73,6 +75,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
     assert.equal(champion.cost, source.cost);
     assert.ok(champion.icon, `${key} has no icon`);
     assert.ok(champion.stats, `${key} has no stats`);
+    assert.equal(champion.stats.hpStars?.length, 3, `${key} has no star-level Health`);
+    assert.equal(champion.stats.adStars?.length, 3, `${key} has no star-level Attack Damage`);
     assert.ok(champion.role, `${key} has no unit role`);
     assert.ok(champion.ability?.descResolved, `${key} has no resolved ability text`);
     assert.ok(Number.isInteger(champion.teamPlannerCode), `${key} has no team-planner code`);
@@ -125,6 +129,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
     'Mama Beak: +45% Damage',
     'Zyra: +4 Plant Attacks',
   ]);
+  assert.deepEqual(champions.get('Shen').stats.hpStars, [900, 1620, 2916]);
+  assert.deepEqual(champions.get('Shen').stats.adStars, [50, 75, 113]);
 
   const adaptors = data.champions.filter(champion => champion.traits.includes('Adaptor'));
   assert.equal(adaptors.length, 5);

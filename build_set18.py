@@ -646,6 +646,16 @@ def main():
                 c["role"] = role
             else:
                 mechanic_errors.append(f"{c['key']} has unknown unit role {role!r}")
+        for source, target in (("health", "hpStars"),
+                               ("attackDamage", "adStars")):
+            values = (ref or {}).get(source)
+            if (isinstance(values, list) and len(values) == 3
+                    and all(isinstance(value, (int, float))
+                            for value in values)):
+                c.setdefault("stats", {})[target] = values
+            else:
+                mechanic_errors.append(
+                    f"{c['key']} has invalid star-level {source}: {values!r}")
         resolved = clean_lolchess(
             skill.get("desc"), keep_icons=True, keep_breaks=True)
         if resolved:
