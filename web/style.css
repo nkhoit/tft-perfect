@@ -122,24 +122,24 @@ button:hover{border-color:var(--acc2)}
 .chips .emb.req{border-color:#3ddc84;color:#3ddc84}
 
 /* ---- trait requirement grid (replaces the 90-option dropdown) ---- */
-#traitSearch{width:100%;margin:0 0 8px}
-.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:290px;overflow-y:auto;
-  padding-right:4px}
-.tgrid::-webkit-scrollbar{width:8px}
-.tgrid::-webkit-scrollbar-thumb{background:#2a3140;border-radius:4px}
-.tg{display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px;cursor:pointer;
-  background:#181d27;border:1px solid #232a36;font-size:11px;user-select:none;
-  transition:background .1s,border-color .1s}
-.tg:hover{background:#202632;border-color:#3a4354}
-.tg img{width:16px;height:16px;object-fit:contain;flex:none;filter:grayscale(1) opacity(.65)}
-.tg .noimg{width:16px;flex:none}
-.tg .tgn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c3cad6}
-.tg .tgv{font-weight:700;color:#0b0e14;background:#3ddc84;border-radius:4px;padding:0 5px;
-  min-width:16px;text-align:center;display:none}
+/* Hex tiles: TFT renders traits as hexes, and icon-only kills the scrollbar.
+   Name lives in the hover card, which already exists for these elements. */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:5px}
+.tg{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  aspect-ratio:1/1;background:#181d27;border:1px solid #232a36;border-radius:7px;
+  user-select:none;transition:background .1s,border-color .1s,transform .1s}
+.tg:hover{background:#202632;border-color:#54607a;transform:translateY(-1px);z-index:2}
+.tg img{position:relative;width:60%;height:60%;object-fit:contain;
+  filter:grayscale(1) opacity(.6);transition:filter .1s}
+.tg .noimg{position:relative;width:60%;height:60%}
+.tg .tgn{display:none}
+.tg .tgv{position:absolute;top:-5px;right:-5px;font-weight:700;font-size:10px;
+  line-height:16px;height:16px;min-width:16px;padding:0 3px;color:#0b0e14;
+  background:#3ddc84;border:1px solid #0b0e14;border-radius:8px;text-align:center;
+  display:none;z-index:3}
 .tg.on{background:#12301f;border-color:#3ddc84}
 .tg.on img{filter:none}
-.tg.on .tgn{color:#dfffe9;font-weight:600}
-.tg.on .tgv{display:inline-block}
+.tg.on .tgv{display:block}
 .tg.hide{display:none}
 
 /* result badges are clickable requirement pins */
@@ -217,9 +217,10 @@ button:hover{border-color:var(--acc2)}
 #card .cnote{margin:6px 0 0;font-size:10px;color:#6e7683;font-style:italic}
 
 /* ---- muted traits: shown on boards, worth no score ---- */
-.tg.muted{opacity:.5;border-style:dashed}
-.tg.muted .tgn{text-decoration:line-through;color:#7f8895}
-.tg.muted .tgv{color:#7f8895}
+/* hexes have no border to dash -- mute reads as a desaturated grey ring + dot */
+.tg.muted{background:#14181f;border-color:#3a4354;border-style:dashed;opacity:.55}
+.tg.muted img{filter:grayscale(1) opacity(.35)}
+.tg.muted .tgv{display:block;background:#7f8895;color:#14181f}
 .tb.mut{opacity:.45;border-style:dashed}
 .tb.mut b{text-decoration:line-through}
 
@@ -232,3 +233,14 @@ label.sub select{margin-top:3px}
 .cstat{display:flex;justify-content:space-between;font-size:11px;line-height:1.6}
 .cstat span{color:#8b94a3}
 .cstat b{color:#e6e9ef;font-weight:600}
+
+/* ---- per-board variants: same trait signature, different roster ---- */
+.vtag{display:inline-flex;align-items:center;cursor:pointer;font-size:10px;font-weight:700;
+  color:#9aa4b2;background:#1b2130;border:1px dashed #3a4354;border-radius:6px;
+  padding:2px 7px;user-select:none;white-space:nowrap}
+.vtag:hover{color:#3ddc84;border-color:#3ddc84}
+.comp.vopen .vtag{color:#3ddc84;border-style:solid;border-color:#3ddc84}
+.vlist{display:none;margin-top:6px;padding-top:6px;border-top:1px dashed #232a36;gap:5px}
+.comp.vopen .vlist{display:flex;flex-direction:column}
+.vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.vg{font-size:11px;color:var(--dim);margin-left:auto;padding-left:8px;white-space:nowrap}

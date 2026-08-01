@@ -93,12 +93,18 @@ function onWorker(e) {
     capped: parts.some(p => p.capped),
     ms: Math.max(...parts.map(p => p.ms)),
   };
-  if ($('uniq').checked) {
-    const seen = new Set();
-    merged.rows = merged.rows.filter(r => {
+  // Boards with an identical trait signature are the same comp reached with
+  // interchangeable units. Collapse them, but KEEP the alternates attached so
+  // the row can offer them -- that's the real question ("I don't have Ahri").
+  {
+    const by = new Map();
+    for (const r of merged.rows) {
       const sig = r.active.map(x => x[0] + ':' + x[1]).join('|');
-      return seen.has(sig) ? false : (seen.add(sig), true);
-    });
+      const hit = by.get(sig);
+      if (hit) { if (hit.variants.length < 24) hit.variants.push(r); }
+      else { r.variants = []; by.set(sig, r); }
+    }
+    merged.rows = [...by.values()];
   }
   merged.rows = merged.rows.slice(0, 100);
   render(merged);
@@ -231,17 +237,10 @@ function buildEmblemGrid() {
     };
     el.appendChild(d);
   });
-  $('embSearch').oninput = filterEmblems;
   renderEmblems();
 }
 
-function filterEmblems() {
-  const q = $('embSearch').value.trim().toLowerCase();
-  for (const d of $('embGrid').children) {
-    const on = emblems.includes(d.dataset.key);
-    d.classList.toggle('hide', !!q && !on && !d.dataset.search.includes(q));
-  }
-}
+function filterEmblems() {}
 
 function renderEmblems() {
   const el = $('embList'); el.innerHTML = '';
@@ -274,13 +273,11 @@ function renderEmblems() {
 });
 $('sort').addEventListener('change', run);
 $('sort2').addEventListener('change', run);
-$('uniq').addEventListener('change', run);
 $('search').addEventListener('input', applyFilter);
 $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
-  emblems.length = 0; $('embSearch').value = ''; filterEmblems(); renderEmblems();
+  emblems.length = 0; renderEmblems();
   reqTraits.length = 0; renderTraitGrid();
-  $('traitSearch').value = '';
   for (const d of $('pool').children) d.classList.remove('req', 'exc');
   $('search').value = ''; applyFilter(); updPickN(); run();
 };
@@ -331,17 +328,10 @@ function buildTraitGrid() {
     d.oncontextmenu = (e) => { e.preventDefault(); cycleTrait(t.key, true); };
     el.appendChild(d);
   });
-  $('traitSearch').oninput = filterTraits;
   renderTraitGrid();
 }
 
-function filterTraits() {
-  const q = $('traitSearch').value.trim().toLowerCase();
-  for (const d of $('traitGrid').children) {
-    const on = reqTraits.some(r => r.key === d.dataset.key);
-    d.classList.toggle('hide', !!q && !on && !d.dataset.search.includes(q));
-  }
-}
+function filterTraits() {}
 
 function renderTraitGrid() {
   for (const d of $('traitGrid').children) {
@@ -480,9 +470,10 @@ function run() {
                         .filter(r => r.t >= 0),
     muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
     sortMode: $('sort').value, sortMode2: $('sort2').value,
-    limit: 100, uniq: $('uniq').checked,
-    // Shards over-return so the global dedup has spare rows to draw from.
-    returnN: $('uniq').checked ? 800 : 100,
+    limit: 100, uniq: true,
+    // Shards over-return so the global dedup has spare rows to draw from,
+    // and so collapsed rows have real alternates to offer.
+    returnN: 800,
     shards: W.length,
   };
   W.forEach((w, i) => w.postMessage({ type: 'search', id, opts: { ...opts, shard: i } }));
@@ -544,11 +535,23 @@ function render(m) {
     if (r.dead.length) notes.push('Dead: ' + r.dead.map(ti => DB.traits[tkeys[ti]].name).join(', '));
     if ((r.over || []).length) notes.push('Over: ' + r.over.map(([ti, w]) => `${DB.traits[tkeys[ti]].name} +${w}`).join(', '));
 
+    // Same trait signature, different roster. Offered per-board instead of as a
+    // global toggle, because the question is "swap THIS board", not "show me
+    // every permutation of everything".
+    const nv = (r.variants || []).length;
+    const varTag = nv ? `<span class="vtag" title="Same traits, same counts — different units. Click to show.">${nv} variant${nv > 1 ? 's' : ''}</span>` : '';
+    const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
+      `<div class="vrow">` + v.units.map(i => DB.champions[i])
+        .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+        .map(c => `<span class="uc k${c.cost}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
+        .join('') +
+      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span></div>`).join('') + `</div>` : '';
+
     const d = document.createElement('div');
     d.className = 'comp';
     d.innerHTML =
-      `<div class="left"><div class="tline">${badges}</div><div class="uline">${units}</div>` +
-      (notes.length ? `<div class="wasted">${notes.join(' · ')}</div>` : '') + `</div>` +
+      `<div class="left"><div class="tline">${badges}</div><div class="uline">${units}${varTag}</div>` +
+      (notes.length ? `<div class="wasted">${notes.join(' · ')}</div>` : '') + varRows + `</div>` +
       `<div class="score"><b>${r.live}</b>traits active<br>` +
       (r.uniqN ? `<span class="u">+${r.uniqN} unique</span> · ` : '') +
       (r.waste ? `<span class="w">${r.waste} wasted</span> · ` : '') +
@@ -561,6 +564,8 @@ function render(m) {
 
 // Click any trait badge in the results to pin it as a requirement at that count.
 $('list').addEventListener('click', (e) => {
+  const vt = e.target.closest('.vtag');
+  if (vt) { vt.closest('.comp').classList.toggle('vopen'); return; }
   const b = e.target.closest('.tb');
   if (!b || !b.dataset.tk) return;
   const key = b.dataset.tk, n = +b.dataset.tn;
