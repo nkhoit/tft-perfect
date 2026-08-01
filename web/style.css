@@ -54,6 +54,14 @@ button:hover{border-color:var(--acc2)}
   border-radius:6px;background:var(--panel2);cursor:pointer;font-weight:700;font-size:12px;
   color:var(--dim);user-select:none}
 .costs .cbtn.on{color:#08120b;background:var(--acc);border-color:var(--acc)}
+.groupex{margin-top:10px;padding-top:9px;border-top:1px dashed var(--edge)}
+.groupex[hidden]{display:none}
+.groupexlbl{display:block;margin-bottom:6px;color:var(--dim);font-size:9px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase}
+.groupcheck{display:flex;align-items:center;gap:6px;color:#aab3c0;font-size:11px;cursor:pointer}
+.groupcheck input{margin:0;accent-color:var(--red)}
+.groupcheck b{margin-left:auto;padding:0 5px;border:1px solid #394354;border-radius:8px;
+  color:var(--dim);font-size:9px;font-variant-numeric:tabular-nums}
 
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .chips .emb{display:flex;align-items:center;gap:5px;background:#1d3b2b;border:1px solid var(--acc);
@@ -415,6 +423,7 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 .selc .x{color:var(--dim);font-size:9px;font-weight:700;margin-left:1px}
 .selc:hover{border-color:var(--red);color:var(--red)}
 .selc:hover .x{color:var(--red)}
+.selc.group{border-left-color:var(--red)}
 .selc.k1{border-left-color:#9aa4b2} .selc.k2{border-left-color:#4ac07a}
 .selc.k3{border-left-color:#4a90d9} .selc.k4{border-left-color:#c061d0}
 .selc.k5{border-left-color:#e0a13a}

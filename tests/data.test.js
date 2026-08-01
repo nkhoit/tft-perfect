@@ -143,6 +143,29 @@ test('unit picker switches between cost and trait groups', () => {
   assert.match(css, /\.traithdr\{/);
 });
 
+test('group exclusions collapse all champion forms into one control', () => {
+  const data = JSON.parse(read('web/data.json'));
+  const html = read('web/index.html');
+  const app = read('web/app.js');
+  const css = read('web/style.css');
+  const luxForms = data.champions.filter(champion => champion.group === 'Lux');
+
+  assert.equal(luxForms.length, 9);
+  assert.match(html, /id="groupExclusions"/);
+  assert.match(html, /id="groupExclusionList"/);
+  assert.match(app, /const excludedGroups = new Set\(\)/);
+  assert.match(app, /function formGroups\(/);
+  assert.match(app, /function buildGroupExclusions\(/);
+  assert.match(app, /function setGroupExcluded\(/);
+  assert.match(app, /function isGroupExcluded\(/);
+  assert.match(app, /else if \(s === 2 \|\| isGroupExcluded\(c\)\) return/);
+  assert.match(app, /class="selc group" data-group="/);
+  assert.match(app, /shared\.xg = \[\.\.\.excludedGroups\]\.sort\(\)/);
+  assert.match(app, /strings\(shared\.xg,/);
+  assert.match(css, /\.groupex\{/);
+  assert.match(css, /\.selc\.group\{/);
+});
+
 test('main and alternate compositions share the roster row layout', () => {
   const app = read('web/app.js');
   const css = read('web/style.css');

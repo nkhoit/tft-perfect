@@ -26,6 +26,7 @@ const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
 const muted = new Set();          // trait keys that still show but earn no score or waste
+const excludedGroups = new Set();
 let poolView = 'cost';
 
 const { algorithmVersion, antiStack, breakpoints, isUnique, mergeSearchResults,
@@ -212,6 +213,7 @@ function resetSearchState() {
   emblems.length = 0;
   reqTraits.length = 0;
   muted.clear();
+  excludedGroups.clear();
   $('size').value = DEFAULT_LEVEL;
   $('sizeV').textContent = DEFAULT_LEVEL;
   $('waste').value = DEFAULT_WASTE;
@@ -237,6 +239,7 @@ function sharedSearchState() {
   }
   if (required.length) shared.r = required;
   if (excluded.length) shared.x = excluded;
+  if (excludedGroups.size) shared.xg = [...excludedGroups].sort();
 
   const costs = [...costOn].sort((a, b) => a - b);
   if (costs.length !== 5 || costs.some((cost, index) => cost !== index + 1)) {
@@ -294,6 +297,13 @@ function applySharedSearchState(shared) {
   for (const key of strings(shared.x, DB.champions.length)) {
     if (championKeys.has(key) && state.get(key) === 0) state.set(key, 2);
   }
+  const validGroups = new Set(formGroups().map(({ group }) => group));
+  for (const group of strings(shared.xg, validGroups.size)) {
+    if (validGroups.has(group)) excludedGroups.add(group);
+  }
+  for (const champion of DB.champions) {
+    if (isGroupExcluded(champion)) state.set(champion.key, 0);
+  }
 
   if (Array.isArray(shared.c)) {
     costOn.clear();
@@ -344,6 +354,7 @@ function refreshSearchControls() {
   }
   renderEmblems();
   renderTraitGrid();
+  buildGroupExclusions();
   buildPool();
   updPickN();
 }
@@ -392,6 +403,7 @@ function defaultSavedSearchName() {
   }
   const champion = DB.champions.find(unit => state.get(unit.key) === 1);
   if (champion) return `${champion.name} team`;
+  if (excludedGroups.size) return `No ${[...excludedGroups][0]} forms`;
   if (poolView === 'trait') return 'Units by trait';
   return `Level ${$('size').value} search`;
 }
@@ -575,6 +587,7 @@ function loadData() {
   stopWorkers(false);
   memoryCache.clear();
   state.clear(); emblems.length = 0; reqTraits.length = 0; muted.clear();
+  excludedGroups.clear();
   poolView = 'cost';
   $('status').textContent = 'loading data…';
   $('list').innerHTML = '';
@@ -650,6 +663,63 @@ function buildCosts() {
   }
 }
 
+function formGroups() {
+  const groups = new Map();
+  for (const champion of DB.champions) {
+    if (!champion.group) continue;
+    if (!groups.has(champion.group)) groups.set(champion.group, []);
+    groups.get(champion.group).push(champion);
+  }
+  return [...groups].map(([group, champions]) => ({ group, champions }))
+    .filter(({ champions }) => champions.length > 1)
+    .sort((a, b) => a.group.localeCompare(b.group));
+}
+
+function isGroupExcluded(champion) {
+  return Boolean(champion.group && excludedGroups.has(champion.group));
+}
+
+function buildGroupExclusions() {
+  const groups = formGroups();
+  const container = $('groupExclusions');
+  const list = $('groupExclusionList');
+  list.replaceChildren();
+  container.hidden = !groups.length;
+  for (const { group, champions } of groups) {
+    const label = document.createElement('label');
+    label.className = 'groupcheck';
+    label.title = `Exclude all ${champions.length} ${group} forms`;
+    label.innerHTML = `<input type="checkbox" data-group="${group}">` +
+      `<span>Exclude ${group} forms</span><b>${champions.length}</b>`;
+    label.querySelector('input').addEventListener('change', event => {
+      setGroupExcluded(group, event.target.checked);
+    });
+    list.appendChild(label);
+  }
+  renderGroupExclusions();
+}
+
+function renderGroupExclusions() {
+  for (const input of $('groupExclusionList').querySelectorAll('input[data-group]')) {
+    input.checked = excludedGroups.has(input.dataset.group);
+  }
+}
+
+function setGroupExcluded(group, excluded) {
+  if (excluded) {
+    excludedGroups.add(group);
+    for (const champion of DB.champions) {
+      if (champion.group === group) state.set(champion.key, 0);
+    }
+  } else {
+    excludedGroups.delete(group);
+  }
+  renderGroupExclusions();
+  buildPool();
+  updPickN();
+  run();
+}
+
 function buildPool() {
   const el = $('pool');
   el.innerHTML = '';
@@ -714,6 +784,8 @@ function setPoolView(view) {
 }
 
 function setUnitState(key, value) {
+  const champion = DB.champions.find(unit => unit.key === key);
+  if (champion && isGroupExcluded(champion)) return;
   state.set(key, value);
   for (const tile of $('pool').children) {
     if (tile.dataset.key !== key) continue;
@@ -735,7 +807,7 @@ function addUnit(el, c, group) {
     d.title = c.name + ' — ' + c.traits.map(t => DB.traits[t]?.name || t).join(', ');
     d.innerHTML = `<img loading="lazy" src="${c.icon}" alt="">
       ${portraitRoleBadge(c)}<span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
-    const value = state.get(c.key) || 0;
+    const value = isGroupExcluded(c) ? 2 : (state.get(c.key) || 0);
     d.classList.toggle('req', value === 1);
     d.classList.toggle('exc', value === 2);
     d.onclick = () => setUnitState(c.key, state.get(c.key) === 1 ? 0 : 1);
@@ -768,7 +840,11 @@ function applyFilter() {
 
 function updPickN() {
   let r = 0, x = 0;
-  for (const v of state.values()) { if (v === 1) r++; else if (v === 2) x++; }
+  for (const champion of DB.champions) {
+    const value = state.get(champion.key);
+    if (value === 1) r++;
+    else if (value === 2 || isGroupExcluded(champion)) x++;
+  }
   $('pickN').textContent = `${r} required · ${x} excluded`;
   renderSel();
 }
@@ -790,15 +866,26 @@ function renderSel() {
   };
   fill($('selReqC'), req, 'req');
   fill($('selExcC'), exc, 'exc');
+  const excludedFormGroups = formGroups()
+    .filter(({ group }) => excludedGroups.has(group));
+  $('selExcC').insertAdjacentHTML('beforeend', excludedFormGroups
+    .map(({ group, champions }) =>
+      `<span class="selc group" data-group="${group}" title="Click to allow all ${group} forms">` +
+      `<img loading="lazy" src="${champions[0].icon}">${group} forms<b class="x">\u2715</b></span>`)
+    .join(''));
   $('selReq').hidden = !req.length;
-  $('selExc').hidden = !exc.length;
-  $('sel').hidden = !req.length && !exc.length;
+  $('selExc').hidden = !exc.length && !excludedFormGroups.length;
+  $('sel').hidden = !req.length && !exc.length && !excludedFormGroups.length;
 }
 
 // Clearing from the strip has to drive the pool tile too, or the two views drift.
 $('sel').addEventListener('click', e => {
   const c = e.target.closest('.selc');
   if (!c) return;
+  if (c.dataset.group) {
+    setGroupExcluded(c.dataset.group, false);
+    return;
+  }
   setUnitState(c.dataset.key, 0);
 });
 
@@ -903,6 +990,8 @@ $('clear').onclick = () => {
   for (const k of state.keys()) state.set(k, 0);
   emblems.length = 0; renderEmblems();
   reqTraits.length = 0; muted.clear(); renderTraitGrid();
+  excludedGroups.clear();
+  renderGroupExclusions();
   poolView = 'cost';
   $('search').value = '';
   buildPool();
@@ -1201,7 +1290,7 @@ function buildSearchOptions() {
   DB.champions.forEach((c, i) => {
     const s = state.get(c.key);
     if (s === 1) reqIdx.push(i);
-    else if (s === 2) return;
+    else if (s === 2 || isGroupExcluded(c)) return;
     else if (costOn.has(c.cost)) poolIdx.push(i);
   });
   const tkeys = Object.keys(DB.traits);
