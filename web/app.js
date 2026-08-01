@@ -525,6 +525,12 @@ function copyCodeButton(units) {
     `data-tip="Copy TFT Team Planner code" aria-label="Copy TFT Team Planner code">${COPY_CODE_ICON}</button>`;
 }
 
+function unitPortrait(c) {
+  const req = state.get(c.key) === 1 ? ' req' : '';
+  return `<span class="uc k${c.cost}${req}" data-key="${c.key}" title="${c.name}">` +
+    `<img loading="lazy" src="${c.icon}" alt="${c.name}"></span>`;
+}
+
 function render(m) {
   const list = $('list'), cnt = $('count');
   if (m.error) {
@@ -581,7 +587,7 @@ function render(m) {
 
     const units = r.units.map(i => DB.champions[i])
       .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
+      .map(unitPortrait)
       .join('');
 
 
@@ -593,7 +599,7 @@ function render(m) {
     const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
       `<div class="vrow">` + v.units.map(i => DB.champions[i])
         .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-        .map(c => `<span class="uc k${c.cost}${state.get(c.key) === 1 ? ' req' : ''}" data-key="${c.key}"><img loading="lazy" src="${c.icon}"><b class="kc">${c.cost}</b>${c.name}</span>`)
+        .map(unitPortrait)
         .join('') +
       `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
       copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
