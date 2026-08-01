@@ -176,6 +176,75 @@ function search(o) {
     return 0;
   };
 
+  // ---- branch-and-bound support ----
+  // cheapK[start * (size+1) + k] = gold for the k cheapest units in pool[start..].
+  // Used for an admissible lower bound on a board's final cost.
+  const cheapK = new Int32Array((P + 1) * (size + 1));
+  {
+    const costs = poolIdx.map(i => DB.champions[i].cost * 3);
+    for (let s = P - 1; s >= 0; s--) {
+      const tail = costs.slice(s).sort((a, b) => a - b);
+      let acc = 0;
+      for (let k = 1; k <= size; k++) {
+        acc += (k <= tail.length ? tail[k - 1] : 0);
+        cheapK[s * (size + 1) + k] = acc;
+      }
+    }
+  }
+
+  // Gold already locked in by the required units — constant for the whole run.
+  let baseGold = 0;
+  for (const u of reqIdx) baseGold += DB.champions[u].cost * 3;
+
+  // Optimistic bounds on what the current partial board could still become.
+  // Every one of these must err in the candidate's favour: overestimate the
+  // maximised keys (live/tier), underestimate the minimised ones (waste/cost).
+  // A bound that is ever too pessimistic silently deletes valid boards.
+  function boundLive(start, slotsLeft) {
+    const base = start * nT;
+    let ub = 0;
+    for (let t = 0; t < nT; t++) {
+      if (UNIQ[t] || MUTE[t]) continue;         // never scored
+      const c = counts[t];
+      if (c >= BP1[t]) { ub++; continue; }      // already active
+      const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
+      if (reach >= BP1[t]) ub++;                // could still activate
+    }
+    return ub;
+  }
+
+  function boundTier(start, slotsLeft) {
+    const base = start * nT;
+    let ub = 0;
+    for (let t = 0; t < nT; t++) {
+      if (UNIQ[t] || MUTE[t]) continue;
+      const c = counts[t];
+      const reach = c + (slotsLeft < avail[base + t] ? slotsLeft : avail[base + t]);
+      const ti = tierOf(BPS[t], reach);
+      if (ti >= 0) ub += ti + 1;
+    }
+    return ub;
+  }
+
+  function boundGold(start, slotsLeft, depth) {
+    let g = baseGold;
+    for (let d = 0; d < depth; d++) g += DB.champions[pick[d]].cost * 3;
+    return g + cheapK[start * (size + 1) + slotsLeft];
+  }
+
+  // Prune only on the primary sort key. Deeper keys are tie-breakers, and a
+  // bound that's optimistic on key 1 says nothing about key 2, so comparing
+  // past the first strict decision would not be admissible.
+  const primary = order[0];
+  function canBeat(start, slotsLeft, depth) {
+    if (!worst) return true;                    // buffer not full: keep everything
+    if (primary === 'live')  return boundLive(start, slotsLeft) >= worst.live;
+    if (primary === 'tier')  return boundTier(start, slotsLeft) >= worst.tierSum;
+    if (primary === 'waste') return wasteLB(slotsLeft) <= worst.waste;
+    if (primary === 'cost')  return boundGold(start, slotsLeft, depth) <= worst.gold;
+    return true;
+  }
+
   const pick = new Int32Array(need);
 
   function dfs(start, depth) {
@@ -227,7 +296,8 @@ function search(o) {
       const ts = CTR[ci];
       for (const t of ts) counts[t]++;
       pick[depth] = ci;
-      if (wasteLB(slotsLeft - 1) <= maxWaste && !reqUnreachable(i + 1, slotsLeft - 1)) dfs(i + 1, depth + 1);
+      if (wasteLB(slotsLeft - 1) <= maxWaste && !reqUnreachable(i + 1, slotsLeft - 1)
+          && canBeat(i + 1, slotsLeft - 1, depth + 1)) dfs(i + 1, depth + 1);
       for (const t of ts) counts[t]--;
       if (truncated) return;
     }

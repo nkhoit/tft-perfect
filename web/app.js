@@ -452,10 +452,14 @@ function render(m) {
   $('status').innerHTML = m.truncated && !m.capped
     ? `<span class="cut" title="Hit the search limit — some boards were never checked. Narrow the pool, or require a trait.">stopped early</span> · ${secs}s`
     : `searched in ${secs}s`;
-  const shown = m.rows.length < m.total ? `${m.rows.length} of ` : '';
-  cnt.innerHTML = `${shown}<b>${m.total.toLocaleString()}</b> board${m.total === 1 ? '' : 's'}` +
-    (m.truncated ? (m.capped ? ' <span class="tag">capped</span>'
-                             : ' <span class="tag warn">incomplete</span>') : '');
+  // Branch-and-bound kills whole subtrees before they reach a leaf, so `total`
+  // is no longer "boards matching your filters" — it's boards actually scored.
+  // The top-100 is still exact; the count is a floor. Label it as one.
+  cnt.innerHTML = `best <b>${m.rows.length}</b> of ${m.total.toLocaleString()}+ scored` +
+    (m.truncated ? ' <span class="tag">pruned</span>' : '');
+  cnt.title = 'Ranking is exact. The search skips branches that provably '
+            + "can't beat what it's already holding, so the scored count is a "
+            + 'lower bound, not every possible board.';
 
   if (!m.rows.length) {
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;
