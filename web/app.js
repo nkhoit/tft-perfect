@@ -616,20 +616,47 @@ function copyCodeButton(units) {
     `data-tip="Copy TFT Team Planner code" aria-label="Copy TFT Team Planner code">${COPY_CODE_ICON}</button>`;
 }
 
+function portraitRoleBadge(champion) {
+  const role = champion.role || '';
+  let kind, label, icons;
+  if (role.endsWith('Tank')) {
+    kind = 'tank';
+    label = 'Tank';
+    icons = statIcon('scaleArmor');
+  } else if (champion.traits.includes('Adaptor') || role.startsWith('Hybrid')) {
+    kind = 'dual';
+    label = champion.traits.includes('Adaptor') ? 'Adaptor: AD or AP' : 'Hybrid: AD and AP';
+    icons = statIcon('scaleAD') + statIcon('scaleAP');
+  } else if (role.startsWith('AD')) {
+    kind = 'ad';
+    label = 'AD';
+    icons = statIcon('scaleAD');
+  } else if (role.startsWith('AP')) {
+    kind = 'ap';
+    label = 'AP';
+    icons = statIcon('scaleAP');
+  } else {
+    return '';
+  }
+  return `<span class="rtype ${kind}" title="${label}">${icons}</span>`;
+}
+
 function unitPortrait(c) {
   const req = state.get(c.key) === 1 ? ' req' : '';
   return `<span class="uc k${c.cost}${req}" data-key="${c.key}" title="${c.name}">` +
-    `<img loading="lazy" src="${c.icon}" alt="${c.name}"><span class="un">${c.name}</span></span>`;
+    `<img loading="lazy" src="${c.icon}" alt="${c.name}">${portraitRoleBadge(c)}` +
+    `<span class="un">${c.name}</span></span>`;
 }
 
 function teamProfile(units, compact = false) {
   const counts = { tanks: 0, AD: 0, AP: 0, Hybrid: 0 };
   for (const index of units) {
-    const role = DB.champions[index].role || '';
+    const champion = DB.champions[index];
+    const role = champion.role || '';
     if (role.endsWith('Tank')) counts.tanks++;
+    else if (champion.traits.includes('Adaptor') || role.startsWith('Hybrid')) counts.Hybrid++;
     else if (role.startsWith('AD')) counts.AD++;
     else if (role.startsWith('AP')) counts.AP++;
-    else if (role.startsWith('Hybrid')) counts.Hybrid++;
   }
   const others = units.length - counts.tanks;
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;

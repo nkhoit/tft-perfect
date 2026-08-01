@@ -113,6 +113,14 @@ button:hover{border-color:var(--acc2)}
   background:linear-gradient(transparent,rgba(0,0,0,.94) 55%);color:#fff;
   font-size:8.5px;line-height:1.1;text-align:center;text-shadow:0 1px 2px #000;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.rtype{position:absolute;z-index:2;top:2px;left:2px;display:inline-flex;align-items:center;
+  justify-content:center;gap:0;min-width:16px;height:16px;padding:1px 2px;
+  box-sizing:border-box;border:1px solid #445064;border-radius:5px;
+  background:#090c12e8;box-shadow:0 1px 3px #000b}
+.rtype .si{width:11px;height:11px;margin:0;object-fit:contain}
+.rtype.dual .si{width:9px;height:9px}
+.rtype.tank{border-color:#4f7480}.rtype.ad{border-color:#8a682e}
+.rtype.ap{border-color:#6056a0}.rtype.dual{border-color:#4d7180}
 .teamprofile{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
 .profilepill{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;
   border:1px solid #303a49;border-radius:10px;background:#171d28;color:#9da7b6;
@@ -337,6 +345,7 @@ label.sub select{margin-top:3px}
 .vrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
 .vrow .uc{width:42px;height:42px;border-radius:7px}
 .vrow .uc .un{padding:7px 1px 1px;font-size:7.5px}
+.vrow .rtype{top:1px;left:1px;transform:scale(.85);transform-origin:top left}
 .vg{font-size:11px;color:var(--dim);margin-left:4px;padding-left:4px;white-space:nowrap}
 
 /* ---- required trait tiles take the breakpoint's in-game tier colour ---- */
