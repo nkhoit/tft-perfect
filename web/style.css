@@ -258,3 +258,4 @@ h2 .q{display:inline-flex;align-items:center;justify-content:center;width:14px;h
 h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 #card .qline{margin:0 0 4px}
 #card .qline:last-child{margin:0}
+.meta .u{font-style:normal;color:#6b7280}

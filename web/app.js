@@ -46,9 +46,16 @@ function loadSet(file) {
     DB = db;
     db.champions.forEach(c => state.set(c.key, 0));
     const build = String(db.gameBuild || '').split('+')[0];
-    $('meta').innerHTML = `${db.setName || db.set} · ${build} · ${db.champions.length} units · ` +
-      `${Object.keys(db.traits).length} traits` +
-      (db.note ? ` <span class="tag" title="${db.note}">PBE</span>` : '');
+    // The set dropdown already names the set; don't say it twice. Split the
+    // trait count -- 10 of them are 1-unit uniques you can't build around.
+    const nUniq = Object.values(db.traits).filter(isUnique).length;
+    const nTr = Object.keys(db.traits).length;
+    $('meta').innerHTML =
+      `${db.champions.length} units · ` +
+      `<span title="${nTr} total: ${nTr - nUniq} you can build around, ` +
+      `${nUniq} unique (single-champion)">${nTr - nUniq} traits ` +
+      `<i class="u">+${nUniq} unique</i></span>` +
+      (db.note ? ` <span class="tag" title="Data build ${build} — ${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
     buildTraitGrid(); updPickN();
