@@ -17,7 +17,7 @@ const DEFAULT_LEVEL = 8;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SORT = ['live', 'cost'];
 const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
-const POOL_VIEWS = new Set(['cost', 'trait']);
+const POOL_VIEWS = new Set(['cost', 'origin', 'class']);
 const MAX_SHARED_EMBLEMS = 20;
 
 const $ = id => document.getElementById(id);
@@ -404,7 +404,7 @@ function defaultSavedSearchName() {
   const champion = DB.champions.find(unit => state.get(unit.key) === 1);
   if (champion) return `${champion.name} team`;
   if (excludedGroups.size) return `No ${[...excludedGroups][0]} forms`;
-  if (poolView === 'trait') return 'Units by trait';
+  if (poolView !== 'cost') return `Units by ${poolView}`;
   return `Level ${$('size').value} search`;
 }
 
@@ -723,8 +723,8 @@ function setGroupExcluded(group, excluded) {
 function buildPool() {
   const el = $('pool');
   el.innerHTML = '';
-  el.classList.toggle('traitview', poolView === 'trait');
-  if (poolView === 'trait') buildPoolByTrait(el);
+  el.classList.toggle('traitview', poolView !== 'cost');
+  if (poolView !== 'cost') buildPoolByCategory(el, poolView);
   else buildPoolByCost(el);
   renderPoolView();
   applyFilter();
@@ -749,12 +749,14 @@ function buildPoolByCost(el) {
   }
 }
 
-function buildPoolByTrait(el) {
-  const groups = Object.entries(DB.traits).map(([key, trait]) => ({
-    key,
-    trait,
-    units: DB.champions.filter(champion => champion.traits.includes(key)),
-  })).filter(group => group.units.length)
+function buildPoolByCategory(el, category) {
+  const groups = Object.entries(DB.traits)
+    .filter(([, trait]) => trait.category === category)
+    .map(([key, trait]) => ({
+      key,
+      trait,
+      units: DB.champions.filter(champion => champion.traits.includes(key)),
+    })).filter(group => group.units.length)
     .sort((a, b) => a.trait.name.localeCompare(b.trait.name));
   for (const { key, trait, units } of groups) {
     const group = `trait:${key}`;
@@ -776,7 +778,12 @@ function buildPoolByTrait(el) {
 }
 
 function renderPoolView() {
-  for (const [view, id] of [['cost', 'poolViewCost'], ['trait', 'poolViewTrait']]) {
+  const views = [
+    ['cost', 'poolViewCost'],
+    ['origin', 'poolViewOrigin'],
+    ['class', 'poolViewClass'],
+  ];
+  for (const [view, id] of views) {
     const active = poolView === view;
     $(id).classList.toggle('active', active);
     $(id).setAttribute('aria-selected', String(active));
@@ -952,7 +959,8 @@ $('search').addEventListener('input', () => {
   void syncSearchUrl(searchGeneration);
 });
 $('poolViewCost').onclick = () => setPoolView('cost');
-$('poolViewTrait').onclick = () => setPoolView('trait');
+$('poolViewOrigin').onclick = () => setPoolView('origin');
+$('poolViewClass').onclick = () => setPoolView('class');
 $('saveSearch').onclick = () => {
   void saveCurrentSearch();
 };

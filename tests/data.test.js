@@ -122,18 +122,21 @@ test('unit picker portraits include role badges', () => {
   assert.match(addUnit[1], /\$\{portraitRoleBadge\(c\)\}/);
 });
 
-test('unit picker switches between cost and trait groups', () => {
+test('unit picker switches between cost, origin, and class groups', () => {
   const html = read('web/index.html');
   const app = read('web/app.js');
   const css = read('web/style.css');
 
   assert.match(html, /id="poolViewCost"/);
-  assert.match(html, /id="poolViewTrait"/);
+  assert.match(html, /id="poolViewOrigin"/);
+  assert.match(html, /id="poolViewClass"/);
+  assert.doesNotMatch(html, /id="poolViewTrait"/);
   assert.doesNotMatch(html + app + css, /traitLens|traitlens|unitTraitLens|traitdim/);
-  assert.match(app, /const POOL_VIEWS = new Set\(\['cost', 'trait'\]\)/);
+  assert.match(app, /const POOL_VIEWS = new Set\(\['cost', 'origin', 'class'\]\)/);
   assert.match(app, /let poolView = 'cost'/);
   assert.match(app, /function buildPoolByCost\(/);
-  assert.match(app, /function buildPoolByTrait\(/);
+  assert.match(app, /function buildPoolByCategory\(/);
+  assert.match(app, /trait\.category === category/);
   assert.match(app, /section\.className = 'traitgroup'/);
   assert.match(app, /unitGrid\.className = 'traitunits'/);
   assert.match(app, /function setUnitState\(/);
@@ -210,6 +213,7 @@ test('team composition renders as one segmented strip', () => {
 test('the generated data and checked-in roster are internally consistent', () => {
   const data = JSON.parse(read('web/data.json'));
   const roster = JSON.parse(read('set18-roster.json'));
+  const builder = read('build_set18.py');
   const champions = new Map(data.champions.map(champion => [champion.key, champion]));
 
   assert.equal(roster.length, data.champions.length);
@@ -234,7 +238,15 @@ test('the generated data and checked-in roster are internally consistent', () =>
   for (const trait of Object.values(data.traits)) {
     assert.ok(trait.icon, `${trait.name} has no icon`);
     assert.ok(trait.bp.length, `${trait.name} has no breakpoints`);
+    assert.ok(['origin', 'class'].includes(trait.category),
+      `${trait.name} has no origin/class category`);
   }
+  assert.equal(Object.values(data.traits).filter(trait => trait.category === 'origin').length, 23);
+  assert.equal(Object.values(data.traits).filter(trait => trait.category === 'class').length, 12);
+  assert.equal(data.traits.Blackthorn.category, 'origin');
+  assert.equal(data.traits.Ravager.category, 'class');
+  assert.match(builder, /TRAIT_CATEGORIES = \{/);
+  assert.match(builder, /"Blackthorn": "origin"/);
   const duplicatePlannerCodes = [...Map.groupBy(data.champions, champion => champion.teamPlannerCode)]
     .filter(([, champions]) => champions.length > 1);
   assert.equal(duplicatePlannerCodes.length, 1);

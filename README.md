@@ -68,8 +68,9 @@ npm run check
 ## Data
 
 `web/data.json` is generated from the checked-in `set18-roster.json`,
-[CommunityDragon](https://communitydragon.org), Riot's team-planner data, and
-[LoLChess](https://lolchess.gg).
+[CommunityDragon](https://communitydragon.org), Riot's team-planner data,
+[LoLChess](https://lolchess.gg), and a checked-in origin/class taxonomy sourced
+from [Blitz](https://utils.iesdev.com/static/json/tftTest/set18/en_us/traits).
 
 ```bash
 python3 -m pip install -r requirements.txt

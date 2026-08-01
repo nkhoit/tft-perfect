@@ -43,6 +43,48 @@ STYLE_NAMES = {1: "bronze", 2: "silver", 3: "silver", 4: "unique",
 # The pre-PBE reveal capture used names Riot has since changed on PBE.
 TRAIT_ALIAS = {"Eldritch": "Blackthorn"}
 
+# CommunityDragon omits origin/class metadata. This taxonomy was captured from
+# Blitz's structured Set 18 trait data and is checked in so builds do not depend
+# on a third-party endpoint remaining available:
+# https://utils.iesdev.com/static/json/tftTest/set18/en_us/traits
+TRAIT_CATEGORIES = {
+    "Adaptor": "class",
+    "ApexPredator": "origin",
+    "Attuned": "origin",
+    "Avatar": "origin",
+    "Blackthorn": "origin",  # Blitz/Riot still call this Eldritch upstream.
+    "Blossom": "origin",
+    "BountySeeker": "origin",
+    "Brawler": "class",
+    "Caustic": "origin",
+    "Coven": "origin",
+    "Defender": "class",
+    "Elderwood": "origin",
+    "EmeraldAspect": "origin",
+    "Executioner": "class",
+    "Fae": "origin",
+    "FloraFatalis": "origin",
+    "Greenfather": "origin",
+    "Hunter": "class",
+    "Inferno": "origin",
+    "Invoker": "class",
+    "Juggernaut": "class",
+    "Lunar": "origin",
+    "Monolith": "origin",
+    "OldGrowth": "origin",
+    "Primal": "origin",
+    "Rapidfire": "class",
+    "Ravager": "class",
+    "Riftbeast": "origin",
+    "Rival": "origin",
+    "Solar": "origin",
+    "Spellweaver": "class",
+    "Sprykin": "origin",
+    "Summoner": "class",
+    "Thornmaiden": "origin",
+    "Vanguard": "class",
+}
+
 # Structured board-capacity rules are kept explicit instead of parsed from
 # player-facing trait text.
 TRAIT_TEAM_SIZE = {
@@ -539,6 +581,7 @@ def main():
                 break
 
         trait = {"key": key, "name": name, "icon": icon,
+                 "category": TRAIT_CATEGORIES.get(key),
                  "bp": bp or [1], "styles": styles,
                  "lead": lead, "tiers": tiers,
                  "desc": desc}
@@ -566,6 +609,7 @@ def main():
                 unresolved.add(t)
                 k = re.sub(r"[^A-Za-z0-9]", "", t)
                 traits.setdefault(k, {"key": k, "name": t, "icon": None,
+                                      "category": TRAIT_CATEGORIES.get(k),
                                       "bp": [2], "styles": [], "desc": ""})
             keys.append(k)
 
@@ -724,6 +768,10 @@ def main():
     missing_icon = [c["name"] for c in champions if not c["icon"]]
     missing_trait_icon = [t["name"] for t in traits.values() if not t["icon"]]
     missing_bp = [t["name"] for t in traits.values() if t["bp"] == [1] and not t["styles"]]
+    missing_trait_categories = sorted(
+        key for key, trait in traits.items()
+        if trait.get("category") not in {"origin", "class"})
+    unused_trait_categories = sorted(set(TRAIT_CATEGORIES) - set(traits))
 
     # ---- integrity checks ---------------------------------------------
     # Pebbles shipped with Krug's art for a while because the icon guess
@@ -758,7 +806,7 @@ def main():
            "teamPlannerSet": "TFTSet18",
            "gameBuild": "PBE TFTSet18",
            "source": ("checked-in reveal roster + CommunityDragon PBE TFTSet18 "
-                      "+ Riot team planner + LoLChess"),
+                      "+ Riot team planner + LoLChess + checked-in Blitz trait taxonomy"),
            "note": "PBE data — breakpoints are live-PBE and may shift before 18.1 launch (2026-08-12).",
            "abilityNote": ("Ability numbers and structured stat lines sourced from "
                            "LoLChess championRefs en/set18 on "
@@ -776,6 +824,10 @@ def main():
         errors.append(f"{len(missing_trait_icon)} traits without icons: {missing_trait_icon[:12]}")
     if missing_bp:
         errors.append(f"{len(missing_bp)} traits without breakpoints: {missing_bp[:12]}")
+    if missing_trait_categories:
+        errors.append(f"traits without categories: {missing_trait_categories}")
+    if unused_trait_categories:
+        errors.append(f"category mappings without traits: {unused_trait_categories}")
     if shared:
         errors.append(f"{len(shared)} shared champion icons: " +
                       "; ".join(" == ".join(group) for group in shared))
