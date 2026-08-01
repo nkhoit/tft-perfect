@@ -210,6 +210,17 @@ test('team composition renders as one segmented strip', () => {
   assert.match(css, /\.profilepart\+\.profilepart\{[^}]*border-left:/);
 });
 
+test('roster summary controls fill the available row height', () => {
+  const css = read('web/style.css');
+
+  assert.match(css, /\.teamprofile\{[^}]*font-size:11px/);
+  assert.match(css, /\.profilepart\{[^}]*padding:3px 8px/);
+  assert.match(css, /\.profilepart \.si\{[^}]*width:13px;height:13px/);
+  assert.match(css, /\.profilepart b\{[^}]*font-size:11px/);
+  assert.match(css, /\.comprow>\.copycode\{[^}]*width:30px;height:30px/);
+  assert.match(css, /\.vg\{font-size:12px/);
+});
+
 test('the generated data and checked-in roster are internally consistent', () => {
   const data = JSON.parse(read('web/data.json'));
   const roster = JSON.parse(read('set18-roster.json'));
