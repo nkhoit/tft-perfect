@@ -290,3 +290,5 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 .selc.k3{border-left-color:#4a90d9} .selc.k4{border-left-color:#c061d0}
 .selc.k5{border-left-color:#e0a13a}
 @media(max-width:820px){ .selgrp{flex-direction:column;gap:4px} .sellbl{flex:none} }
+/* traits you can't require (uniques, Rival) shouldn't look clickable */
+.tb.nopin{cursor:default}

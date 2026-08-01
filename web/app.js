@@ -21,6 +21,16 @@ function isUnique(t) {
   return (t.bp || []).length === 1 && (t.bp[0] || 1) <= 1;
 }
 
+// Traits nobody can actually build toward. Uniques are the obvious case, but
+// Rival is the trap: bp [1,1,2] looks like a real trait, yet only KhaZix and
+// Rengar have it and it reads "only active while fielding 1 Rival". Requiring
+// it is requiring a specific unit, so it belongs in the picker, not here.
+// Counting champions catches this without hardcoding a trait name.
+let CHAMPS_PER_TRAIT = {};
+function filterable(t) {
+  return !isUnique(t) && (CHAMPS_PER_TRAIT[t.key] || 0) >= 3;
+}
+
 function styleAt(tr, n) {
   let s = null;
   for (const st of (tr.styles || [])) {
@@ -45,16 +55,20 @@ function loadSet(file) {
   return fetch(file + '?v=' + Date.now()).then(r => r.json()).then(db => {
     DB = db;
     db.champions.forEach(c => state.set(c.key, 0));
+    CHAMPS_PER_TRAIT = {};
+    db.champions.forEach(c => (c.traits || []).forEach(t => {
+      CHAMPS_PER_TRAIT[t] = (CHAMPS_PER_TRAIT[t] || 0) + 1;
+    }));
     const build = String(db.gameBuild || '').split('+')[0];
     // The set dropdown already names the set; don't say it twice. Split the
     // trait count -- 10 of them are 1-unit uniques you can't build around.
-    const nUniq = Object.values(db.traits).filter(isUnique).length;
+    const nUniq = Object.values(db.traits).filter(t => !filterable(t)).length;
     const nTr = Object.keys(db.traits).length;
     $('meta').innerHTML =
       `${db.champions.length} units · ` +
       `<span title="${nTr} total: ${nTr - nUniq} you can build around, ` +
-      `${nUniq} unique (single-champion)">${nTr - nUniq} traits ` +
-      `<i class="u">+${nUniq} unique</i></span>` +
+      `${nUniq} tied to one or two specific champions">${nTr - nUniq} traits ` +
+      `<i class="u">+${nUniq} fixed</i></span>` +
       (db.note ? ` <span class="tag" title="Data build ${build} — ${db.note}">PBE</span>` : '');
     $('pool').innerHTML = ''; $('costs').innerHTML = '';
     buildCosts(); buildPool(); buildEmblemGrid();
@@ -254,8 +268,7 @@ $('sel').addEventListener('click', e => {
 // Only traits with real breakpoints can exist as emblems -- a unique trait
 // belongs to exactly one champion and has no spatula version in game.
 function emblemable() {
-  return Object.values(DB.traits)
-    .filter(t => (t.bp || [1]).length > 1 || (t.bp || [1])[0] > 1)
+  return Object.values(DB.traits).filter(filterable)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -351,7 +364,7 @@ function buildTraitGrid() {
   el.innerHTML = '';
   // Unique traits activate off a single champion, so requiring one is just
   // requiring that unit -- the unit picker already does that better.
-  Object.values(DB.traits).filter(t => !isUnique(t))
+  Object.values(DB.traits).filter(filterable)
     .sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
     const d = document.createElement('div');
     d.className = 'tg';
@@ -566,7 +579,8 @@ function render(m) {
       const mu = muted.has(key) ? ' mut' : '';
       const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} unit(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
       const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
-      return `<span class="tb ${cls}${isEmb}${uq}${mu}${req}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
+      const nop = filterable(t) ? '' : ' nopin';
+      return `<span class="tb ${cls}${isEmb}${uq}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
     }).join('');
 
     const units = r.units.map(i => DB.champions[i])
@@ -612,6 +626,10 @@ $('list').addEventListener('click', (e) => {
   const b = e.target.closest('.tb');
   if (!b || !b.dataset.tk) return;
   const key = b.dataset.tk, n = +b.dataset.tn;
+  // Pinning a trait that has no grid tile strands the requirement: the count
+  // goes up, nothing lights up, and there's no way to clear it. This is how
+  // Rival produced an invisible "1 required" and an empty result set.
+  if (!filterable(DB.traits[key])) return;
   const cur = reqTraits.find(r => r.key === key);
   if (cur && cur.n === n) reqTraits.splice(reqTraits.indexOf(cur), 1);
   else if (cur) cur.n = n;
