@@ -42,6 +42,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Quick, Balanced, and Deep search budgets with one-click refinement.
 - An instant precomputed result for the default landing search.
 - Compact shareable URLs that restore every search control.
+- Discord preview links for featured selected compositions.
 - Named saved searches stored privately on the current device.
 - Sorting by active traits, trait tiers, waste, or board cost.
 - Copyable codes for importing any result into TFT's Team Planner.
@@ -69,6 +70,21 @@ The deployed application is static HTML, CSS, and JavaScript with no runtime
 dependencies or build step. Searches run across Web Workers to keep the UI responsive.
 Complete results are cached in IndexedDB; truncated results stay in the current
 session's memory cache. Local counters are available at `window.TFTSearchMetrics`.
+
+### Discord previews
+
+Selecting multiple comps preserves their display order. The first selected comp
+is featured in Discord previews; use its star action to move another comp to the
+front. **Copy link** emits a managed Azure Function URL that serves Open Graph
+HTML and a generated 1200×630 PNG, then redirects browsers back to the client app.
+Search itself remains entirely client-side.
+
+To run the static app and managed API together locally:
+
+```bash
+npm --prefix api install
+npx @azure/static-web-apps-cli start web --api-location api --func-args "--javascript"
+```
 
 ## Team Planner Codes
 

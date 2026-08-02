@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /api/share/
+Disallow: /api/og/

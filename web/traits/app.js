@@ -31,7 +31,7 @@ const DEVICE_CACHE_LIMIT = 50;
 const DEVICE_CACHE_DB = 'tft-trait-search-cache';
 const DEVICE_CACHE_STORE = 'results';
 const METRICS_KEY = 'tft-search-metrics-v1';
-const SHARE_SCHEMA_VERSION = 1;
+const SHARE_SCHEMA_VERSION = 2;
 const DEFAULT_LEVEL = 8;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SORT = ['live', 'cost'];
@@ -60,13 +60,15 @@ const excludedGroups = new Set();
 let poolView = 'cost';
 
 const { algorithmVersion, antiStack, breakpoints, compSignature, isUnique,
-  mergeSearchResults, scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey,
-  summary, toggleSelection } = SearchUtils;
+  mergeSearchResults, moveSelectionFirst, scoreFloor, scoresAt,
+  scoringBreakpoints, searchCacheKey, summary, toggleSelection } = SearchUtils;
 
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
 let urlSyncGeneration = 0;
 let savedSearches = [], savedSearchesAvailable = true;
+let BOARD_TABLES = null;
+let selectedRestoreNotice = '';
 
 function loadMetrics() {
   const empty = {
@@ -268,6 +270,8 @@ function resetSearchState() {
   $('effort').value = DEFAULT_EFFORT;
   $('search').value = '';
   poolView = 'cost';
+  selectedComps.clear();
+  selectedRestoreNotice = '';
 }
 
 function sharedSearchState() {
@@ -316,11 +320,15 @@ function sharedSearchState() {
   const query = $('search').value.trim();
   if (query) shared.q = query.slice(0, 100);
   if (poolView !== 'cost') shared.g = poolView;
+  if (selectedComps.size) {
+    shared.sel = [...selectedComps.values()].slice(0, 12).map(row =>
+      row.units.map(index => DB.champions[index].key));
+  }
   return shared;
 }
 
 function applySharedSearchState(shared) {
-  if (shared.v !== SHARE_SCHEMA_VERSION) {
+  if (!Number.isInteger(shared.v) || shared.v < 1 || shared.v > SHARE_SCHEMA_VERSION) {
     throw new Error(`Unsupported shared-search version: ${shared.v}`);
   }
   resetSearchState();
@@ -394,6 +402,30 @@ function applySharedSearchState(shared) {
   if (typeof shared.o === 'string' && EFFORTS[shared.o]) $('effort').value = shared.o;
   if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
   if (POOL_VIEWS.has(shared.g)) poolView = shared.g;
+
+  let dropped = 0;
+  const seenSelections = new Set();
+  const mutedIndexes = [...muted].map(key => BOARD_TABLES.traitIndex.get(key))
+    .filter(index => index !== undefined);
+  for (const roster of Array.isArray(shared.sel) ? shared.sel.slice(0, 12) : []) {
+    const validated = BoardScore.validateRoster(DB, BOARD_TABLES, roster, {
+      size: +$('size').value,
+      emblems,
+      muted: mutedIndexes,
+    });
+    if (validated.error) {
+      dropped++;
+      continue;
+    }
+    const signature = compSignature(validated.indexes);
+    if (seenSelections.has(signature)) continue;
+    seenSelections.add(signature);
+    selectedComps.set(signature, validated.row);
+  }
+  if (dropped) {
+    selectedRestoreNotice = `${dropped} invalid selected comp${dropped === 1 ? '' : 's'} ` +
+      `could not be restored.`;
+  }
 }
 
 function refreshSearchControls() {
@@ -419,6 +451,15 @@ async function shareUrl(shared = sharedSearchState()) {
   } else {
     url.searchParams.set('s', await ShareState.encode(shared));
   }
+  return url;
+}
+
+async function previewShareUrl(shared = sharedSearchState()) {
+  const url = new URL(location.href);
+  const token = await ShareState.encode(shared);
+  url.pathname = `/api/share/${token}`;
+  url.search = '';
+  url.hash = '';
   return url;
 }
 
@@ -679,6 +720,7 @@ function loadData() {
     return r.json();
   }).then(async db => {
     DB = db;
+    BOARD_TABLES = BoardScore.tables(DB);
     db.champions.forEach(c => state.set(c.key, 0));
     resetSearchState();
     const build = String(db.gameBuild || '').split('+')[0];
@@ -696,6 +738,7 @@ function loadData() {
     refreshSearchControls();
     dataReady = true;
     renderSavedSearches();
+    renderSelectedComps();
     if (!await showPrecomputedLanding()) run(true);
   }).catch(e => { $('status').textContent = 'data load failed: ' + e; });
 }
@@ -1197,8 +1240,7 @@ $('share').onclick = async () => {
   button.disabled = true;
   let url = null;
   try {
-    url = await shareUrl();
-    history.replaceState(null, '', url);
+    url = await previewShareUrl();
     const copied = () => {
       clearTimeout(button.copyReset);
       button.textContent = 'Copied';
@@ -1791,6 +1833,12 @@ function compCard(r, { selected = false } = {}) {
   const varRows = variantRowsMarkup(r);
 
   const signature = compSignature(r.units);
+  const featured = selected && selectedComps.keys().next().value === signature;
+  const previewButton = selected
+    ? `<button type="button" class="previewcomp" data-sig="${signature}" ` +
+      `aria-pressed="${featured}" data-tip="${featured ? 'Discord preview comp' : 'Use for Discord preview'}" ` +
+      `aria-label="${featured ? 'This comp is featured in the Discord preview' : 'Use this comp for the Discord preview'}">★</button>`
+    : '';
   const pinButton = `<button type="button" class="pincomp" data-sig="${signature}" ` +
     `aria-pressed="${selected}" ` +
     `data-tip="${selected ? 'Remove from selected' : 'Select this comp'}" ` +
@@ -1811,7 +1859,7 @@ function compCard(r, { selected = false } = {}) {
     `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
     `<div class="comprow primary">${units}${varTag}${profile}` +
     `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
-    copyCodeButton(r.units) + pinButton + `</div>` +
+    copyCodeButton(r.units) + previewButton + pinButton + `</div>` +
     varRows;
   return d;
 }
@@ -1932,7 +1980,7 @@ function render(m) {
 function renderSelectedComps() {
   const host = $('selected');
   if (!host) return;
-  if (!selectedComps.size) {
+  if (!selectedComps.size && !selectedRestoreNotice) {
     host.innerHTML = '';
     host.hidden = true;
     return;
@@ -1944,6 +1992,12 @@ function renderSelectedComps() {
   head.innerHTML = `<h2>SELECTED <span class="tag">${selectedComps.size}</span></h2>` +
     `<button type="button" class="clearsel">Clear</button>`;
   frag.appendChild(head);
+  if (selectedRestoreNotice) {
+    const notice = document.createElement('p');
+    notice.className = 'selnotice';
+    notice.textContent = selectedRestoreNotice;
+    frag.appendChild(notice);
+  }
   for (const r of selectedComps.values()) {
     frag.appendChild(compCard(r, { selected: true }));
   }
@@ -1954,6 +2008,11 @@ function renderSelectedComps() {
 // Click any trait badge in the results to pin it as a requirement at that count.
 // Bound to both containers so a selected comp behaves exactly like a result row.
 function onCompClick(e) {
+  const preview = e.target.closest('.previewcomp');
+  if (preview) {
+    if (moveSelectionFirst(selectedComps, preview.dataset.sig)) syncSelectedState();
+    return;
+  }
   // Select / deselect. Held in memory as the whole row, so the pinned card
   // needs no recompute and survives the next search unchanged.
   const pin = e.target.closest('.pincomp');
@@ -1966,6 +2025,7 @@ function onCompClick(e) {
   }
   if (e.target.closest('.clearsel')) {
     selectedComps.clear();
+    selectedRestoreNotice = '';
     syncSelectedState();
     return;
   }
@@ -2039,6 +2099,7 @@ function syncSelectedState() {
       ? 'Remove this comp from the selected section'
       : 'Select this comp and pin it above the results');
   }
+  void syncSearchUrl(searchGeneration);
 }
 
 // Sticky sidebar offset must equal the real header height, or the panel slides

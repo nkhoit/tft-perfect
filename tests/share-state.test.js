@@ -28,6 +28,10 @@ test('share state rejects malformed payloads', async () => {
   await assert.rejects(decode('r' + Buffer.from('[]').toString('base64url')), /invalid/i);
 });
 
+test('checked-in v1 share tokens remain decodable', async () => {
+  assert.deepEqual(await decode('reyJ2IjoxLCJsIjo5fQ'), { v: 1, l: 9 });
+});
+
 test('share state bounds decompressed payloads', async () => {
   const compressed = deflateSync(JSON.stringify({ q: 'x'.repeat(300000) }));
   await assert.rejects(decode('z' + compressed.toString('base64url')), /too large/i);

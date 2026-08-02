@@ -29,5 +29,8 @@
     ".json": "application/json",
     ".wasm": "application/wasm",
     ".js": "text/javascript"
+  },
+  "platform": {
+    "apiRuntime": "node:20"
   }
 }

@@ -24,11 +24,18 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install API dependencies
+        run: |
+          npm --prefix api ci
+          npm --prefix api run sync:traits
+
       - name: Test
         run: npm test
 
       - name: Check JavaScript
-        run: npm run check
+        run: |
+          npm run check
+          npm --prefix api run check
 
       - name: Check Python
         run: |
@@ -50,8 +57,8 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: dist
+          api_location: api
           skip_app_build: true
-          skip_api_build: true
 
   close_pr:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
