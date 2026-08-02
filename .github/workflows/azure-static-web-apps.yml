@@ -25,7 +25,9 @@ jobs:
           node-version: 22
 
       - name: Install API dependencies
-        run: npm --prefix api ci
+        run: |
+          npm --prefix api ci
+          npm --prefix api run sync:traits
 
       - name: Test
         run: npm test
