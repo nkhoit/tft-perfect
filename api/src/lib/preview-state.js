@@ -3,8 +3,11 @@ const crypto = require('node:crypto');
 const BoardScore = require('../../generated/board-score.js');
 const data = require('../../generated/data.json');
 const SearchUtils = require('../../generated/search-utils.js');
+const { PREVIEW_RENDER_SCHEMA } = require('./preview-version.js');
 
 const tables = BoardScore.tables(data);
+const PREVIEW_ROUTE_VERSION = `${PREVIEW_RENDER_SCHEMA}-${
+  crypto.createHash('sha256').update(data.builtAt).digest('base64url').slice(0, 10)}`;
 
 function strings(value, limit) {
   return Array.isArray(value)
@@ -82,14 +85,23 @@ function previewState(state) {
   };
 }
 
-function etag(token) {
-  return '"' + crypto.createHash('sha256')
-    .update(data.builtAt)
-    .update('\0portraits-profile-v1')
+function previewDigest(token) {
+  return crypto.createHash('sha256')
+    .update(PREVIEW_ROUTE_VERSION)
     .update('\0')
     .update(token)
-    .digest('base64url')
-    .slice(0, 24) + '"';
+    .digest('base64url');
 }
 
-module.exports = { data, etag, previewState, tables };
+function etag(token) {
+  return `"${previewDigest(token).slice(0, 24)}"`;
+}
+
+module.exports = {
+  data,
+  etag,
+  PREVIEW_ROUTE_VERSION,
+  previewDigest,
+  previewState,
+  tables,
+};

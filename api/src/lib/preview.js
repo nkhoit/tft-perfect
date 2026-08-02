@@ -1,6 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { PREVIEW_ROUTE_VERSION } = require('./preview-state.js');
+
 const WIDTH = 1200;
 const HEIGHT = 630;
 let rendererPromise = null;
@@ -54,13 +56,13 @@ function previewText(preview) {
   };
 }
 
-function shareDocument(origin, token, preview, sharePath) {
+function shareDocument(origin, token, preview, sharePath, imagePath) {
   const escapedOrigin = escapeHtml(origin);
   const escapedToken = escapeHtml(token);
   const escapedSharePath = escapeHtml(sharePath);
   const text = previewText(preview);
   const appUrl = `${escapedOrigin}/traits/?s=${escapedToken}`;
-  const imageUrl = `${escapedOrigin}/api/og/${escapedToken}`;
+  const imageUrl = `${escapedOrigin}${escapeHtml(imagePath)}`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -88,11 +90,14 @@ function shareDocument(origin, token, preview, sharePath) {
 }
 
 function shareHtml(origin, token, preview) {
-  return shareDocument(origin, token, preview, `/api/share/${token}`);
+  return shareDocument(
+    origin, token, preview, `/api/share/${token}`, `/api/og/${token}`);
 }
 
 function shortShareHtml(origin, id, token, preview) {
-  return shareDocument(origin, token, preview, `/api/s/${id}`);
+  return shareDocument(
+    origin, token, preview, `/api/s/${id}`,
+    `/api/i/${PREVIEW_ROUTE_VERSION}/${id}`);
 }
 
 function portraitSource(champion) {

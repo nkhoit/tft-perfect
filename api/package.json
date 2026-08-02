@@ -7,13 +7,14 @@
     "sync:portraits": "node scripts/sync-portraits.js",
     "sync:traits": "node scripts/sync-traits.js",
     "precheck": "npm run sync:traits",
-    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/functions/short-links.js && node --check src/lib/preview.js && node --check src/lib/preview-state.js && node --check src/lib/share-codec.js && node --check src/lib/short-links.js",
+    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/functions/short-links.js && node --check src/functions/short-image.js && node --check src/lib/preview.js && node --check src/lib/preview-cache.js && node --check src/lib/preview-state.js && node --check src/lib/preview-version.js && node --check src/lib/share-codec.js && node --check src/lib/short-links.js",
     "pretest": "npm run sync:traits",
     "test": "node --test"
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.1",
     "@azure/functions": "^4.7.2",
+    "@azure/storage-blob": "^12.29.0",
     "@fontsource/inter": "^5.2.8",
     "@resvg/resvg-wasm": "^2.6.2",
     "satori": "^0.18.3"

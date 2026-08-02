@@ -79,7 +79,9 @@ comp to the front. **Copy link** emits a managed Azure Function URL that serves 
 HTML and a generated 1200×630 PNG, then redirects browsers back to the client app.
 The API stores validated tokens in Azure Table Storage and returns compact,
 content-addressed links; if storage is unavailable, the client falls back to the
-full stateless token URL. Search itself remains entirely client-side.
+full stateless token URL. Preview PNGs are rendered while creating a short link,
+cached in private Blob Storage, and served through a versioned short image route.
+Search itself remains entirely client-side.
 
 To run the static app and managed API together locally:
 
@@ -95,6 +97,10 @@ Production requires `SHARE_STORAGE_CONNECTION_STRING` and
 `SHARE_STORAGE_TABLE` in the Static Web App application settings. The table must
 already exist. Short-link rows are immutable and retained so shared URLs do not
 expire; `createdAt` is stored for operational cleanup if abuse ever requires it.
+`SHARE_IMAGE_CONTAINER` selects the existing private Blob container used for
+rendered preview images and defaults to `og-cache`. The connection string must
+grant both Table and Blob access. Production expires cached blobs after 90 days;
+an expired image is regenerated on its next request.
 
 ## Team Planner Codes
 
