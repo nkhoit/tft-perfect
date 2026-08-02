@@ -69,6 +69,7 @@ let urlSyncGeneration = 0;
 let savedSearches = [], savedSearchesAvailable = true;
 let BOARD_TABLES = null;
 let selectedRestoreNotice = '';
+let lastShareApiWarmAt = 0;
 
 function loadMetrics() {
   const empty = {
@@ -474,12 +475,31 @@ async function previewShareUrl(shared = sharedSearchState()) {
     if (typeof payload.id !== 'string' || !/^[A-Za-z0-9_-]{12,43}$/.test(payload.id)) {
       throw new Error('Short-link service returned an invalid ID.');
     }
+    if (payload.prewarm !== `/api/prewarm/${payload.id}`) {
+      throw new Error('Short-link service returned an invalid prewarm path.');
+    }
     url.pathname = `/api/s/${payload.id}`;
+    void fetch(payload.prewarm, {
+      method: 'POST',
+      keepalive: true,
+    }).catch(error => console.warn('Could not prewarm the Discord preview.', error));
     return url;
   } catch (error) {
     console.warn('Falling back to the stateless share URL.', error);
     return url;
   }
+}
+
+function warmShareApi() {
+  const now = Date.now();
+  if (now - lastShareApiWarmAt < 5 * 60 * 1000) return;
+  lastShareApiWarmAt = now;
+  void fetch('/api/ready', { cache: 'no-store' }).then(response => {
+    if (!response.ok) throw new Error(`Share API returned HTTP ${response.status}.`);
+  }).catch(error => {
+    lastShareApiWarmAt = 0;
+    console.warn('Could not warm the share API.', error);
+  });
 }
 
 async function syncSearchUrl(generation) {
@@ -756,6 +776,7 @@ function loadData() {
     await restoreSharedSearch();
     refreshSearchControls();
     dataReady = true;
+    warmShareApi();
     renderSavedSearches();
     renderSelectedComps();
     if (!await showPrecomputedLanding()) run(true);
@@ -2111,6 +2132,7 @@ $('selected').addEventListener('click', onCompClick);
 // row, without rebuilding the whole results list.
 function syncSelectedState() {
   renderSelectedComps();
+  if (selectedComps.size) warmShareApi();
   for (const card of $('list').querySelectorAll('.comp[data-sig]')) {
     const on = selectedComps.has(card.dataset.sig);
     card.classList.toggle('selected', on);

@@ -7,7 +7,7 @@
     "sync:portraits": "node scripts/sync-portraits.js",
     "sync:traits": "node scripts/sync-traits.js",
     "precheck": "npm run sync:traits",
-    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/functions/short-links.js && node --check src/functions/short-image.js && node --check src/lib/preview.js && node --check src/lib/preview-cache.js && node --check src/lib/preview-state.js && node --check src/lib/preview-version.js && node --check src/lib/share-codec.js && node --check src/lib/short-links.js",
+    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/functions/short-links.js && node --check src/functions/short-image.js && node --check src/functions/prewarm.js && node --check src/functions/ready.js && node --check src/lib/preview.js && node --check src/lib/preview-cache.js && node --check src/lib/preview-state.js && node --check src/lib/preview-version.js && node --check src/lib/share-codec.js && node --check src/lib/short-links.js",
     "pretest": "npm run sync:traits",
     "test": "node --test"
   },

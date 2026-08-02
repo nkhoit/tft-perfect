@@ -1,10 +1,6 @@
 const { app } = require('@azure/functions');
 
 const { publicOrigin, shortShareHtml } = require('../lib/preview.js');
-const {
-  cachedPreviewPng,
-  shortPreviewCacheKey,
-} = require('../lib/preview-cache.js');
 const { previewState } = require('../lib/preview-state.js');
 const { decodeToken, validToken } = require('../lib/share-codec.js');
 const {
@@ -15,8 +11,6 @@ const {
   validShortId,
 } = require('../lib/short-links.js');
 
-const PREWARM_TIMEOUT_MS = 3000;
-
 function text(status, body) {
   return {
     status,
@@ -25,7 +19,7 @@ function text(status, body) {
   };
 }
 
-async function shortenHandler(request, context, store, imageOptions = {}) {
+async function shortenHandler(request, context, store) {
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
     return text(415, 'Short-link requests must use JSON.');
   }
@@ -52,9 +46,8 @@ async function shortenHandler(request, context, store, imageOptions = {}) {
       || !validToken(payload.token)) {
     return text(400, 'Invalid shared composition.');
   }
-  let state;
   try {
-    state = decodeToken(payload.token);
+    decodeToken(payload.token);
   } catch {
     return text(400, 'Invalid shared composition.');
   }
@@ -66,31 +59,6 @@ async function shortenHandler(request, context, store, imageOptions = {}) {
     context.error('Could not persist short link.', error);
     return text(503, 'Short links are temporarily unavailable.');
   }
-  try {
-    const { prewarmTimeoutMs = PREWARM_TIMEOUT_MS, ...cacheOptions } = imageOptions;
-    let timer;
-    let ready;
-    try {
-      ready = await Promise.race([
-        cachedPreviewPng(payload.token, previewState(state), {
-          ...cacheOptions,
-          key: shortPreviewCacheKey(saved.id),
-          onCacheError(error) {
-            cacheOptions.onCacheError?.(error);
-            context.warn?.('Preview image cache unavailable during prewarm.', error);
-          },
-        }).then(() => true),
-        new Promise(resolve => {
-          timer = setTimeout(() => resolve(false), prewarmTimeoutMs);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!ready) context.warn?.('Preview image prewarm timed out.');
-  } catch (error) {
-    context.warn?.('Could not prewarm preview image.', error);
-  }
   return {
     status: saved.created ? 201 : 200,
     headers: {
@@ -99,6 +67,7 @@ async function shortenHandler(request, context, store, imageOptions = {}) {
     },
     body: JSON.stringify({
       id: saved.id,
+      prewarm: `/api/prewarm/${saved.id}`,
       url: `${publicOrigin(request)}/api/s/${saved.id}`,
     }),
   };

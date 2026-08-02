@@ -11,8 +11,6 @@ const {
   shortenHandler,
   shortShareHandler,
 } = require('../src/functions/short-links.js');
-const { shortImageHandler } = require('../src/functions/short-image.js');
-const { clearMemoryCache } = require('../src/lib/preview-cache.js');
 const { PREVIEW_ROUTE_VERSION } = require('../src/lib/preview-state.js');
 
 const token = state => 'r' + Buffer.from(JSON.stringify(state)).toString('base64url');
@@ -151,8 +149,9 @@ test('shorten endpoint validates and stores share tokens', async () => {
   assert.equal(result.status, 201);
   assert.equal(result.headers['cache-control'], 'no-store');
   assert.match(payload.id, /^[A-Za-z0-9_-]{12}$/);
-  assert.equal(images.renders, 1);
-  assert.equal(images.store.rows.size, 1);
+  assert.equal(images.renders, 0);
+  assert.equal(images.store.rows.size, 0);
+  assert.equal(payload.prewarm, `/api/prewarm/${payload.id}`);
 });
 
 test('short share endpoint serves metadata and restores the long token', async () => {
@@ -170,29 +169,6 @@ test('short share endpoint serves metadata and restores the long token', async (
   assert.doesNotMatch(result.body, new RegExp(`api\\/og\\/${selectedToken}`));
   assert.match(result.body, new RegExp(`location\\.replace\\("\\/traits\\/\\?s=${selectedToken}"\\)`));
   assert.match(result.body, /Shen, Teemo/);
-});
-
-test('short image route reuses the image persisted during prewarm', async () => {
-  clearMemoryCache();
-  const shares = memoryStore();
-  const images = imageOptions();
-  const created = await shortenHandler(request({
-    method: 'POST',
-    body: { token: selectedToken },
-  }), context, shares, images);
-  const { id } = JSON.parse(created.body);
-  clearMemoryCache();
-
-  const image = await shortImageHandler({
-    method: 'GET',
-    params: { version: PREVIEW_ROUTE_VERSION, id },
-    headers: new Headers(),
-  }, context, shares, images);
-
-  assert.equal(image.status, 200);
-  assert.equal(images.renders, 1);
-  assert.equal(images.gets, 2);
-  assert.equal(Buffer.from(image.body).toString(), 'PNG body');
 });
 
 test('short-link endpoints reject invalid and missing records', async () => {

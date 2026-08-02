@@ -79,9 +79,11 @@ comp to the front. **Copy link** emits a managed Azure Function URL that serves 
 HTML and a generated 1200×630 PNG, then redirects browsers back to the client app.
 The API stores validated tokens in Azure Table Storage and returns compact,
 content-addressed links; if storage is unavailable, the client falls back to the
-full stateless token URL. Preview PNGs are rendered while creating a short link,
-cached in private Blob Storage, and served through a versioned short image route.
-Search itself remains entirely client-side.
+full stateless token URL. After copying, the browser starts a separate preview
+prewarm request without waiting for it. PNGs are cached in private Blob Storage
+and served through a versioned short image route. Blob leases ensure concurrent
+prewarm and Discord requests share one render. Search itself remains entirely
+client-side.
 
 To run the static app and managed API together locally:
 
