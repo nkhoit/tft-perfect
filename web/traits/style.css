@@ -461,3 +461,14 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
   border-right:1px solid var(--edge)}
 .kit span{color:var(--acc)}
 .kit:hover{color:var(--txt)}
+
+/* Optimality badge. Deliberately louder than the "incomplete" warning: the
+   whole point of the solver is that users can trust a result at a glance. */
+.opt{color:var(--acc);font-weight:700}
+.tag.ok{background:rgba(74,222,128,.14);border-color:rgba(74,222,128,.45);
+  color:var(--acc)}
+/* interim state: proven boards are up, the wider search is still filling in */
+.more{color:var(--dim)}
+.more::after{content:'';display:inline-block;width:6px;height:6px;margin-left:5px;
+  border-radius:50%;background:var(--acc2);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}

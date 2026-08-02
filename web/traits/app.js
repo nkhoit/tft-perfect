@@ -3,6 +3,11 @@ let DB = null, W = [], dataReady = false, workersReady = false;
 let reqId = 0, pending = false, workerEpoch = 0, searchGeneration = 0;
 let inbox = [];                   // shard results for the in-flight request
 let debounceTimer = null, queuedDispatch = null, activeSearch = null;
+// The MILP solver runs beside the DFS shards. It proves the ceiling in a few
+// hundred ms where the DFS needs tens of seconds and usually gives up first, so
+// its row is what makes a result trustworthy rather than merely plausible.
+let solverWorker = null, solverReady = false, solverInbox = null;
+let solverBroken = false;
 // One worker per core, minus one so the UI thread keeps a lane. Capped at 8:
 // past that the merge cost outweighs the split on this search size.
 const NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
@@ -564,8 +569,38 @@ function stopWorkers(cancellation = false) {
   queuedDispatch = null;
   pending = false;
   inbox = [];
+  solverInbox = null;
   activeSearch = null;
   reqId++;
+  // The solver worker is deliberately NOT terminated here: booting it means
+  // re-fetching and re-instantiating ~3MB of wasm, which costs far more than
+  // letting a stale solve finish and be discarded by its request id.
+}
+
+// Lazily spin up the MILP solver. Failures are non-fatal by design — if the
+// wasm can't load (old browser, blocked fetch, OOM) the DFS still answers, we
+// just lose the optimality proof.
+function ensureSolver() {
+  if (solverBroken || solverWorker) return;
+  try {
+    solverWorker = new Worker('solver-worker.js');
+  } catch (err) {
+    solverBroken = true;
+    return;
+  }
+  solverWorker.onmessage = event => {
+    const message = event.data;
+    if (message.type === 'ready') { solverReady = true; return; }
+    if (message.type === 'solver') onSolver(message);
+  };
+  solverWorker.onerror = () => {
+    solverBroken = true;
+    solverReady = false;
+    if (solverWorker) { solverWorker.terminate(); solverWorker = null; }
+    // A search waiting only on the solver must not hang forever.
+    if (pending && activeSearch && inbox.length >= W.length) finishSearch();
+  };
+  solverWorker.postMessage({ type: 'init', db: DB });
 }
 
 function ensureWorkers(count, callback) {
@@ -651,27 +686,89 @@ function onWorker(e) {
   if (m.id !== reqId) return;            // stale shard from a superseded search
   inbox.push(m);
   if (inbox.length < W.length) return;   // still waiting on other shards
+  finishSearch();
+}
+
+function onSolver(m) {
+  if (m.id !== reqId) return;            // stale solve from a superseded search
+  // A partial is an early proof, not a completed solve: render it, but keep
+  // waiting for the real message or the search would finish holding one board.
+  if (m.partial) {
+    if (pending && activeSearch && m.rows && m.rows.length) renderPartialSolver(m);
+    return;
+  }
+  solverInbox = m;
+  if (!pending || !activeSearch) return;
+  if (inbox.length >= W.length) { finishSearch(); return; }
+  // The DFS is still grinding, but the solver has already proved the ceiling.
+  // Show it now — waiting means staring at "searching…" for another ten seconds
+  // to receive rows we can already prove are no better.
+  if (m.rows && m.rows.length && !m.error) renderPartialSolver(m);
+}
+
+// Interim render: proven boards only, clearly marked as still filling in.
+function renderPartialSolver(solver) {
+  const search = activeSearch;
+  if (!search) return;
+  const merged = mergeSearchResults(
+    [{
+      rows: solver.rows, total: 0, ms: solver.ms,
+      nodes: 0, truncated: false, capped: false, stopReason: null,
+    }],
+    search.opts.sortMode, search.opts.sortMode2);
+  merged.effort = search.opts.effort;
+  merged.proved = !!solver.proved;
+  merged.partial = true;
+  render(merged);
+}
+
+// Both engines are in. Combine and render.
+//
+// The solver contributes proven-optimal boards; the DFS contributes volume.
+// mergeSearchResults() dedupes by trait signature and keeps the best roster per
+// signature, so overlapping boards collapse correctly rather than double-count.
+function finishSearch() {
+  const search = activeSearch;
+  if (!search) return;
+  // Wait for the solver unless it is unavailable or already reported.
+  const solverPending = !solverBroken && solverWorker && solverInbox === null;
+  if (solverPending) return;
 
   pending = false;
   const parts = inbox; inbox = [];
+  const solver = solverInbox; solverInbox = null;
+  activeSearch = null;
+
   const err = parts.find(p => p.error);
   if (err) {
-    activeSearch = null;
     render({ error: err.error });
     return;
   }
 
-  const search = activeSearch;
-  if (!search) return;
+  const solverRows = (solver && !solver.error && solver.rows) ? solver.rows : [];
+  // The synthetic part mimics a shard so mergeSearchResults() can treat both
+  // engines uniformly. total:0 keeps the "boards examined" figure honest —
+  // the solver proves rather than enumerates, so it counts no nodes.
+  const solverPart = {
+    rows: solverRows, total: 0, ms: solver ? solver.ms : 0,
+    nodes: 0, truncated: false, capped: false, stopReason: null,
+  };
   const merged = mergeSearchResults(
-    parts, search.opts.sortMode, search.opts.sortMode2);
+    solverRows.length ? [...parts, solverPart] : parts,
+    search.opts.sortMode, search.opts.sortMode2);
   merged.effort = search.opts.effort;
-  activeSearch = null;
+  // `proved` means the solver ran to optimality on this exact query, so the top
+  // row is the best board that exists — not merely the best one we stumbled on.
+  merged.proved = !!(solver && solver.proved);
+  merged.solverMs = solver ? solver.ms : null;
+  if (solver && solver.error) merged.solverError = solver.error;
+
   recordMetric('workerMs', merged.ms);
   recordMetric('workerNodes', merged.nodes);
   if (merged.truncated) recordMetric('truncated');
   if (merged.stopReason === 'time') recordMetric('timeStops');
   else if (merged.stopReason === 'nodes') recordMetric('nodeStops');
+  if (merged.proved) recordMetric('proved');
   memoryCacheSet(search.key, merged);
   void deviceCacheSet(search.key, merged);
   render(merged);
@@ -1361,6 +1458,11 @@ function buildSearchOptions() {
     effort,
     timeBudgetMs: settings.timeBudgetMs,
     limit: 100, uniq: true,
+    // The solver's cost is superlinear in rows returned (each no-good cut makes
+    // the next solve harder), so we ask it for a small proven frontier and let
+    // the DFS supply the tail. Measured: row 1 ~100-400ms, row 8 ~1-2s.
+    solverRows: 8,
+    solverBudgetMs: settings.timeBudgetMs ? Math.max(1500, settings.timeBudgetMs) : 5000,
     // Each shard's top 100 unique signatures are sufficient to recover the
     // global top 100; retained signatures carry their best found alternates.
     returnN: 100,
@@ -1372,12 +1474,17 @@ function dispatchSearch(generation, opts, key) {
   if (generation !== searchGeneration || !workersReady) return;
   pending = true;
   inbox = [];
+  solverInbox = null;
   $('status').textContent = 'searching…';
   const id = ++reqId;
   activeSearch = { generation, key, opts };
   recordMetric('workerRuns');
   W.forEach((worker, shard) =>
     worker.postMessage({ type: 'search', id, opts: { ...opts, shard } }));
+  ensureSolver();
+  if (solverWorker && !solverBroken) {
+    solverWorker.postMessage({ type: 'search', id, opts });
+  }
 }
 
 async function executeSearch(generation) {

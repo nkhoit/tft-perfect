@@ -1,0 +1,168 @@
+// solver-worker.js — proves the optimum with a MILP solver (HiGHS via WASM).
+//
+// Runs alongside the DFS shards in worker.js. The DFS is good at enumerating
+// many boards but its bounds are too loose to prove optimality inside a user's
+// patience; HiGHS proves the ceiling in ~100-400ms. We emit rows in the exact
+// shape worker.js emits so mergeSearchResults() can combine them blindly.
+//
+// The WASM payload is ~1.1MB gzipped and is fetched only when a search actually
+// runs, so the landing path is unaffected.
+
+importScripts('search-utils.js', 'lp-model.js', 'vendor/highs.js');
+
+let DB = null;
+let TABLES = null;
+let highsPromise = null;
+
+// Module is the Emscripten factory from vendor/highs.js.
+function loadHighs() {
+  if (!highsPromise) {
+    highsPromise = Module({
+      // The worker's base URL is /traits/, so the wasm sits under vendor/.
+      locateFile: file => (file.endsWith('.wasm') ? 'vendor/' + file : file),
+    });
+  }
+  return highsPromise;
+}
+
+// Score a roster with the same rules worker.js uses in evaluate(), so a solver
+// row and a DFS row for the same board are byte-for-byte comparable.
+function scoreRoster(roster, emblems, muted) {
+  const traitKeys = TABLES.traitKeys;
+  const nT = traitKeys.length;
+  const counts = new Int32Array(nT);
+  for (const emblem of emblems || []) {
+    const t = typeof emblem === 'string' ? TABLES.traitIndex.get(emblem) : emblem;
+    if (t >= 0 && t < nT) counts[t]++;
+  }
+  let gold = 0, usedSlots = 0;
+  for (const c of roster) {
+    gold += TABLES.cost[c] * 3;
+    usedSlots += TABLES.slots[c];
+    for (const [t, p] of TABLES.points[c]) counts[t] += p;
+  }
+
+  const mutedSet = new Set(muted || []);
+  let live = 0, uniqN = 0, waste = 0, tierSum = 0;
+  const active = [], dead = [], over = [];
+  let signature = '';
+  for (let t = 0; t < nT; t++) {
+    const count = counts[t];
+    if (!count) continue;
+    signature += (signature ? '|' : '') + `${t}:${count}`;
+    const bp = TABLES.bps[t];
+    let reached = 0, tier = -1;
+    for (let j = 0; j < bp.length; j++) {
+      if (count >= bp[j]) { reached = bp[j]; tier = j; }
+    }
+    const wasted = count - reached;
+    if (wasted) {
+      if (!mutedSet.has(t)) waste += wasted;
+      if (tier >= 0) over.push([t, wasted]); else dead.push([t, count]);
+    }
+    if (tier >= 0) {
+      active.push([t, count, tier]);
+      const floor = TABLES.floors[t];
+      if (floor === null) uniqN++;
+      else if (!mutedSet.has(t) && count >= floor) { live++; tierSum += tier + 1; }
+    }
+  }
+  const dim = t => (TABLES.floors[t] === null || mutedSet.has(t)
+    || counts[t] < TABLES.floors[t]) ? 1 : 0;
+  active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
+  return {
+    units: roster.slice(), active, dead, over,
+    live, uniqN, waste, tierSum, gold, slots: usedSlots, signature,
+  };
+}
+
+async function solve(opts, onProgress) {
+  const highs = await loadHighs();
+  const started = performance.now();
+  const budget = Number.isFinite(opts.solverBudgetMs) && opts.solverBudgetMs > 0
+    ? opts.solverBudgetMs
+    : 3000;
+  const want = Math.max(1, opts.solverRows || 8);
+
+  const rows = [];
+  const seenSignature = new Set();
+  let proved = false;          // did we prove the top row optimal?
+  let infeasible = true;
+
+  // Each team-size bonus is a separate model; solve them in order and keep the
+  // best. Enumerating is safe because there is only a handful of bonus values.
+  for (const bonus of LpModel.bonusOptions(TABLES)) {
+    if (performance.now() - started > budget) break;
+    const cuts = [];
+    for (let i = 0; i < want; i++) {
+      if (performance.now() - started > budget) break;
+      const built = LpModel.buildLP(DB, {
+        ...opts, bonus, cuts, tables: TABLES,
+      });
+      if (!built) break;
+      let solution;
+      try {
+        solution = highs.solve(built.lp, {
+          output_flag: false,
+          time_limit: Math.max(0.25, (budget - (performance.now() - started)) / 1000),
+          mip_rel_gap: 0,
+        });
+      } catch (err) {
+        // A malformed model or an OOM must not kill the DFS results.
+        return { rows, proved: false, error: String(err && err.message || err) };
+      }
+      if (!solution || solution.Status !== 'Optimal') break;
+      infeasible = false;
+      const roster = LpModel.rosterOf(solution);
+      if (!roster.length) break;
+      const row = scoreRoster(roster, opts.emblems, opts.muted);
+      // The model enforces the waste cap, but re-check with the shipped scoring
+      // rules: if these ever disagree the DFS answer must win, not ours.
+      if (row.waste > opts.maxWaste) break;
+      if (i === 0 && bonus === LpModel.bonusOptions(TABLES)[0]) proved = true;
+      if (!seenSignature.has(row.signature)) {
+        seenSignature.add(row.signature);
+        rows.push(row);
+        // Publish the proven optimum the moment it exists. Enumerating the next
+        // seven boards costs seconds (each no-good cut makes the following solve
+        // harder) and none of them can beat this one, so making the user wait
+        // for them before seeing anything is pure latency.
+        if (rows.length === 1 && proved && onProgress) onProgress(rows.slice());
+      }
+      cuts.push(roster);
+    }
+  }
+
+  return { rows, proved: proved && rows.length > 0, infeasible: infeasible && !rows.length };
+}
+
+onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'init') {
+    DB = m.db;
+    TABLES = LpModel.tables(DB);
+    postMessage({ type: 'ready' });
+    return;
+  }
+  if (m.type === 'search') {
+    const t0 = performance.now();
+    let result;
+    try {
+      result = await solve(m.opts, rows => {
+        // Interim proof — the app can render this while we keep enumerating.
+        postMessage({
+          type: 'solver', id: m.id, partial: true, proved: true, rows,
+          ms: Math.round(performance.now() - t0),
+        });
+      });
+    } catch (err) {
+      result = { rows: [], proved: false, error: String(err && err.message || err) };
+    }
+    postMessage({
+      type: 'solver',
+      id: m.id,
+      ms: Math.round(performance.now() - t0),
+      ...result,
+    });
+  }
+};

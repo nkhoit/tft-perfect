@@ -3,7 +3,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  const ALGORITHM_VERSION = 'weighted-v4-effort';
+  // Bumped for the MILP hybrid: cached rows from the DFS-only era lack the
+  // optimality proof, so they must not satisfy a new-format query.
+  const ALGORITHM_VERSION = 'milp-hybrid-v5';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -139,19 +141,43 @@
         : result.cached === 'precomputed'
           ? 'Loaded from the precomputed landing result. '
           : '';
+    // `proved` is the important signal: the MILP solver ran this exact query to
+    // optimality, so the top board is the best that exists. Without it the DFS
+    // may simply have run out of budget, which used to look identical to
+    // success — the single most misleading thing this UI could do.
+    const proved = !!result.proved;
+    // A partial render shows only the proven frontier while the wider search
+    // still runs. Say so, or the board count looks like the search failed.
+    const partial = !!result.partial;
+    const provedBadge = '<span class="opt" title="A constraint solver proved this '
+      + 'is the highest-scoring board for these settings — not just the best one found '
+      + 'before the search ran out of budget.">optimal</span>';
     const statusHtml = effort + (result.cached
-      ? `<span class="hit">cached</span>` +
-        (result.truncated ? ' · <span class="cut">incomplete</span>' : '')
-      : result.truncated
-        ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
-        : `searched in ${seconds}s`);
-    const countHtml = `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
-      (result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
-    const title = cachedTitle + (result.truncated
-      ? result.stopReason === 'time'
-        ? 'Search reached its time budget. These are the best boards found, but unseen boards may rank higher.'
-        : 'Search hit its node limit. These are the best boards found, but unseen boards may rank higher.'
-      : 'Search completed without hitting its node limit. The scored count is a lower bound because noncompetitive branches are skipped.');
+      ? `<span class="hit">cached</span>`
+        + (proved ? ' · ' + provedBadge : '')
+        + (!proved && result.truncated ? ' · <span class="cut">incomplete</span>' : '')
+      : partial
+        ? (proved ? provedBadge + ' · ' : '') + '<span class="more">finding more…</span>'
+        : proved
+          ? `${provedBadge} · ${seconds}s`
+          : result.truncated
+            ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
+            : `searched in ${seconds}s`);
+    const countHtml = partial
+      ? `best <b>${result.rows.length}</b> proved so far`
+      : `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
+        (proved
+          ? ' <span class="tag ok">optimal</span>'
+          : result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
+    const title = cachedTitle + (partial
+      ? 'Showing solver-proved boards while the wider search fills in the rest.'
+      : proved
+        ? 'The top board is provably the best for these settings. Lower-ranked boards come from the wider search and may be incomplete.'
+        : result.truncated
+          ? result.stopReason === 'time'
+            ? 'Search reached its time budget. These are the best boards found, but unseen boards may rank higher.'
+            : 'Search hit its node limit. These are the best boards found, but unseen boards may rank higher.'
+          : 'Search completed without hitting its node limit. The scored count is a lower bound because noncompetitive branches are skipped.');
     return { statusHtml, countHtml, title };
   }
 
