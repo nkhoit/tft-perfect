@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { isMainThread, parentPort, workerData, Worker } = require('node:worker_threads');
 
 const ROOT = __dirname;
-const WEB = path.join(ROOT, 'web');
+const WEB = path.join(ROOT, 'web', 'traits');
 const SHARDS = 8;
 
 function options(db, shard) {
@@ -67,7 +67,7 @@ async function main() {
   const dataPath = path.resolve(argument('--data', path.join(WEB, 'data.json')));
   const outputPath = path.resolve(argument('--out', path.join(WEB, 'precomputed-default.json')));
   const db = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-  const SearchUtils = require('./web/search-utils.js');
+  const SearchUtils = require('./web/traits/search-utils.js');
   const parts = await Promise.all(Array.from({ length: SHARDS }, (_, shard) =>
     new Promise((resolve, reject) => {
       const worker = new Worker(__filename, {

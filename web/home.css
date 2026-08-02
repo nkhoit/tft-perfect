@@ -1,0 +1,69 @@
+/* landing page only — tools bring their own sheet. tokens.css loads first. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--font);
+  font-size:14px;line-height:1.5;
+  /* faint glow behind the hero so the flat dark doesn't read as unstyled */
+  background-image:radial-gradient(900px 420px at 50% -140px,rgba(74,222,128,.10),transparent 70%);
+  background-repeat:no-repeat}
+
+/* nav ------------------------------------------------------------------ */
+.nav{display:flex;align-items:center;gap:12px;padding:10px 16px;
+  background:var(--panel);border-bottom:1px solid var(--edge);
+  position:sticky;top:0;z-index:20}
+.brand{font-size:16px;font-weight:700;letter-spacing:.06em;
+  color:var(--txt);text-decoration:none}
+.brand span{color:var(--acc)}
+.spacer{flex:1}
+.setname{font-size:12px;color:var(--dim)}
+
+main{max-width:900px;margin:0 auto;padding:0 16px}
+
+/* hero ----------------------------------------------------------------- */
+.hero{padding:72px 0 56px;text-align:center}
+.hero h1{margin:0;font-size:38px;line-height:1.18;font-weight:800;
+  letter-spacing:-.02em}
+.hero h1 em{font-style:normal;color:var(--acc)}
+.sub{margin:16px auto 0;max-width:480px;color:var(--dim);font-size:15px}
+.cta{display:inline-block;margin-top:28px;padding:11px 20px;
+  background:var(--acc);color:#08150d;font-weight:700;font-size:14px;
+  border-radius:8px;text-decoration:none;
+  transition:transform .12s ease,box-shadow .12s ease}
+.cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(74,222,128,.22)}
+
+/* tools ---------------------------------------------------------------- */
+.tools{padding-bottom:64px}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--dim);margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+
+.card{display:block;background:var(--panel);border:1px solid var(--edge);
+  border-radius:10px;padding:16px;color:var(--txt);text-decoration:none;
+  transition:border-color .12s ease,transform .12s ease}
+a.card:hover{border-color:var(--acc2);transform:translateY(-2px)}
+.card.soon{opacity:.6}
+.cardtop{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.name{font-size:15px;font-weight:700}
+.card p{margin:0;color:var(--dim);font-size:13px}
+
+.pill{margin-left:auto;font-size:10px;text-transform:uppercase;
+  letter-spacing:.06em;padding:2px 8px;border-radius:10px;
+  background:var(--panel2);border:1px solid var(--edge);color:var(--dim)}
+.pill.live{color:var(--acc);border-color:rgba(74,222,128,.4)}
+
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.tags span{font-size:10px;color:var(--dim);background:var(--panel2);
+  border:1px solid var(--edge);border-radius:4px;padding:2px 7px}
+
+/* footer --------------------------------------------------------------- */
+footer{border-top:1px solid var(--edge);padding:20px 16px 36px;
+  text-align:center;color:var(--dim);font-size:11px}
+footer a{color:var(--dim)}
+footer a:hover{color:var(--acc2)}
+.dot{margin:0 6px;opacity:.5}
+.fine{display:block;margin-top:10px;opacity:.7;max-width:520px;
+  margin-left:auto;margin-right:auto;line-height:1.5}
+
+@media(max-width:560px){
+  .hero{padding:48px 0 40px}
+  .hero h1{font-size:29px}
+}

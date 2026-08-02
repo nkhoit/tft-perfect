@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { deflateSync } = require('node:zlib');
 const test = require('node:test');
 
-const { decode, encode } = require('../web/share-state.js');
+const { decode, encode } = require('../web/traits/share-state.js');
 
 test('share state round-trips through a URL-safe token', async () => {
   const state = {

@@ -3,145 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TFT Trait Explorer</title>
-<link rel="stylesheet" href="style.css">
+<title>TFTKIT — Teamfight Tactics tools</title>
+<meta name="description" content="A small kit of Teamfight Tactics tools. Trait solving, board building, no account required.">
+<meta property="og:title" content="TFTKIT">
+<meta property="og:description" content="A small kit of Teamfight Tactics tools.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tftkit.com/">
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="/home.css">
 </head>
 <body>
-<header>
-  <h1>TFT Trait <span class="beta">Explorer</span></h1>
-  <span class="setname">Set 18 · Enchanted Wilds</span>
-  <div class="meta" id="meta">loading…</div>
+
+<header class="nav">
+  <a class="brand" href="/">TFT<span>KIT</span></a>
   <div class="spacer"></div>
-  <div class="status" id="status"></div>
+  <span class="setname">Set 18 · Enchanted Wilds</span>
 </header>
 
-<div class="wrap">
-  <aside class="side">
-    <section>
-      <h2>Level <i class="q" tabindex="0" data-tip="Your level sets base team size.
-Some units consume two slots, and traits can increase the limit.">?</i></h2>
-      <div class="slider">
-        <input type="range" id="size" min="2" max="10" value="8"
-          title="Your level sets base team size. Some units and traits modify the final capacity.">
-        <output id="sizeV">8</output>
-      </div>
-    </section>
+<main>
+  <section class="hero">
+    <h1>Tools for people who<br><em>overthink their board.</em></h1>
+    <p class="sub">
+      A small kit of Teamfight Tactics utilities. No account, no ads,
+      no telemetry — everything runs in your browser.
+    </p>
+    <a class="cta" href="/traits/">Open Trait Explorer &rarr;</a>
+  </section>
 
-    <section>
-      <h2>Wasted trait slots allowed <i class="q" tabindex="0" data-tip="Trait slots that aren't paying off. 0 = perfect boards only.
-Counted per trait, not per unit: 2/3 Sprykin = 2 wasted.">?</i></h2>
-      <div class="slider">
-        <input type="range" id="waste" min="0" max="10" value="10"
-          title="Counted per trait, not per unit — a unit overshooting one trait still counts toward its others.&#10;2/3 Sprykin = 2 wasted · 4/5 Riftbeast = 1 wasted">
-        <output id="wasteV">10</output>
-      </div>
-    </section>
+  <section class="tools">
+    <h2>The kit</h2>
+    <div class="grid">
 
-    <section>
-      <h2>Require traits <span class="tag" id="reqTN">0</span> <i class="q" tabindex="0" data-tip="Click to require · again for the next tier.
-Right click to mute: still shown on boards, but scores nothing.
-Unique traits are excluded — require the unit instead.">?</i></h2>
-      <div class="tgrid" id="traitGrid"></div>
-    </section>
-
-    <section>
-      <h2>Cost filter <i class="q" tabindex="0" data-tip="Which unit costs the search may draw from. Required units are always allowed.">?</i></h2>
-      <div class="costs" id="costs"></div>
-      <div class="groupex" id="groupExclusions" hidden>
-        <span class="groupexlbl">Special exclusions</span>
-        <div id="groupExclusionList"></div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Sort <i class="q" tabindex="0" data-tip="Board cost assumes every unit at 2★ (3 copies each).">?</i></h2>
-      <select id="sort">
-        <option value="live">Most active traits</option>
-        <option value="tier">Highest trait tiers</option>
-        <option value="waste">Fewest wasted</option>
-        <option value="cost">Cheapest board</option>
-        <option value="rich">Most expensive board</option>
-      </select>
-      <label class="sub">then by
-        <select id="sort2">
-          <option value="cost">Cheapest board</option>
-          <option value="rich">Most expensive board</option>
-          <option value="waste">Fewest wasted</option>
-          <option value="tier">Highest trait tiers</option>
-          <option value="live">Most active traits</option>
-        </select>
-      </label>
-    </section>
-
-    <section>
-      <h2>Emblems <span class="tag" id="embN">0</span> <i class="q" tabindex="0" data-tip="Each emblem adds a free trait point without using a unit slot.
-Click to add · right click to remove one.
-Built for the Trait Tree encounter.">?</i></h2>
-      <div class="tgrid" id="embGrid"></div>
-    </section>
-
-    <section>
-      <h2>Search effort <i class="q" tabindex="0" data-tip="Quick returns approximate boards in about a second.
-Balanced searches longer with more workers.
-Deep uses the full search budget.">?</i></h2>
-      <div class="effortctl">
-        <select id="effort">
-          <option value="quick">Quick</option>
-          <option value="balanced">Balanced</option>
-          <option value="deep" selected>Deep</option>
-        </select>
-        <button id="refine" type="button" disabled>Refine</button>
-      </div>
-    </section>
-  </aside>
-
-  <main class="main">
-    <div class="picker">
-      <div class="pickhead">
-        <h2>Units <span class="tag" id="pickN">0 required · 0 excluded</span> <i class="q" tabindex="0" data-tip="Left click to require · right click to exclude · click again to clear.">?</i></h2>
-        <div class="pooltabs" role="tablist" aria-label="Group units by">
-          <button class="active" id="poolViewCost" type="button" role="tab"
-            aria-selected="true">Cost</button>
-          <button id="poolViewOrigin" type="button" role="tab"
-            aria-selected="false">Origin</button>
-          <button id="poolViewClass" type="button" role="tab"
-            aria-selected="false">Class</button>
+      <a class="card" href="/traits/">
+        <div class="cardtop">
+          <span class="name">Trait Explorer</span>
+          <span class="pill live">live</span>
         </div>
-        <div class="pickctl">
-          <input type="search" id="search" placeholder="filter units or traits…">
-          <button id="saveSearch" type="button" title="Save this search on this device">Save</button>
-          <details class="savedmenu" id="savedMenu">
-            <summary>Saved <span id="savedN">0</span></summary>
-            <div class="savedlist" id="savedList"></div>
-          </details>
-          <button id="share" type="button" title="Copy a link to this search">Copy link</button>
-          <button id="clear">Clear</button>
+        <p>
+          Pick the units you want and it finds the boards where every trait
+          actually does something. Breakpoints, emblems, cost filters, and
+          copyable Team Planner codes.
+        </p>
+        <div class="tags">
+          <span>trait solver</span><span>board search</span><span>set 18</span>
         </div>
+      </a>
+
+      <div class="card soon">
+        <div class="cardtop">
+          <span class="name">More coming</span>
+          <span class="pill">planned</span>
+        </div>
+        <p>
+          The kit grows as the itch demands. Ideas welcome — this is a
+          for-fun project, built one annoyance at a time.
+        </p>
+        <div class="tags"><span>tbd</span></div>
       </div>
-      <div class="grid" id="pool"></div>
-      <div class="sel" id="sel" hidden>
-        <div class="selgrp" id="selReq" hidden>
-          <span class="sellbl g">Required</span>
-          <div class="selchips" id="selReqC"></div>
-        </div>
-        <div class="selgrp" id="selExc" hidden>
-          <span class="sellbl r">Excluded</span>
-          <div class="selchips" id="selExcC"></div>
-        </div>
-      </div>
+
     </div>
+  </section>
+</main>
 
-    <div class="results">
-      <div class="rhead"><h2>Results</h2><div class="count" id="count">—</div></div>
-      <div id="list"></div>
-    </div>
-  </main>
-</div>
+<footer>
+  <span>tftkit.com</span>
+  <span class="dot">·</span>
+  <a href="https://github.com/nkhoit/tftkit">source on github</a>
+  <span class="dot">·</span>
+  <span class="fine">
+    Not affiliated with or endorsed by Riot Games. Teamfight Tactics and Riot
+    Games are trademarks of Riot Games, Inc.
+  </span>
+</footer>
 
-<script src="search-utils.js"></script>
-<script src="saved-searches.js"></script>
-<script src="share-state.js"></script>
-<script src="team-code.js"></script>
-<script src="app.js"></script>
 </body>
 </html>

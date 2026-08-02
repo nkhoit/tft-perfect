@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const { decode, encode } = require('../web/team-code.js');
-const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'web', 'data.json'), 'utf8'));
+const { decode, encode } = require('../web/traits/team-code.js');
+const data = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'web', 'traits', 'data.json'), 'utf8'));
 const byName = new Map(data.champions.flatMap(champion => [
   [champion.name.toLowerCase(), champion],
   [champion.key.toLowerCase(), champion],

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const SavedSearches = require('../web/saved-searches.js');
+const SavedSearches = require('../web/traits/saved-searches.js');
 
 function storage() {
   const values = new Map();

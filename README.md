@@ -1,4 +1,31 @@
-# TFT Trait Explorer
+# TFTKIT
+
+Teamfight Tactics tools, served at **[tftkit.com](https://tftkit.com)**.
+
+| Path | Tool | Status |
+|---|---|---|
+| `/` | Landing page | live |
+| `/traits/` | Trait Explorer | live |
+
+## Layout
+
+```
+web/
+  index.html      landing page
+  home.css        landing styles
+  404.html
+  shared/
+    tokens.css    shared palette — every tool imports this first
+  traits/         Trait Explorer (self-contained)
+```
+
+Adding a tool: drop it in `web/<tool>/`, import `/shared/tokens.css`,
+add a card to `web/index.html`, and add `/<tool>/*` to the
+`navigationFallback.exclude` list in `staticwebapp.config.json`.
+
+---
+
+## Trait Explorer
 
 Find Teamfight Tactics boards where every trait actually does something.
 
@@ -36,7 +63,7 @@ Waste is measured in trait contributions that buy nothing, not units:
 python3 serve.py
 ```
 
-Open the [local app](http://localhost:8808). Set `TFT_PORT` to override port 8808.
+Open the [local app](http://localhost:8808) — landing page at `/`, explorer at `/traits/`. Set `TFT_PORT` to override port 8808.
 
 The deployed application is static HTML, CSS, and JavaScript with no runtime
 dependencies or build step. Searches run across Web Workers to keep the UI responsive.
@@ -115,3 +142,7 @@ The deployment token is stored in the `AZURE_STATIC_WEB_APPS_API_TOKEN` reposito
 Game data and icons belong to Riot Games and are retrieved through
 [CommunityDragon](https://communitydragon.org). Ability values are sourced from
 [LoLChess](https://lolchess.gg). Not endorsed by Riot Games.
+
+---
+
+Not affiliated with or endorsed by Riot Games.

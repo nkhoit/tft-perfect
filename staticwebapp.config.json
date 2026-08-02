@@ -1,12 +1,28 @@
 {
-  "navigationFallback": { "rewrite": "/index.html" },
   "globalHeaders": {
     "Cache-Control": "public, max-age=300"
   },
   "routes": [
-    { "route": "/data.json", "headers": { "Cache-Control": "no-cache" } },
-    { "route": "/precomputed-default.json", "headers": { "Cache-Control": "no-cache" } }
+    { "route": "/traits", "redirect": "/traits/", "statusCode": 301 },
+    { "route": "/traits/data.json", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/traits/precomputed-default.json", "headers": { "Cache-Control": "no-cache" } }
   ],
+  "navigationFallback": {
+    "rewrite": "/404.html",
+    "exclude": [
+      "/shared/*",
+      "/traits/*",
+      "/*.css",
+      "/*.js",
+      "/*.json",
+      "/*.png",
+      "/*.svg",
+      "/*.ico"
+    ]
+  },
+  "responseOverrides": {
+    "404": { "rewrite": "/404.html" }
+  },
   "mimeTypes": {
     ".json": "application/json",
     ".js": "text/javascript"

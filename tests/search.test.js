@@ -16,10 +16,10 @@ function loadWorker() {
   });
   context.importScripts = (...files) => {
     for (const file of files) {
-      vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', file), 'utf8'), context);
+      vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', 'traits', file), 'utf8'), context);
     }
   };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', 'worker.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', 'traits', 'worker.js'), 'utf8'), context);
 
   return data => {
     const before = messages.length;
@@ -137,7 +137,7 @@ test('only one shard evaluates a board made entirely of required units', () => {
 });
 
 test('rich ordering survives the main-thread merge', () => {
-  const { comparator } = require('../web/search-utils.js');
+  const { comparator } = require('../web/traits/search-utils.js');
   const rows = [
     { live: 1, tierSum: 1, waste: 0, gold: 3 },
     { live: 1, tierSum: 1, waste: 0, gold: 15 },
@@ -148,7 +148,7 @@ test('rich ordering survives the main-thread merge', () => {
 });
 
 test('search status never overclaims exact results', () => {
-  const { summary } = require('../web/search-utils.js');
+  const { summary } = require('../web/traits/search-utils.js');
   const limited = summary({ rows: [{}], total: 12, ms: 1500, truncated: true });
   const complete = summary({ rows: [{}], total: 12, ms: 1500, truncated: false });
 
@@ -160,7 +160,7 @@ test('search status never overclaims exact results', () => {
 });
 
 test('Rival scores and cycles only at two units', () => {
-  const { breakpoints, scoreFloor, scoringBreakpoints, scoresAt } = require('../web/search-utils.js');
+  const { breakpoints, scoreFloor, scoringBreakpoints, scoresAt } = require('../web/traits/search-utils.js');
   const rival = {
     bp: [1, 1, 2],
     styles: [],
@@ -175,7 +175,7 @@ test('Rival scores and cycles only at two units', () => {
 });
 
 test('trait signatures include inactive trait counts', () => {
-  const { traitSignature } = require('../web/search-utils.js');
+  const { traitSignature } = require('../web/traits/search-utils.js');
   const first = { active: [[0, 2]], dead: [[1, 1]] };
   const second = { active: [[0, 2]], dead: [[2, 1]] };
 
@@ -183,7 +183,7 @@ test('trait signatures include inactive trait counts', () => {
 });
 
 test('shard results merge, sort, and retain roster variants', () => {
-  const { mergeSearchResults } = require('../web/search-utils.js');
+  const { mergeSearchResults } = require('../web/traits/search-utils.js');
   const first = { units: [0], active: [[0, 2]], dead: [], live: 1, tierSum: 1, waste: 0, gold: 3 };
   const variant = { units: [1], active: [[0, 2]], dead: [], live: 1, tierSum: 1, waste: 0, gold: 6 };
   const better = { units: [2], active: [[1, 3]], dead: [], live: 2, tierSum: 2, waste: 0, gold: 9 };
@@ -443,7 +443,7 @@ test('searches can stop on a wall-clock budget', () => {
 
 test('Set 18 Avatar and Apex Predator rules reach the worker', () => {
   const send = loadWorker();
-  const db = JSON.parse(fs.readFileSync(path.join(ROOT, 'web', 'data.json'), 'utf8'));
+  const db = JSON.parse(fs.readFileSync(path.join(ROOT, 'web', 'traits', 'data.json'), 'utf8'));
   const champion = key => db.champions.findIndex(entry => entry.key === key);
   const traitKeys = Object.keys(db.traits);
   const base = {
@@ -497,7 +497,7 @@ test('Set 18 Avatar and Apex Predator rules reach the worker', () => {
 });
 
 test('search cache keys normalize unordered options', () => {
-  const { searchCacheKey } = require('../web/search-utils.js');
+  const { searchCacheKey } = require('../web/traits/search-utils.js');
   const base = {
     size: 8,
     maxWaste: 2,
@@ -527,7 +527,7 @@ test('search cache keys normalize unordered options', () => {
 });
 
 test('cached search status identifies its source', () => {
-  const { summary } = require('../web/search-utils.js');
+  const { summary } = require('../web/traits/search-utils.js');
   const memory = summary({ rows: [{}], total: 1, ms: 1000, truncated: false, cached: 'memory' });
   const disk = summary({ rows: [{}], total: 1, ms: 1000, truncated: false, cached: 'device' });
   const precomputed = summary({

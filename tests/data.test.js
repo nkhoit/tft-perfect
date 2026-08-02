@@ -8,12 +8,12 @@ const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
 test('the application contains only Set 18', () => {
   assert.equal(fs.existsSync(path.join(ROOT, 'build_data.py')), false);
-  assert.equal(fs.existsSync(path.join(ROOT, 'web', 'data-set18.json')), false);
+  assert.equal(fs.existsSync(path.join(ROOT, 'web', 'traits', 'data-set18.json')), false);
 
-  const data = JSON.parse(read('web/data.json'));
-  const html = read('web/index.html');
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const data = JSON.parse(read('web/traits/data.json'));
+  const html = read('web/traits/index.html');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
   const readme = read('README.md');
 
   assert.equal(data.set, 'set18');
@@ -96,7 +96,7 @@ test('the application contains only Set 18', () => {
 });
 
 test('required units use check badges without replacing cost borders', () => {
-  const css = read('web/style.css');
+  const css = read('web/traits/style.css');
 
   assert.doesNotMatch(css, /\.u\.req\{[^}]*(?:border|box-shadow)/);
   assert.doesNotMatch(css, /\.uc\.req\{[^}]*(?:border|box-shadow)/);
@@ -105,7 +105,7 @@ test('required units use check badges without replacing cost borders', () => {
 });
 
 test('selection badges contrast with role badge styling', () => {
-  const css = read('web/style.css');
+  const css = read('web/traits/style.css');
   const badge = css.match(/\.u\.req::before,\.uc\.req::before\{([^}]*)\}/)?.[1];
 
   assert.ok(badge, 'missing selection badge styling');
@@ -120,7 +120,7 @@ test('selection badges contrast with role badge styling', () => {
 });
 
 test('unit picker portraits include role badges', () => {
-  const app = read('web/app.js');
+  const app = read('web/traits/app.js');
   const addUnit = app.match(
     /function addUnit\(el, c, group\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction applyFilter/);
 
@@ -129,8 +129,8 @@ test('unit picker portraits include role badges', () => {
 });
 
 test('result unit portraits toggle required state', () => {
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
 
   assert.match(app, /e\.target\.closest\('\.uc\[data-key\]'\)/);
   assert.match(app,
@@ -140,9 +140,9 @@ test('result unit portraits toggle required state', () => {
 });
 
 test('unit picker switches between cost, origin, and class groups', () => {
-  const html = read('web/index.html');
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const html = read('web/traits/index.html');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
 
   assert.match(html, /id="poolViewCost"/);
   assert.match(html, /id="poolViewOrigin"/);
@@ -172,10 +172,10 @@ test('unit picker switches between cost, origin, and class groups', () => {
 });
 
 test('group exclusions collapse all champion forms into one control', () => {
-  const data = JSON.parse(read('web/data.json'));
-  const html = read('web/index.html');
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const data = JSON.parse(read('web/traits/data.json'));
+  const html = read('web/traits/index.html');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
   const luxForms = data.champions.filter(champion => champion.group === 'Lux');
 
   assert.equal(luxForms.length, 9);
@@ -195,8 +195,8 @@ test('group exclusions collapse all champion forms into one control', () => {
 });
 
 test('main and alternate compositions share the roster row layout', () => {
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
 
   assert.match(app, /class="comprow primary"/);
   assert.match(app, /class="comprow alternate"/);
@@ -213,8 +213,8 @@ test('main and alternate compositions share the roster row layout', () => {
 });
 
 test('team composition renders as one segmented strip', () => {
-  const app = read('web/app.js');
-  const css = read('web/style.css');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
   const profile = app.match(/function teamProfile\(units, compact = false\) \{[\s\S]*?\n\}/)?.[0];
 
   assert.ok(profile, 'missing team profile renderer');
@@ -228,7 +228,7 @@ test('team composition renders as one segmented strip', () => {
 });
 
 test('roster summary controls fill the available row height', () => {
-  const css = read('web/style.css');
+  const css = read('web/traits/style.css');
 
   assert.match(css, /\.teamprofile\{[^}]*font-size:11px/);
   assert.match(css, /\.profilepart\{[^}]*padding:3px 8px/);
@@ -239,7 +239,7 @@ test('roster summary controls fill the available row height', () => {
 });
 
 test('the generated data and checked-in roster are internally consistent', () => {
-  const data = JSON.parse(read('web/data.json'));
+  const data = JSON.parse(read('web/traits/data.json'));
   const roster = JSON.parse(read('set18-roster.json'));
   const builder = read('build_set18.py');
   const champions = new Map(data.champions.map(champion => [champion.key, champion]));

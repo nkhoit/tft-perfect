@@ -3,9 +3,9 @@ const path = require('node:path');
 const test = require('node:test');
 
 const ROOT = path.join(__dirname, '..');
-const data = require('../web/data.json');
-const precomputed = require('../web/precomputed-default.json');
-const SearchUtils = require('../web/search-utils.js');
+const data = require('../web/traits/data.json');
+const precomputed = require('../web/traits/precomputed-default.json');
+const SearchUtils = require('../web/traits/search-utils.js');
 
 function defaultOptions() {
   return {
