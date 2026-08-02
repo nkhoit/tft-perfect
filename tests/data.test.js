@@ -40,7 +40,7 @@ test('the application contains only Set 18', () => {
   assert.match(app, /function unitPortrait/);
   assert.match(app, /class="un"/);
   assert.match(app, /<button type="button" class="vtag" aria-expanded="false"/);
-  assert.match(app, /alternate\$\{nv > 1 \? 's' : ''\}/);
+  assert.match(app, /alternate\$\{count > 1 \? 's' : ''\}/);
   assert.match(app, /vt\.setAttribute\('aria-expanded', String\(open\)\)/);
   assert.match(css, /\.vchev\{/);
   assert.match(app, /STAT_ICON_BASE/);
@@ -91,7 +91,11 @@ test('the application contains only Set 18', () => {
   assert.match(app, /function renderSavedSearches/);
   assert.match(app, /function restoreSavedEntry/);
   assert.match(app, /history\.replaceState/);
+  assert.match(app, /function reconcileResultCards/);
+  assert.match(app, /list\.insertBefore\(card, cursor\)/);
+  assert.match(app, /function syncVariants/);
   assert.match(css, /\.savedlist\{/);
+  assert.match(css, /\.comp\.entering\{animation:comp-enter/);
   assert.doesNotMatch(app, /class="kc"/);
 });
 

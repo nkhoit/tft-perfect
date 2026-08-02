@@ -142,6 +142,12 @@ button:hover{border-color:var(--acc2)}
 .count{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
 .comp{background:var(--panel);border:1px solid var(--edge);border-radius:9px;
   padding:10px 12px;margin-bottom:8px}
+.comp.entering{animation:comp-enter .16s ease-out both}
+@keyframes comp-enter{
+  from{opacity:0;transform:translateY(3px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@media(prefers-reduced-motion:reduce){.comp.entering{animation:none}}
 .comphead{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px}
 .tline{display:flex;flex:1;flex-wrap:wrap;gap:5px;min-width:0}
 .tb{display:flex;align-items:center;gap:4px;border-radius:11px;padding:2px 8px 2px 5px;

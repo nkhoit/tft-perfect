@@ -1689,6 +1689,53 @@ function teamProfile(units, compact = false) {
   return `<div class="teamprofile${compact ? ' compact' : ''}">${parts.join('')}</div>`;
 }
 
+function variantTagMarkup(r) {
+  const count = (r.variants || []).length;
+  return count
+    ? `<button type="button" class="vtag" aria-expanded="false" data-count="${count}" ` +
+      `aria-label="Show ${count} alternate composition${count > 1 ? 's' : ''}" ` +
+      `title="Same traits and counts, different units">${count} alternate${count > 1 ? 's' : ''}` +
+      `<i class="vchev" aria-hidden="true"></i></button>`
+    : '';
+}
+
+function variantRowsMarkup(r) {
+  return (r.variants || []).length
+    ? `<div class="vlist">` + r.variants.map(v =>
+      `<div class="comprow alternate">` + v.units.map(i => DB.champions[i])
+        .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+        .map(unitPortrait)
+        .join('') +
+      teamProfile(v.units, true) +
+      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
+      copyCodeButton(v.units) + `</div>`).join('') + `</div>`
+    : '';
+}
+
+function rowRenderKey(r) {
+  const traitUi = [
+    [...emblems].sort(),
+    reqTraits.map(({ key, n }) => [key, n]).sort(([a], [b]) => a.localeCompare(b)),
+    [...muted].sort(),
+  ];
+  return JSON.stringify([
+    r.live, r.uniqN, r.waste, r.tierSum, r.gold, r.slots,
+    r.active, r.dead, r.over, traitUi, +$('size').value,
+  ]);
+}
+
+function variantRenderKey(r) {
+  return JSON.stringify((r.variants || []).map(variant => [
+    compSignature(variant.units), variant.gold,
+  ]));
+}
+
+function elementFromMarkup(markup) {
+  const template = document.createElement('template');
+  template.innerHTML = markup.trim();
+  return template.content.firstElementChild;
+}
+
 // Build one board card. Shared by the results list and the selected-comps
 // section above it, so a pinned comp is byte-for-byte the card it was pinned
 // from — no second renderer to drift out of sync.
@@ -1740,21 +1787,8 @@ function compCard(r, { selected = false } = {}) {
   // Same trait signature, different roster. Offered per-board instead of as a
   // global toggle, because the question is "swap THIS board", not "show me
   // every permutation of everything".
-  const nv = (r.variants || []).length;
-  const varTag = nv
-    ? `<button type="button" class="vtag" aria-expanded="false" data-count="${nv}" ` +
-      `aria-label="Show ${nv} alternate composition${nv > 1 ? 's' : ''}" ` +
-      `title="Same traits and counts, different units">${nv} alternate${nv > 1 ? 's' : ''}` +
-      `<i class="vchev" aria-hidden="true"></i></button>`
-    : '';
-  const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
-    `<div class="comprow alternate">` + v.units.map(i => DB.champions[i])
-      .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(unitPortrait)
-      .join('') +
-    teamProfile(v.units, true) +
-    `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
-    copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
+  const varTag = variantTagMarkup(r);
+  const varRows = variantRowsMarkup(r);
 
   const signature = compSignature(r.units);
   const pinButton = `<button type="button" class="pincomp" data-sig="${signature}" ` +
@@ -1765,6 +1799,8 @@ function compCard(r, { selected = false } = {}) {
   const d = document.createElement('div');
   d.className = 'comp' + (selected ? ' selected' : '');
   d.dataset.sig = signature;
+  d.dataset.rowKey = rowRenderKey(r);
+  d.dataset.variantKey = variantRenderKey(r);
   // Stash the row on the node: pinning needs the full scored board, and
   // re-deriving it from the DOM would mean a second scoring implementation.
   d.__row = r;
@@ -1778,6 +1814,93 @@ function compCard(r, { selected = false } = {}) {
     copyCodeButton(r.units) + pinButton + `</div>` +
     varRows;
   return d;
+}
+
+function syncPinState(card, selected) {
+  card.classList.toggle('selected', selected);
+  const button = card.querySelector('.pincomp');
+  if (!button) return;
+  button.setAttribute('aria-pressed', String(selected));
+  button.dataset.tip = selected ? 'Remove from selected' : 'Select this comp';
+  button.setAttribute('aria-label', selected
+    ? 'Remove this comp from the selected section'
+    : 'Select this comp and pin it above the results');
+}
+
+function syncRequiredPortraits(card) {
+  for (const portrait of card.querySelectorAll('.uc[data-key]')) {
+    portrait.classList.toggle('req', state.get(portrait.dataset.key) === 1);
+  }
+}
+
+function syncVariants(card, row) {
+  const key = variantRenderKey(row);
+  if (card.dataset.variantKey === key) return;
+  const open = card.classList.contains('vopen');
+  const oldTag = card.querySelector('.vtag');
+  const oldList = [...card.children].find(child => child.classList.contains('vlist'));
+  const tagMarkup = variantTagMarkup(row);
+  const rowsMarkup = variantRowsMarkup(row);
+
+  if (tagMarkup) {
+    const tag = elementFromMarkup(tagMarkup);
+    if (open) {
+      tag.setAttribute('aria-expanded', 'true');
+      tag.setAttribute('aria-label',
+        `Hide ${tag.dataset.count} alternate composition${tag.dataset.count === '1' ? '' : 's'}`);
+    }
+    if (oldTag) oldTag.replaceWith(tag);
+    else card.querySelector('.comprow.primary').insertBefore(
+      tag, card.querySelector('.teamprofile'));
+  } else if (oldTag) {
+    oldTag.remove();
+  }
+
+  if (rowsMarkup) {
+    const list = elementFromMarkup(rowsMarkup);
+    if (oldList) oldList.replaceWith(list);
+    else card.appendChild(list);
+  } else if (oldList) {
+    oldList.remove();
+  }
+  card.classList.toggle('vopen', open && Boolean(rowsMarkup));
+  card.dataset.variantKey = key;
+}
+
+function updateResultCard(card, row, selected) {
+  if (!card || card.dataset.rowKey !== rowRenderKey(row)) {
+    const replacement = compCard(row, { selected });
+    if (!card) {
+      replacement.classList.add('entering');
+      replacement.addEventListener('animationend',
+        () => replacement.classList.remove('entering'), { once: true });
+    }
+    return replacement;
+  }
+  card.__row = row;
+  syncPinState(card, selected);
+  syncRequiredPortraits(card);
+  syncVariants(card, row);
+  return card;
+}
+
+function reconcileResultCards(rows) {
+  const list = $('list');
+  const existing = new Map(
+    [...list.children].filter(child => child.classList.contains('comp'))
+      .map(card => [card.dataset.sig, card]));
+  const stale = new Set(list.children);
+  let cursor = list.firstElementChild;
+
+  for (const row of rows) {
+    const signature = compSignature(row.units);
+    const card = updateResultCard(
+      existing.get(signature), row, selectedComps.has(signature));
+    stale.delete(card);
+    if (card === cursor) cursor = cursor.nextElementSibling;
+    else list.insertBefore(card, cursor);
+  }
+  for (const node of stale) node.remove();
 }
 
 
@@ -1796,17 +1919,11 @@ function render(m) {
 
   if (!m.rows.length) {
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;
-    renderSelectedComps();
     return;
   }
 
-  const frag = document.createDocumentFragment();
-  for (const r of m.rows) {
-    frag.appendChild(compCard(r, { selected: selectedComps.has(compSignature(r.units)) }));
-  }
-  list.innerHTML = '';
-  list.appendChild(frag);
-  renderSelectedComps();
+  reconcileResultCards(m.rows);
+  if (!m.partial) renderSelectedComps();
 }
 
 // The selected section sits above the results and survives re-searching: these
