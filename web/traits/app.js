@@ -69,6 +69,7 @@ let urlSyncGeneration = 0;
 let savedSearches = [], savedSearchesAvailable = true;
 let BOARD_TABLES = null;
 let selectedRestoreNotice = '';
+let lastShareApiWarmAt = 0;
 
 function loadMetrics() {
   const empty = {
@@ -489,6 +490,18 @@ async function previewShareUrl(shared = sharedSearchState()) {
   }
 }
 
+function warmShareApi() {
+  const now = Date.now();
+  if (now - lastShareApiWarmAt < 5 * 60 * 1000) return;
+  lastShareApiWarmAt = now;
+  void fetch('/api/ready', { cache: 'no-store' }).then(response => {
+    if (!response.ok) throw new Error(`Share API returned HTTP ${response.status}.`);
+  }).catch(error => {
+    lastShareApiWarmAt = 0;
+    console.warn('Could not warm the share API.', error);
+  });
+}
+
 async function syncSearchUrl(generation) {
   if (!dataReady || !DB) return;
   const sync = ++urlSyncGeneration;
@@ -763,6 +776,7 @@ function loadData() {
     await restoreSharedSearch();
     refreshSearchControls();
     dataReady = true;
+    warmShareApi();
     renderSavedSearches();
     renderSelectedComps();
     if (!await showPrecomputedLanding()) run(true);
@@ -2118,6 +2132,7 @@ $('selected').addEventListener('click', onCompClick);
 // row, without rebuilding the whole results list.
 function syncSelectedState() {
   renderSelectedComps();
+  if (selectedComps.size) warmShareApi();
   for (const card of $('list').querySelectorAll('.comp[data-sig]')) {
     const on = selectedComps.has(card.dataset.sig);
     card.classList.toggle('selected', on);
