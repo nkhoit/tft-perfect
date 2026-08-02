@@ -21,6 +21,8 @@ function options(db, shard) {
     muted: [],
     sortMode: 'live',
     sortMode2: 'cost',
+    effort: 'deep',
+    timeBudgetMs: 0,
     limit: 100,
     uniq: true,
     returnN: 100,
@@ -79,6 +81,7 @@ async function main() {
     })));
   const result = SearchUtils.mergeSearchResults(parts, 'live', 'cost');
   result.ms = 0;
+  result.effort = 'deep';
   const baseOptions = options(db, 0);
   const version = `${SearchUtils.algorithmVersion}:${db.builtAt || db.gameBuild || db.set}`;
   const output = {

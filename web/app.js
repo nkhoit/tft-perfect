@@ -16,6 +16,13 @@ const SHARE_SCHEMA_VERSION = 1;
 const DEFAULT_LEVEL = 8;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SORT = ['live', 'cost'];
+const DEFAULT_EFFORT = 'deep';
+const EFFORT_ORDER = ['quick', 'balanced', 'deep'];
+const EFFORTS = {
+  quick: { timeBudgetMs: 1000, workers: 2 },
+  balanced: { timeBudgetMs: 4000, workers: 4 },
+  deep: { timeBudgetMs: 0, workers: 8 },
+};
 const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
 const POOL_VIEWS = new Set(['cost', 'origin', 'class']);
 const MAX_SHARED_EMBLEMS = 20;
@@ -40,7 +47,8 @@ let savedSearches = [], savedSearchesAvailable = true;
 function loadMetrics() {
   const empty = {
     requests: 0, memoryHits: 0, deviceHits: 0, precomputedHits: 0, workerRuns: 0,
-    cancellations: 0, truncated: 0, workerMs: 0, cacheErrors: 0,
+    cancellations: 0, truncated: 0, workerMs: 0, workerNodes: 0,
+    timeStops: 0, nodeStops: 0, cacheErrors: 0,
   };
   try {
     return { ...empty, ...JSON.parse(localStorage.getItem(METRICS_KEY) || '{}') };
@@ -206,6 +214,19 @@ async function deviceCacheSet(key, result) {
 
 function filterable(t) { return Number.isFinite(scoreFloor(t)); }
 
+function effortSettings() {
+  return EFFORTS[$('effort').value] || EFFORTS[DEFAULT_EFFORT];
+}
+
+function updateRefineButton() {
+  const index = EFFORT_ORDER.indexOf($('effort').value);
+  const next = EFFORT_ORDER[index + 1];
+  $('refine').disabled = !next;
+  $('refine').textContent = next
+    ? `Refine to ${next[0].toUpperCase() + next.slice(1)}`
+    : 'Fully refined';
+}
+
 function resetSearchState() {
   for (const key of state.keys()) state.set(key, 0);
   costOn.clear();
@@ -220,6 +241,7 @@ function resetSearchState() {
   $('wasteV').textContent = DEFAULT_WASTE;
   $('sort').value = DEFAULT_SORT[0];
   $('sort2').value = DEFAULT_SORT[1];
+  $('effort').value = DEFAULT_EFFORT;
   $('search').value = '';
   poolView = 'cost';
 }
@@ -266,6 +288,7 @@ function sharedSearchState() {
 
   const sort = [$('sort').value, $('sort2').value];
   if (sort[0] !== DEFAULT_SORT[0] || sort[1] !== DEFAULT_SORT[1]) shared.s = sort;
+  if ($('effort').value !== DEFAULT_EFFORT) shared.o = $('effort').value;
   const query = $('search').value.trim();
   if (query) shared.q = query.slice(0, 100);
   if (poolView !== 'cost') shared.g = poolView;
@@ -344,6 +367,7 @@ function applySharedSearchState(shared) {
     $('sort').value = shared.s[0];
     $('sort2').value = shared.s[1];
   }
+  if (typeof shared.o === 'string' && EFFORTS[shared.o]) $('effort').value = shared.o;
   if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
   if (POOL_VIEWS.has(shared.g)) poolView = shared.g;
 }
@@ -357,6 +381,7 @@ function refreshSearchControls() {
   buildGroupExclusions();
   buildPool();
   updPickN();
+  updateRefineButton();
 }
 
 function isDefaultSharedState(shared) {
@@ -543,9 +568,10 @@ function stopWorkers(cancellation = false) {
   reqId++;
 }
 
-function ensureWorkers(callback) {
+function ensureWorkers(count, callback) {
+  if (W.length && W.length !== count) stopWorkers(false);
   queuedDispatch = callback;
-  if (workersReady) {
+  if (workersReady && W.length === count) {
     queuedDispatch = null;
     callback();
     return;
@@ -554,12 +580,12 @@ function ensureWorkers(callback) {
 
   const epoch = ++workerEpoch;
   let started = 0;
-  for (let i = 0; i < NW; i++) {
+  for (let i = 0; i < count; i++) {
     const worker = new Worker('worker.js');
     worker.onmessage = event => {
       if (epoch !== workerEpoch) return;
       if (event.data.type === 'ready') {
-        if (++started === NW) {
+        if (++started === count) {
           workersReady = true;
           const dispatch = queuedDispatch;
           queuedDispatch = null;
@@ -639,9 +665,13 @@ function onWorker(e) {
   if (!search) return;
   const merged = mergeSearchResults(
     parts, search.opts.sortMode, search.opts.sortMode2);
+  merged.effort = search.opts.effort;
   activeSearch = null;
   recordMetric('workerMs', merged.ms);
+  recordMetric('workerNodes', merged.nodes);
   if (merged.truncated) recordMetric('truncated');
+  if (merged.stopReason === 'time') recordMetric('timeStops');
+  else if (merged.stopReason === 'nodes') recordMetric('nodeStops');
   memoryCacheSet(search.key, merged);
   void deviceCacheSet(search.key, merged);
   render(merged);
@@ -954,6 +984,17 @@ function renderEmblems() {
 });
 $('sort').addEventListener('change', run);
 $('sort2').addEventListener('change', run);
+$('effort').addEventListener('change', () => {
+  updateRefineButton();
+  run();
+});
+$('refine').onclick = () => {
+  const next = EFFORT_ORDER[EFFORT_ORDER.indexOf($('effort').value) + 1];
+  if (!next) return;
+  $('effort').value = next;
+  updateRefineButton();
+  run(true);
+};
 $('search').addEventListener('input', () => {
   applyFilter();
   void syncSearchUrl(searchGeneration);
@@ -1301,6 +1342,8 @@ document.addEventListener('scroll', hideCard, true);
 // ---------- search dispatch ----------
 function buildSearchOptions() {
   const size = +$('size').value;
+  const effort = $('effort').value;
+  const settings = effortSettings();
   const reqIdx = [], poolIdx = [];
   DB.champions.forEach((c, i) => {
     const s = state.get(c.key);
@@ -1315,11 +1358,13 @@ function buildSearchOptions() {
                         .filter(r => r.t >= 0),
     muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
     sortMode: $('sort').value, sortMode2: $('sort2').value,
+    effort,
+    timeBudgetMs: settings.timeBudgetMs,
     limit: 100, uniq: true,
     // Each shard's top 100 unique signatures are sufficient to recover the
     // global top 100; retained signatures carry their best found alternates.
     returnN: 100,
-    shards: NW,
+    shards: Math.min(NW, settings.workers),
   };
 }
 
@@ -1359,7 +1404,7 @@ async function executeSearch(generation) {
     return;
   }
 
-  ensureWorkers(() => dispatchSearch(generation, opts, key));
+  ensureWorkers(opts.shards, () => dispatchSearch(generation, opts, key));
 }
 
 function run(immediate = false) {

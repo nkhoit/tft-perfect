@@ -46,6 +46,8 @@ select{width:100%;background:var(--panel2);color:var(--txt);border:1px solid var
 button{background:var(--panel2);color:var(--txt);border:1px solid var(--edge);
   border-radius:6px;padding:6px 11px;cursor:pointer;font-size:12px}
 button:hover{border-color:var(--acc2)}
+.effortctl{display:grid;grid-template-columns:1fr auto;gap:6px}
+.effortctl button:disabled{opacity:.45;cursor:default}
 .chk{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;margin-top:9px;color:var(--dim)}
 .chk input{accent-color:var(--acc)}
 
@@ -281,6 +283,7 @@ button:hover{border-color:var(--acc2)}
 /* search stopped short of a full sweep */
 .status .cut{color:#ffb454;font-weight:700;cursor:help}
 .status .hit{color:var(--acc);font-weight:700}
+.status .effort{color:#aab3c0;font-weight:700}
 .tag.warn{background:#3a2a12;border-color:#7a5a1e;color:#ffb454}
 
 /* ---- hover cards ---- */

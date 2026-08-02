@@ -20,6 +20,8 @@ function defaultOptions() {
     muted: [],
     sortMode: 'live',
     sortMode2: 'cost',
+    effort: 'deep',
+    timeBudgetMs: 0,
     limit: 100,
     uniq: true,
     returnN: 100,
@@ -36,6 +38,7 @@ test('precomputed landing result matches data and search versions', () => {
   assert.equal(precomputed.result.rows.length, 100);
   assert.ok(precomputed.result.total > 0);
   assert.equal(precomputed.result.ms, 0);
+  assert.equal(precomputed.result.effort, 'deep');
 });
 
 test('precomputed landing rows are globally deduplicated', () => {

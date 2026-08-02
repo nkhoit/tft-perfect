@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  const ALGORITHM_VERSION = 'weighted-v3-topk';
+  const ALGORITHM_VERSION = 'weighted-v4-effort';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -73,6 +73,10 @@
       truncated: parts.some(part => part.truncated),
       capped: parts.some(part => part.capped),
       ms: Math.max(...parts.map(part => part.ms)),
+      nodes: parts.reduce((total, part) => total + (part.nodes || 0), 0),
+      stopReason: parts.some(part => part.stopReason === 'time')
+        ? 'time'
+        : parts.some(part => part.stopReason === 'nodes') ? 'nodes' : null,
     };
     const candidatesBySignature = new Map();
     const plain = row => {
@@ -115,6 +119,8 @@
       muted: numbers(options.muted),
       sortMode: options.sortMode,
       sortMode2: options.sortMode2,
+      effort: options.effort,
+      timeBudgetMs: options.timeBudgetMs,
       limit: options.limit,
       returnN: options.returnN,
     };
@@ -123,6 +129,9 @@
 
   function summary(result) {
     const seconds = (result.ms / 1000).toFixed(1);
+    const effort = result.effort
+      ? `<span class="effort">${result.effort[0].toUpperCase() + result.effort.slice(1)}</span> · `
+      : '';
     const cachedTitle = result.cached === 'memory'
       ? 'Loaded from the in-memory result cache. '
       : result.cached === 'device'
@@ -130,16 +139,18 @@
         : result.cached === 'precomputed'
           ? 'Loaded from the precomputed landing result. '
           : '';
-    const statusHtml = result.cached
+    const statusHtml = effort + (result.cached
       ? `<span class="hit">cached</span>` +
         (result.truncated ? ' · <span class="cut">incomplete</span>' : '')
       : result.truncated
         ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
-        : `searched in ${seconds}s`;
+        : `searched in ${seconds}s`);
     const countHtml = `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
       (result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
     const title = cachedTitle + (result.truncated
-      ? 'Search hit its node limit. These are the best boards found, but unseen boards may rank higher.'
+      ? result.stopReason === 'time'
+        ? 'Search reached its time budget. These are the best boards found, but unseen boards may rank higher.'
+        : 'Search hit its node limit. These are the best boards found, but unseen boards may rank higher.'
       : 'Search completed without hitting its node limit. The scored count is a lower bound because noncompetitive branches are skipped.');
     return { statusHtml, countHtml, title };
   }

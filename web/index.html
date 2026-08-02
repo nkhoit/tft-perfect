@@ -79,6 +79,20 @@ Click to add · right click to remove one.
 Built for the Trait Tree encounter.">?</i></h2>
       <div class="tgrid" id="embGrid"></div>
     </section>
+
+    <section>
+      <h2>Search effort <i class="q" tabindex="0" data-tip="Quick returns approximate boards in about a second.
+Balanced searches longer with more workers.
+Deep uses the full search budget.">?</i></h2>
+      <div class="effortctl">
+        <select id="effort">
+          <option value="quick">Quick</option>
+          <option value="balanced">Balanced</option>
+          <option value="deep" selected>Deep</option>
+        </select>
+        <button id="refine" type="button" disabled>Refine</button>
+      </div>
+    </section>
   </aside>
 
   <main class="main">

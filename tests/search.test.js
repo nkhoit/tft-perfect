@@ -189,8 +189,9 @@ test('shard results merge, sort, and retain roster variants', () => {
   const better = { units: [2], active: [[1, 3]], dead: [], live: 2, tierSum: 2, waste: 0, gold: 9 };
   first.variants = [variant];
   const merged = mergeSearchResults([
-    { rows: [first], total: 2, truncated: false, capped: false, ms: 10 },
-    { rows: [better], total: 1, truncated: true, capped: true, ms: 20 },
+    { rows: [first], total: 2, truncated: false, capped: false, ms: 10, nodes: 100 },
+    { rows: [better], total: 1, truncated: true, capped: true, ms: 20,
+      nodes: 200, stopReason: 'time' },
   ], 'live', 'cost');
 
   assert.deepEqual(merged.rows.map(row => row.units), [[2], [0]]);
@@ -199,6 +200,8 @@ test('shard results merge, sort, and retain roster variants', () => {
   assert.equal(merged.truncated, true);
   assert.equal(merged.capped, true);
   assert.equal(merged.ms, 20);
+  assert.equal(merged.nodes, 300);
+  assert.equal(merged.stopReason, 'time');
 });
 
 test('champions can contribute multiple points to a trait', () => {
@@ -402,6 +405,42 @@ test('a team-size bonus cannot bootstrap its own breakpoint', () => {
   assert.equal(result.rows.length, 0);
 });
 
+test('searches can stop on a wall-clock budget', () => {
+  const send = loadWorker();
+  const db = {
+    traits: {},
+    champions: Array.from({ length: 24 }, (_, index) => ({
+      key: `c${index}`, name: `C${index}`, cost: 1, traits: [],
+    })),
+  };
+  send({ type: 'init', db });
+  const result = send({
+    type: 'search',
+    id: 1,
+    opts: {
+      size: 10,
+      maxWaste: 0,
+      reqIdx: [],
+      poolIdx: db.champions.map((_, index) => index),
+      emblems: [],
+      reqTraits: [],
+      muted: [],
+      sortMode: 'live',
+      sortMode2: 'cost',
+      effort: 'quick',
+      timeBudgetMs: 0.01,
+      limit: 100,
+      returnN: 100,
+      shards: 1,
+      shard: 0,
+    },
+  });
+
+  assert.equal(result.truncated, true);
+  assert.equal(result.stopReason, 'time');
+  assert.ok(result.nodes < 40000001);
+});
+
 test('Set 18 Avatar and Apex Predator rules reach the worker', () => {
   const send = loadWorker();
   const db = JSON.parse(fs.readFileSync(path.join(ROOT, 'web', 'data.json'), 'utf8'));
@@ -482,6 +521,8 @@ test('search cache keys normalize unordered options', () => {
   assert.equal(searchCacheKey('data-v1', base), searchCacheKey('data-v1', reordered));
   assert.notEqual(searchCacheKey('data-v1', base),
     searchCacheKey('data-v1', { ...base, sortMode: 'tier' }));
+  assert.notEqual(searchCacheKey('data-v1', { ...base, effort: 'quick' }),
+    searchCacheKey('data-v1', { ...base, effort: 'deep' }));
   assert.notEqual(searchCacheKey('data-v1', base), searchCacheKey('data-v2', base));
 });
 

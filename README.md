@@ -12,6 +12,7 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 - Stackable emblems that add trait points without using board slots.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
 - Debounced, cancellable searches with versioned memory and device caches.
+- Quick, Balanced, and Deep search budgets with one-click refinement.
 - An instant precomputed result for the default landing search.
 - Compact shareable URLs that restore every search control.
 - Named saved searches stored privately on the current device.

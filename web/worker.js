@@ -113,22 +113,78 @@ function search(o) {
     return { error: 'More required unit slots than this level can support.' };
   }
 
-  const pool = poolIdx;
+  function championPriority(index) {
+    let priority = 0;
+    for (const [trait, points] of CTP[index]) {
+      for (const requirement of reqTraits) {
+        if (requirement.t !== trait) continue;
+        const short = Math.max(0, requirement.n - counts[trait]);
+        priority += Math.min(points, short) * 100;
+        if (short > 0 && points >= short) priority += 200;
+      }
+      if (UNIQ[trait] || MUTE[trait]) continue;
+      const count = counts[trait];
+      const floor = SCORE1[trait];
+      if (count < floor) {
+        const short = floor - count;
+        priority += Math.min(points, short) * 8;
+        if (points >= short) priority += 40;
+      } else {
+        priority += points * 2;
+      }
+      const next = BPS[trait].find(breakpoint => breakpoint > count);
+      if (next && points >= next - count) priority += 15;
+    }
+    return priority / CSLOT[index];
+  }
+
+  const branchOrder = SearchUtils.sortOrder(o.sortMode, o.sortMode2);
+  const pool = poolIdx.slice();
+  if (o.effort && o.effort !== 'deep') {
+    pool.sort((a, b) => {
+      const priority = championPriority(b) - championPriority(a);
+      if (priority) return priority;
+      for (const key of branchOrder) {
+        if (key === 'cost') return DB.champions[a].cost - DB.champions[b].cost || a - b;
+        if (key === 'rich') return DB.champions[b].cost - DB.champions[a].cost || a - b;
+      }
+      return a - b;
+    });
+  }
   const uniqueCap = Math.max(limit || 100, o.returnN || limit || 100);
   const kept = [];
   const bySignature = new Map();
-  let nodes = 0, truncated = false;
+  let nodes = 0, truncated = false, stopReason = null;
   // Shards split the top-level branch round-robin across workers.
   const shards = o.shards || 1, shard = o.shard || 0;
   // Budget is per shard, not a split of one global pot. Top-level branches are
   // wildly uneven in size, so dividing the budget starves whichever shard drew
   // the fat branches and silently truncates boards the serial search finds.
   const NODE_BUDGET = 40e6;
+  const timeBudgetMs = Number.isFinite(o.timeBudgetMs) && o.timeBudgetMs > 0
+    ? o.timeBudgetMs
+    : Infinity;
+  const deadline = performance.now() + timeBudgetMs;
+
+  function consumeNode() {
+    nodes++;
+    if (nodes > NODE_BUDGET) {
+      truncated = true;
+      stopReason = 'nodes';
+      return false;
+    }
+    if ((nodes & 4095) === 0 && performance.now() >= deadline) {
+      truncated = true;
+      stopReason = 'time';
+      return false;
+    }
+    return true;
+  }
 
   // Maximum trait points reachable from each pool suffix for every remaining
   // slot capacity. This is a 0/1 knapsack because Elder Dragon consumes two
   // slots and Avatar origins contribute two points.
-  const P = poolIdx.length;
+  const P = pool.length;
   const CAP = maxSlots + 1;
   const reach = new Int16Array((P + 1) * nT * CAP);
   const reachAt = (start, trait, capacity) => reach[(start * nT + trait) * CAP + capacity];
@@ -138,7 +194,7 @@ function search(o) {
         reach[(i * nT + t) * CAP + capacity] = reachAt(i + 1, t, capacity);
       }
     }
-    const champion = poolIdx[i];
+    const champion = pool[i];
     const slots = CSLOT[champion];
     for (const [t, points] of CTP[champion]) {
       for (let capacity = slots; capacity <= maxSlots; capacity++) {
@@ -266,7 +322,7 @@ function search(o) {
   cheap[P * CAP] = 0;
   dear[P * CAP] = 0;
   for (let i = P - 1; i >= 0; i--) {
-    const champion = poolIdx[i];
+    const champion = pool[i];
     const slots = CSLOT[champion];
     const gold = DB.champions[champion].cost * 3;
     for (let capacity = 0; capacity <= maxSlots; capacity++) {
@@ -489,7 +545,7 @@ function search(o) {
       if (slots > remainingCapacity) continue;
       const group = CGROUP[ci];
       if (group && groups.has(group)) continue;
-      if (++nodes > NODE_BUDGET) { truncated = true; return; }
+      if (!consumeNode()) return;
       if (group) groups.add(group);
       for (const [t, points] of CTP[ci]) counts[t] += points;
       pick[depth] = ci;
@@ -526,7 +582,7 @@ function search(o) {
       ...entry.row,
       variants: entry.variants,
     })),
-    total: found, truncated, capped: trimmed, nodes,
+    total: found, truncated, capped: trimmed, nodes, stopReason,
   };
 }
 
