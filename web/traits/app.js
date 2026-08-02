@@ -1783,10 +1783,9 @@ function elementFromMarkup(markup) {
   return template.content.firstElementChild;
 }
 
-// Build one board card. Shared by the results list and the selected-comps
-// section above it, so a pinned comp is byte-for-byte the card it was pinned
-// from — no second renderer to drift out of sync.
-function compCard(r, { selected = false } = {}) {
+// Build one board card for both lists. Only the selected section exposes the
+// control that chooses which pinned comp appears in shared-link previews.
+function compCard(r, { selected = false, showPreview = false } = {}) {
   const embCount = {};
   emblems.forEach(k => embCount[k] = (embCount[k] || 0) + 1);
   const tkeys = Object.keys(DB.traits);
@@ -1838,8 +1837,8 @@ function compCard(r, { selected = false } = {}) {
   const varRows = variantRowsMarkup(r);
 
   const signature = compSignature(r.units);
-  const featured = selected && selectedComps.keys().next().value === signature;
-  const previewButton = selected
+  const featured = showPreview && selectedComps.keys().next().value === signature;
+  const previewButton = showPreview
     ? `<button type="button" class="previewcomp" data-sig="${signature}" ` +
       `aria-pressed="${featured}" data-tip="${featured ? 'Discord preview comp' : 'Use for Discord preview'}" ` +
       `aria-label="${featured ? 'This comp is featured in the Discord preview' : 'Use this comp for the Discord preview'}">${PREVIEW_ICON}</button>`
@@ -2004,7 +2003,7 @@ function renderSelectedComps() {
     frag.appendChild(notice);
   }
   for (const r of selectedComps.values()) {
-    frag.appendChild(compCard(r, { selected: true }));
+    frag.appendChild(compCard(r, { selected: true, showPreview: true }));
   }
   host.innerHTML = '';
   host.appendChild(frag);
@@ -2096,6 +2095,7 @@ function syncSelectedState() {
   for (const card of $('list').querySelectorAll('.comp[data-sig]')) {
     const on = selectedComps.has(card.dataset.sig);
     card.classList.toggle('selected', on);
+    card.querySelector('.previewcomp')?.remove();
     const button = card.querySelector('.pincomp');
     if (!button) continue;
     button.setAttribute('aria-pressed', String(on));
