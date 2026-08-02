@@ -23,6 +23,17 @@ test('share HTML contains server-rendered metadata and a safe app redirect', asy
   assert.match(result.body, /noindex,nofollow/);
 });
 
+test('public metadata uses the Static Web Apps origin', async () => {
+  const req = request('rYWJj');
+  req.headers.set(
+    'x-ms-original-url',
+    'https://preview-host.azurestaticapps.net/api/share/rYWJj');
+  const result = await shareHandler(req);
+  assert.match(result.body,
+    /https:\/\/preview-host\.azurestaticapps\.net\/api\/og\/rYWJj/);
+  assert.doesNotMatch(result.body, /azurewebsites\.net/);
+});
+
 test('share HTML escapes reflected values', () => {
   const html = shareHtml('https://example.test', 'rYWJj');
   assert.doesNotMatch(html, /<script[^>]*>.*rYWJj.*<\/script>.*<script/s);

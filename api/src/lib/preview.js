@@ -11,6 +11,18 @@ function validToken(value) {
 }
 
 function publicOrigin(request) {
+  const originalUrl = request.headers.get('x-ms-original-url');
+  if (originalUrl) {
+    try {
+      const parsed = new URL(originalUrl);
+      if (['http:', 'https:'].includes(parsed.protocol)
+          && /^[A-Za-z0-9.:[\]-]+$/.test(parsed.host)) {
+        return parsed.origin;
+      }
+    } catch {
+      // Fall through to forwarded headers.
+    }
+  }
   const forwardedHost = request.headers.get('x-forwarded-host');
   const host = forwardedHost || request.headers.get('host');
   if (!host || !/^[A-Za-z0-9.:[\]-]+$/.test(host)) return 'https://tftkit.com';
