@@ -91,6 +91,8 @@ test('the application contains only Set 18', () => {
   assert.match(app, /function sharedSearchState/);
   assert.match(app, /function applySharedSearchState/);
   assert.match(app, /function previewShareUrl/);
+  assert.match(app, /fetch\('\/api\/shorten'/);
+  assert.match(app, /Falling back to the stateless share URL/);
   assert.match(app, /shared\.sel/);
   assert.match(app, /const SHARE_SCHEMA_VERSION = 2/);
   assert.match(app, /shared\.v < 1 \|\| shared\.v > SHARE_SCHEMA_VERSION/);
