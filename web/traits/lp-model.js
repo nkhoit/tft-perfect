@@ -120,24 +120,64 @@
       for (let j = first; j < bp.length; j++) tierTerms.push(`y${t}_${j}`);
     }
 
-    // Objective. Gold is a lexicographic tiebreak, scaled below the primary key
-    // so it can never outweigh it: max board gold is 73*5*3 = 1095 << 100000.
-    const goldTerm = pool.map(c => `${T.cost[c] * 3} x${c}`);
+    // Objective.
+    //
+    // The result list is sorted lexicographically by
+    // primary -> secondary -> live -> tier -> waste -> cost (see comparator() in
+    // search-utils.js). The objective must encode that WHOLE chain, not just the
+    // primary key: if it stops at the primary, the solver is free to break ties
+    // however it likes, and the board it proves optimal is then re-sorted below
+    // some other equally-optimal board once the DFS rows merge in. The user sees
+    // the top row change out from under them.
+    //
+    // Each key gets a weight strictly larger than the maximum possible total of
+    // every lower-priority key combined, which makes the single linear objective
+    // behave exactly like the lexicographic comparator. Weights stay well inside
+    // float64's exact-integer range (~9e15).
     const sortMode = opts.sortMode || 'live';
-    const maximize = sortMode === 'live' || sortMode === 'tier' || sortMode === 'rich';
-    L.push(maximize ? 'Maximize' : 'Minimize');
-    const plus = terms => terms.map(s => (s.startsWith('-') ? ` ${s}` : ` +${s}`)).join('');
-    if (sortMode === 'live') {
-      L.push(' obj:' + plus(scoringTerms.map(v => `100000 ${v}`)) + plus(goldTerm.map(g => `-${g}`)));
-    } else if (sortMode === 'tier') {
-      L.push(' obj:' + plus(tierTerms.map(v => `100000 ${v}`)) + plus(goldTerm.map(g => `-${g}`)));
-    } else if (sortMode === 'waste') {
-      L.push(' obj: +100000 Wtot' + plus(goldTerm));
-    } else if (sortMode === 'rich') {
-      L.push(' obj:' + plus(goldTerm));
-    } else {                                    // 'cost' — cheapest board
-      L.push(' obj:' + plus(goldTerm));
+
+    // Per-key: the terms that compute it, whether bigger is better, and a safe
+    // upper bound on its value (used to size the weight ladder).
+    const maxGold = pool.reduce((sum, c) => sum + T.cost[c] * 3, 0);
+    const KEYS = {
+      live: { terms: scoringTerms.map(v => [1, v]), better: 'max', bound: scoringTerms.length },
+      tier: { terms: tierTerms.map(v => [1, v]), better: 'max', bound: tierTerms.length },
+      waste: { terms: [[1, 'Wtot']], better: 'min', bound: Math.max(0, opts.maxWaste) },
+      cost: { terms: pool.map(c => [T.cost[c] * 3, `x${c}`]), better: 'min', bound: maxGold },
+      rich: { terms: pool.map(c => [T.cost[c] * 3, `x${c}`]), better: 'max', bound: maxGold },
+    };
+
+    // Mirror sortOrder(): primary, secondary, then the standard fallback chain,
+    // de-duplicated, preserving first occurrence.
+    const order = [sortMode, opts.sortMode2, 'live', 'tier', 'waste', 'cost']
+      .filter((key, i, keys) => KEYS[key] && keys.indexOf(key) === i);
+
+    // Build weights bottom-up so weight[i] > sum of everything beneath it.
+    const weights = new Array(order.length);
+    let scale = 1;
+    for (let i = order.length - 1; i >= 0; i--) {
+      weights[i] = scale;
+      scale *= (KEYS[order[i]].bound + 1);
     }
+
+    // Everything is folded into one Maximize; minimize-keys enter negated.
+    const coefficients = new Map();
+    order.forEach((key, i) => {
+      const { terms, better } = KEYS[key];
+      const sign = better === 'max' ? 1 : -1;
+      for (const [c, name] of terms) {
+        coefficients.set(name, (coefficients.get(name) || 0) + sign * weights[i] * c);
+      }
+    });
+
+    const plus = terms => terms.map(s => (s.startsWith('-') ? ` ${s}` : ` +${s}`)).join('');
+    const objTerms = [];
+    for (const [name, c] of coefficients) {
+      if (c === 0) continue;
+      objTerms.push(`${c < 0 ? '-' : ''}${Math.abs(c)} ${name}`);
+    }
+    L.push('Maximize');
+    L.push(' obj:' + (objTerms.length ? plus(objTerms) : ' 0 Wtot'));
 
     L.push('Subject To');
     // Exact slot fill. `bonus` is validated by the caller's activation clause.

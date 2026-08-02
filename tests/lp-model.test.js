@@ -226,3 +226,118 @@ test('a partial solver render says it is still filling in', () => {
   // It must NOT claim a scored total it hasn't got.
   assert.doesNotMatch(partial.countHtml, /scored/);
 });
+
+// Regression: the interim "proved" board shown while the DFS is still running
+// must be the same board that stays on top after every row merges in.
+//
+// The objective used to encode only the PRIMARY sort key, leaving the solver
+// free to break ties arbitrarily. With sort=live, then=waste that surfaced a
+// max-live board with high waste, which then dropped down the list the moment
+// the DFS rows arrived and the real secondary key applied. The preview visibly
+// reordered under the user.
+//
+// Ground truth here is brute force over a small pool: enumerate every feasible
+// board, rank with the shipped comparator, and require the LP to agree.
+test('LP objective matches the result-list comparator, not just the primary key',
+  { timeout: 300000 }, async () => {
+    const highsInstance = await solver();
+    if (!highsInstance) return; // highs is optional; nothing to check without it
+
+    const bonuses = LpModel.bonusOptions(T);
+    const maxBonus = Math.max(...bonuses);
+
+    // Every board of exactly `size` (+ an activated bonus) slots from `pool`.
+    function bruteForce(pool, size, maxWaste) {
+      const found = [];
+      const pick = [];
+      const usedGroups = new Set();
+      const recurse = (i, slots) => {
+        if (slots > size + maxBonus) return;
+        if (i === pool.length) {
+          const sc = score(pick);
+          if (sc.waste > maxWaste) return;
+          // The slot total must match a bonus the board actually activates.
+          let granted = 0;
+          T.teamSize.forEach((tiers, t) => {
+            for (const tier of tiers) {
+              if (sc.counts[t] >= tier.min) granted = Math.max(granted, tier.slots);
+            }
+          });
+          if (sc.slots !== size + granted) return;
+          found.push(sc);
+          return;
+        }
+        recurse(i + 1, slots);
+        const c = pool[i], group = T.group[c];
+        if (group && usedGroups.has(group)) return;
+        if (group) usedGroups.add(group);
+        pick.push(c);
+        recurse(i + 1, slots + T.slots[c]);
+        pick.pop();
+        if (group) usedGroups.delete(group);
+      };
+      recurse(0, 0);
+      return found;
+    }
+
+    async function lpBest(opts) {
+      const rank = SearchUtils.comparator(opts.sortMode, opts.sortMode2);
+      let best = null;
+      for (const bonus of bonuses) {
+        const built = LpModel.buildLP(db, { ...opts, bonus, tables: T });
+        if (!built) continue;
+        const solution = highsInstance.solve(built.lp,
+          { output_flag: false, time_limit: 30, mip_rel_gap: 0 });
+        if (!solution || solution.Status !== 'Optimal') continue;
+        const roster = LpModel.rosterOf(solution);
+        if (!roster.length) continue;
+        const sc = score(roster);
+        if (sc.waste > opts.maxWaste) continue;
+        if (!best || rank(sc, best) < 0) best = sc;
+      }
+      return best;
+    }
+
+    // Deterministic pseudo-random pools: small enough to brute force, varied
+    // enough to produce ties across every sort mode.
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const modes = ['live', 'tier', 'waste', 'cost', 'rich'];
+
+    let checked = 0;
+    for (let trial = 0; trial < 10; trial++) {
+      const poolSize = 13 + Math.floor(rnd() * 4);
+      const pool = [];
+      while (pool.length < poolSize) {
+        const c = Math.floor(rnd() * nC);
+        if (!pool.includes(c)) pool.push(c);
+      }
+      pool.sort((a, b) => a - b);
+
+      const size = 5 + Math.floor(rnd() * 2);
+      const maxWaste = [0, 1, 2, 10][Math.floor(rnd() * 4)];
+      const sortMode = modes[trial % modes.length];
+      const sortMode2 = modes[(trial + 2) % modes.length];
+      const opts = {
+        size, maxWaste, poolIdx: pool, reqIdx: [], emblems: [], muted: [],
+        reqTraits: [], sortMode, sortMode2,
+      };
+
+      const feasible = bruteForce(pool, size, maxWaste);
+      if (!feasible.length) continue;
+
+      const rank = SearchUtils.comparator(sortMode, sortMode2);
+      feasible.sort(rank);
+      const truth = feasible[0];
+      const lp = await lpBest(opts);
+      checked++;
+
+      assert.ok(lp, `LP found a board for ${sortMode}>${sortMode2}`);
+      // Compare on rank, not roster identity - several boards can tie exactly.
+      assert.equal(rank(lp, truth), 0,
+        `${sortMode}>${sortMode2} pool=${poolSize} size=${size} waste<=${maxWaste}: ` +
+        `LP chose live=${lp.live} tier=${lp.tierSum} waste=${lp.waste} gold=${lp.gold}, ` +
+        `comparator prefers live=${truth.live} tier=${truth.tierSum} waste=${truth.waste} gold=${truth.gold}`);
+    }
+    assert.ok(checked >= 5, `exercised ${checked} tie-break comparisons`);
+  });

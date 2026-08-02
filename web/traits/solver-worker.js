@@ -89,16 +89,63 @@ async function solve(opts, onProgress) {
   let proved = false;          // did we prove the top row optimal?
   let infeasible = true;
 
-  // Each team-size bonus is a separate model; solve them in order and keep the
-  // best. Enumerating is safe because there is only a handful of bonus values.
-  for (const bonus of LpModel.bonusOptions(TABLES)) {
+  // Phase 1 — prove the ceiling. Solve the i=0 model for EVERY team-size bonus
+  // before showing anything. Each of those solves is fast (~100-400ms) and the
+  // best of them is the true optimum, so the board we publish here is the one
+  // that will still be on top after the DFS rows merge in.
+  //
+  // Announcing earlier (after the first bonus) is not safe: a later bonus can
+  // beat it, and the user watches the top row change out from under them.
+  const rank = SearchUtils.comparator(opts.sortMode, opts.sortMode2);
+  const bonuses = LpModel.bonusOptions(TABLES);
+  const seeds = new Map();     // bonus -> roster proving that bonus's optimum
+  let best = null;
+
+  for (const bonus of bonuses) {
     if (performance.now() - started > budget) break;
-    const cuts = [];
-    for (let i = 0; i < want; i++) {
-      if (performance.now() - started > budget) break;
-      const built = LpModel.buildLP(DB, {
-        ...opts, bonus, cuts, tables: TABLES,
+    const built = LpModel.buildLP(DB, { ...opts, bonus, cuts: [], tables: TABLES });
+    if (!built) continue;
+    let solution;
+    try {
+      solution = highs.solve(built.lp, {
+        output_flag: false,
+        time_limit: Math.max(0.25, (budget - (performance.now() - started)) / 1000),
+        mip_rel_gap: 0,
       });
+    } catch (err) {
+      // A malformed model or an OOM must not kill the DFS results.
+      return { rows: [], proved: false, error: String(err && err.message || err) };
+    }
+    if (!solution || solution.Status !== 'Optimal') continue;
+    const roster = LpModel.rosterOf(solution);
+    if (!roster.length) continue;
+    const row = scoreRoster(roster, opts.emblems, opts.muted);
+    // The model enforces the waste cap, but re-check with the shipped scoring
+    // rules: if these ever disagree the DFS answer must win, not ours.
+    if (row.waste > opts.maxWaste) continue;
+    infeasible = false;
+    proved = true;
+    seeds.set(bonus, roster);
+    if (!seenSignature.has(row.signature)) {
+      seenSignature.add(row.signature);
+      rows.push(row);
+    }
+    if (!best || rank(row, best) < 0) best = row;
+  }
+
+  // Publish the proven optimum now. Enumerating the runners-up costs seconds
+  // (each no-good cut makes the next solve harder) and none of them can beat
+  // this board, so making the user wait for them is pure latency.
+  if (proved && best && onProgress) onProgress([best]);
+
+  // Phase 2 — enumerate runners-up with no-good cuts, per bonus.
+  for (const bonus of bonuses) {
+    if (performance.now() - started > budget) break;
+    if (!seeds.has(bonus)) continue;
+    const cuts = [seeds.get(bonus)];
+    for (let i = 1; i < want; i++) {
+      if (performance.now() - started > budget) break;
+      const built = LpModel.buildLP(DB, { ...opts, bonus, cuts, tables: TABLES });
       if (!built) break;
       let solution;
       try {
@@ -108,31 +155,22 @@ async function solve(opts, onProgress) {
           mip_rel_gap: 0,
         });
       } catch (err) {
-        // A malformed model or an OOM must not kill the DFS results.
-        return { rows, proved: false, error: String(err && err.message || err) };
+        break;                 // keep the proven rows we already have
       }
       if (!solution || solution.Status !== 'Optimal') break;
-      infeasible = false;
       const roster = LpModel.rosterOf(solution);
       if (!roster.length) break;
       const row = scoreRoster(roster, opts.emblems, opts.muted);
-      // The model enforces the waste cap, but re-check with the shipped scoring
-      // rules: if these ever disagree the DFS answer must win, not ours.
       if (row.waste > opts.maxWaste) break;
-      if (i === 0 && bonus === LpModel.bonusOptions(TABLES)[0]) proved = true;
       if (!seenSignature.has(row.signature)) {
         seenSignature.add(row.signature);
         rows.push(row);
-        // Publish the proven optimum the moment it exists. Enumerating the next
-        // seven boards costs seconds (each no-good cut makes the following solve
-        // harder) and none of them can beat this one, so making the user wait
-        // for them before seeing anything is pure latency.
-        if (rows.length === 1 && proved && onProgress) onProgress(rows.slice());
       }
       cuts.push(roster);
     }
   }
 
+  rows.sort(rank);
   return { rows, proved: proved && rows.length > 0, infeasible: infeasible && !rows.length };
 }
 
