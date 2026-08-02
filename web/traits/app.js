@@ -2,6 +2,20 @@
 let DB = null, W = [], dataReady = false, workersReady = false;
 let reqId = 0, pending = false, workerEpoch = 0, searchGeneration = 0;
 let inbox = [];                   // shard results for the in-flight request
+// Mid-flight snapshots, keyed by worker, so a shard's newer snapshot replaces
+// its older one instead of accumulating duplicate rows.
+let shardProgress = new Map();
+// Best board the solver has proved for the in-flight request, kept separately
+// from solverInbox so interim renders can include it before the solver
+// finishes enumerating the runners-up.
+let solverBest = null;
+// Interim-render throttle state. Declared up here with the rest of the module
+// state, NOT next to renderProgress(): stopWorkers() runs during init and calls
+// cancelProgressRender(), and a `let` declared further down would still be in
+// its temporal dead zone at that point, throwing and killing page load.
+const PROGRESS_RENDER_MS = 250;
+let progressFrame = null;
+let lastProgressRender = 0;
 let debounceTimer = null, queuedDispatch = null, activeSearch = null;
 // The MILP solver runs beside the DFS shards. It proves the ceiling in a few
 // hundred ms where the DFS needs tens of seconds and usually gives up first, so
@@ -569,6 +583,9 @@ function stopWorkers(cancellation = false) {
   queuedDispatch = null;
   pending = false;
   inbox = [];
+  shardProgress = new Map();
+  cancelProgressRender();
+  solverBest = null;
   solverInbox = null;
   activeSearch = null;
   reqId++;
@@ -684,42 +701,98 @@ function onWorker(e) {
   const m = e.data;
   if (m.type !== 'result') return;
   if (m.id !== reqId) return;            // stale shard from a superseded search
+  // A partial is a mid-flight snapshot, not a finished shard. It must never
+  // land in `inbox` or it would be counted toward completion and the search
+  // would "finish" while the DFS is still running.
+  if (m.partial) {
+    if (pending && activeSearch) {
+      shardProgress.set(e.target, m);
+      renderProgress();
+    }
+    return;
+  }
+  shardProgress.delete(e.target);
   inbox.push(m);
-  if (inbox.length < W.length) return;   // still waiting on other shards
+  if (inbox.length < W.length) { renderProgress(); return; }
   finishSearch();
+}
+
+// Interim render while shards are still grinding: merge whatever each engine
+// has found so far. Rows are already sorted inside each shard, and
+// mergeSearchResults() dedupes by trait signature, so this is the same
+// combination the final render does — just over incomplete inputs.
+//
+// Coalesced: eight shards emit independently, so without this the UI would
+// rebuild the whole 100-board list ~20x/second and steal main-thread time from
+// the search itself. One render per animation frame, and at most one per
+// PROGRESS_RENDER_MS, is plenty to look live. (The throttle state itself lives
+// at the top of this file — see the note there about the temporal dead zone.)
+
+// Drop any queued interim render. Without this a timer armed mid-search can
+// fire AFTER the final render and revert the UI to "finding more…".
+function cancelProgressRender() {
+  if (progressFrame !== null) {
+    clearTimeout(progressFrame);
+    progressFrame = null;
+  }
+}
+
+function renderProgress() {
+  if (progressFrame !== null) return;
+  const since = performance.now() - lastProgressRender;
+  const wait = Math.max(0, PROGRESS_RENDER_MS - since);
+  progressFrame = setTimeout(() => {
+    progressFrame = null;
+    lastProgressRender = performance.now();
+    renderProgressNow();
+  }, wait);
+}
+
+function renderProgressNow() {
+  const search = activeSearch;
+  if (!search || !pending) return;
+
+  const parts = [
+    ...inbox,                             // shards that already finished
+    ...shardProgress.values(),            // snapshots from shards still running
+  ];
+  const solverRows = solverBest ? [solverBest] : [];
+  if (solverRows.length) {
+    parts.push({
+      rows: solverRows, total: 0, ms: 0,
+      nodes: 0, truncated: false, capped: false, stopReason: null,
+    });
+  }
+  if (!parts.length) return;
+
+  const merged = mergeSearchResults(parts, search.opts.sortMode, search.opts.sortMode2);
+  if (!merged.rows.length) return;
+  merged.effort = search.opts.effort;
+  merged.proved = !!solverBest;
+  merged.partial = true;
+  render(merged);
 }
 
 function onSolver(m) {
   if (m.id !== reqId) return;            // stale solve from a superseded search
-  // A partial is an early proof, not a completed solve: render it, but keep
-  // waiting for the real message or the search would finish holding one board.
+  // A partial is an early proof, not a completed solve: record it and render,
+  // but keep waiting for the real message or the search would finish holding
+  // just the one board.
   if (m.partial) {
-    if (pending && activeSearch && m.rows && m.rows.length) renderPartialSolver(m);
+    if (pending && activeSearch && m.rows && m.rows.length) {
+      solverBest = m.rows[0];
+      renderProgress();
+    }
     return;
   }
   solverInbox = m;
   if (!pending || !activeSearch) return;
+  if (m.rows && m.rows.length && !m.error) solverBest = m.rows[0];
   if (inbox.length >= W.length) { finishSearch(); return; }
   // The DFS is still grinding, but the solver has already proved the ceiling.
   // Show it now — waiting means staring at "searching…" for another ten seconds
   // to receive rows we can already prove are no better.
-  if (m.rows && m.rows.length && !m.error) renderPartialSolver(m);
-}
-
-// Interim render: proven boards only, clearly marked as still filling in.
-function renderPartialSolver(solver) {
-  const search = activeSearch;
-  if (!search) return;
-  const merged = mergeSearchResults(
-    [{
-      rows: solver.rows, total: 0, ms: solver.ms,
-      nodes: 0, truncated: false, capped: false, stopReason: null,
-    }],
-    search.opts.sortMode, search.opts.sortMode2);
-  merged.effort = search.opts.effort;
-  merged.proved = !!solver.proved;
-  merged.partial = true;
-  render(merged);
+  renderProgress();
 }
 
 // Both engines are in. Combine and render.
@@ -736,6 +809,9 @@ function finishSearch() {
 
   pending = false;
   const parts = inbox; inbox = [];
+  shardProgress = new Map();
+  cancelProgressRender();
+  solverBest = null;
   const solver = solverInbox; solverInbox = null;
   activeSearch = null;
 
@@ -1474,6 +1550,9 @@ function dispatchSearch(generation, opts, key) {
   if (generation !== searchGeneration || !workersReady) return;
   pending = true;
   inbox = [];
+  shardProgress = new Map();
+  cancelProgressRender();
+  solverBest = null;
   solverInbox = null;
   $('status').textContent = 'searching…';
   const id = ++reqId;

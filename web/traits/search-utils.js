@@ -164,13 +164,17 @@
             ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
             : `searched in ${seconds}s`);
     const countHtml = partial
-      ? `best <b>${result.rows.length}</b> proved so far`
+      ? `best <b>${result.rows.length}</b> so far` +
+        (result.total ? ` of ${result.total.toLocaleString()}+ scored` : '') +
+        (proved ? ' <span class="tag ok">optimal</span>' : '')
       : `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
         (proved
           ? ' <span class="tag ok">optimal</span>'
           : result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
     const title = cachedTitle + (partial
-      ? 'Showing solver-proved boards while the wider search fills in the rest.'
+      ? (proved
+        ? 'The top board is already proved optimal. Lower-ranked boards are still filling in.'
+        : 'Results are still filling in as the search finds them.')
       : proved
         ? 'The top board is provably the best for these settings. Lower-ranked boards come from the wider search and may be incomplete.'
         : result.truncated

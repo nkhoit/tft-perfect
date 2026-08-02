@@ -49,7 +49,9 @@ function runShard(dataPath, shard) {
   context.onmessage({ data: { type: 'init', db } });
   if (messages.at(-1)?.type !== 'ready') throw new Error(`Shard ${shard} failed to initialize.`);
   context.onmessage({
-    data: { type: 'search', id: 1, opts: options(db, shard) },
+    // progress:false — this is a headless build step with no UI to update, and
+    // streaming snapshots would just pile up in `messages`.
+    data: { type: 'search', id: 1, opts: { ...options(db, shard), progress: false } },
   });
   const result = messages.at(-1);
   if (result?.type !== 'result' || result.error) {

@@ -166,6 +166,23 @@ function search(o) {
     : Infinity;
   const deadline = performance.now() + timeBudgetMs;
 
+  // Interim progress. The `kept` list is maintained in sorted order at all
+  // times, so snapshotting it mid-search is just a slice — no extra work, and
+  // the DFS keeps running. Emitting lets the UI fill results in as they are
+  // found instead of staying blank until the whole shard finishes.
+  const onProgress = typeof o.onProgress === 'function' ? o.onProgress : null;
+  const progressEveryMs = Number.isFinite(o.progressEveryMs) && o.progressEveryMs > 0
+    ? o.progressEveryMs
+    : 400;
+  let nextProgressAt = performance.now() + progressEveryMs;
+
+  function snapshotRows() {
+    return kept.slice(0, o.returnN || limit).map(entry => ({
+      ...entry.row,
+      variants: entry.variants,
+    }));
+  }
+
   function consumeNode() {
     nodes++;
     if (nodes > NODE_BUDGET) {
@@ -173,10 +190,18 @@ function search(o) {
       stopReason = 'nodes';
       return false;
     }
-    if ((nodes & 4095) === 0 && performance.now() >= deadline) {
-      truncated = true;
-      stopReason = 'time';
-      return false;
+    if ((nodes & 4095) === 0) {
+      const now = performance.now();
+      if (now >= deadline) {
+        truncated = true;
+        stopReason = 'time';
+        return false;
+      }
+      // Cheap: one compare per 4096 nodes, a slice only when it actually fires.
+      if (onProgress && now >= nextProgressAt) {
+        nextProgressAt = now + progressEveryMs;
+        onProgress({ rows: snapshotRows(), total: found, nodes });
+      }
     }
     return true;
   }
@@ -578,10 +603,7 @@ function search(o) {
   }
 
   return {
-    rows: kept.slice(0, o.returnN || limit).map(entry => ({
-      ...entry.row,
-      variants: entry.variants,
-    })),
+    rows: snapshotRows(),
     total: found, truncated, capped: trimmed, nodes, stopReason,
   };
 }
@@ -592,7 +614,22 @@ onmessage = (e) => {
   if (m.type === 'search') {
     const t0 = performance.now();
     let r;
-    try { r = search(m.opts); } catch (err) { r = { error: String(err) }; }
+    try {
+      r = search({
+        ...m.opts,
+        // Stream partial results so the UI fills in as boards are found.
+        // `partial: true` marks these as not-yet-final; the app must keep
+        // waiting for the real 'result' message before completing the search.
+        onProgress: m.opts && m.opts.progress === false ? null : (snap) => {
+          postMessage({
+            type: 'result', id: m.id, partial: true,
+            ms: Math.round(performance.now() - t0),
+            rows: snap.rows, total: snap.total, nodes: snap.nodes,
+            truncated: false, capped: false, stopReason: null,
+          });
+        },
+      });
+    } catch (err) { r = { error: String(err) }; }
     postMessage({ type: 'result', id: m.id, ms: Math.round(performance.now() - t0), ...r });
   }
 };

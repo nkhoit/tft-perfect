@@ -222,9 +222,19 @@ test('a partial solver render says it is still filling in', () => {
   });
   assert.match(partial.statusHtml, /optimal/);
   assert.match(partial.statusHtml, /finding more/);
-  assert.match(partial.countHtml, /proved so far/);
+  assert.match(partial.countHtml, /so far/);
   // It must NOT claim a scored total it hasn't got.
   assert.doesNotMatch(partial.countHtml, /scored/);
+
+  // A partial that HAS scored boards (the DFS streaming its own rows in) may
+  // report the running total, but must not imply the search is done.
+  const filling = SearchUtils.summary({
+    ms: 900, rows: [{}, {}, {}], total: 4210, truncated: false, stopReason: null,
+    proved: true, partial: true,
+  });
+  assert.match(filling.countHtml, /4,210\+ scored/);
+  assert.match(filling.statusHtml, /finding more/);
+  assert.doesNotMatch(filling.statusHtml, /stopped early/);
 });
 
 // Regression: the interim "proved" board shown while the DFS is still running
