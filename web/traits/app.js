@@ -1662,6 +1662,11 @@ const COPY_CODE_ICON = `<svg class="copyicon" viewBox="0 0 20 20" aria-hidden="t
   <g class="copyglyph"><path d="M7 6V4.8C7 3.8 7.8 3 8.8 3h6.4c1 0 1.8.8 1.8 1.8v6.4c0 1-.8 1.8-1.8 1.8H14"/><rect x="3" y="7" width="10" height="10" rx="2"/></g>
   <path class="checkglyph" d="m4.8 10.4 3.1 3.1 7.3-7.3"/>
 </svg>`;
+const PREVIEW_ICON = `<svg class="previewicon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+  <rect x="2.5" y="3.5" width="15" height="13" rx="2"/>
+  <circle cx="7" cy="8" r="1.5"/>
+  <path d="m4.5 14 4-4 2.8 2.8 1.7-1.7 2.5 2.9"/>
+</svg>`;
 
 function copyCodeButton(units) {
   return `<button type="button" class="copycode" data-units="${units.join(',')}" ` +
@@ -1837,7 +1842,7 @@ function compCard(r, { selected = false } = {}) {
   const previewButton = selected
     ? `<button type="button" class="previewcomp" data-sig="${signature}" ` +
       `aria-pressed="${featured}" data-tip="${featured ? 'Discord preview comp' : 'Use for Discord preview'}" ` +
-      `aria-label="${featured ? 'This comp is featured in the Discord preview' : 'Use this comp for the Discord preview'}">★</button>`
+      `aria-label="${featured ? 'This comp is featured in the Discord preview' : 'Use this comp for the Discord preview'}">${PREVIEW_ICON}</button>`
     : '';
   const pinButton = `<button type="button" class="pincomp" data-sig="${signature}" ` +
     `aria-pressed="${selected}" ` +

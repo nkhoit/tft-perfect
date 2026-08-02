@@ -5,7 +5,8 @@ const test = require('node:test');
 
 const { shareHandler } = require('../src/functions/share.js');
 const { ogHandler } = require('../src/functions/og.js');
-const { fallbackPng, shareHtml } = require('../src/lib/preview.js');
+const { fallbackPng, previewTree, shareHtml } = require('../src/lib/preview.js');
+const { data, previewState } = require('../src/lib/preview-state.js');
 const { decodeToken, validToken } = require('../src/lib/share-codec.js');
 
 const token = state => 'r' + Buffer.from(JSON.stringify(state)).toString('base64url');
@@ -77,6 +78,39 @@ test('bundled fallback is a 1200x630 PNG', () => {
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
+});
+
+test('every champion has a bundled preview portrait', () => {
+  const portraitDir = path.join(__dirname, '..', 'assets', 'champions');
+  for (const champion of data.champions) {
+    const portrait = fs.readFileSync(path.join(portraitDir, `${champion.key}.png`));
+    assert.equal(portrait.subarray(1, 4).toString(), 'PNG', champion.key);
+  }
+});
+
+test('preview cards use bundled portraits with bottom name labels', () => {
+  const tree = previewTree(previewState({
+    v: 2,
+    l: 2,
+    sel: [['Pebbles', 'AncientSentinel']],
+  }));
+  const nodes = [];
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    nodes.push(node);
+    const children = node.props?.children;
+    for (const child of Array.isArray(children) ? children : [children]) visit(child);
+  };
+  visit(tree);
+
+  const portraits = nodes.filter(node => node.type === 'img');
+  assert.equal(portraits.length, 2);
+  assert.ok(portraits.every(node => node.props.src.startsWith('data:image/png;base64,')));
+  for (const name of ['Pebbles', 'Ancient Sentinel']) {
+    const label = nodes.find(node => node.props?.children === name);
+    assert.equal(label.props.style.position, 'absolute');
+    assert.equal(label.props.style.bottom, 0);
+  }
 });
 
 test('fallback responses are not cacheable', async () => {
