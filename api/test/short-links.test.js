@@ -11,6 +11,9 @@ const {
   shortenHandler,
   shortShareHandler,
 } = require('../src/functions/short-links.js');
+const { shortImageHandler } = require('../src/functions/short-image.js');
+const { clearMemoryCache } = require('../src/lib/preview-cache.js');
+const { PREVIEW_ROUTE_VERSION } = require('../src/lib/preview-state.js');
 
 const token = state => 'r' + Buffer.from(JSON.stringify(state)).toString('base64url');
 const selectedToken = token({ v: 2, l: 2, sel: [['Shen', 'Teemo']] });
@@ -50,6 +53,27 @@ function request({ body, id, method = 'GET', url = 'https://preview.example.test
 }
 
 const context = { error() {} };
+
+function imageOptions() {
+  const rows = new Map();
+  const options = {
+    gets: 0,
+    renders: 0,
+    store: {
+      rows,
+      async get(key) {
+        options.gets++;
+        return rows.get(key) || null;
+      },
+      async put(key, body) { rows.set(key, Buffer.from(body)); },
+    },
+    async render() {
+      options.renders++;
+      return Buffer.from('PNG body');
+    },
+  };
+  return options;
+}
 
 test('share tokens receive deterministic 12-character IDs', async () => {
   const store = memoryStore();
@@ -116,16 +140,19 @@ test('concurrent creation widens an ID occupied by another token', async () => {
 
 test('shorten endpoint validates and stores share tokens', async () => {
   const store = memoryStore();
+  const images = imageOptions();
   const result = await shortenHandler(request({
     method: 'POST',
     url: 'https://preview.example.test/api/shorten',
     body: { token: selectedToken },
-  }), context, store);
+  }), context, store, images);
   const payload = JSON.parse(result.body);
 
   assert.equal(result.status, 201);
   assert.equal(result.headers['cache-control'], 'no-store');
   assert.match(payload.id, /^[A-Za-z0-9_-]{12}$/);
+  assert.equal(images.renders, 1);
+  assert.equal(images.store.rows.size, 1);
 });
 
 test('short share endpoint serves metadata and restores the long token', async () => {
@@ -138,9 +165,34 @@ test('short share endpoint serves metadata and restores the long token', async (
 
   assert.equal(result.status, 200);
   assert.match(result.body, new RegExp(`property="og:url" content="https:\\/\\/preview\\.example\\.test\\/api\\/s\\/${id}"`));
-  assert.match(result.body, new RegExp(`https:\\/\\/preview\\.example\\.test\\/api\\/og\\/${selectedToken}`));
+  assert.match(result.body, new RegExp(
+    `https:\\/\\/preview\\.example\\.test\\/api\\/i\\/${PREVIEW_ROUTE_VERSION}\\/${id}`));
+  assert.doesNotMatch(result.body, new RegExp(`api\\/og\\/${selectedToken}`));
   assert.match(result.body, new RegExp(`location\\.replace\\("\\/traits\\/\\?s=${selectedToken}"\\)`));
   assert.match(result.body, /Shen, Teemo/);
+});
+
+test('short image route reuses the image persisted during prewarm', async () => {
+  clearMemoryCache();
+  const shares = memoryStore();
+  const images = imageOptions();
+  const created = await shortenHandler(request({
+    method: 'POST',
+    body: { token: selectedToken },
+  }), context, shares, images);
+  const { id } = JSON.parse(created.body);
+  clearMemoryCache();
+
+  const image = await shortImageHandler({
+    method: 'GET',
+    params: { version: PREVIEW_ROUTE_VERSION, id },
+    headers: new Headers(),
+  }, context, shares, images);
+
+  assert.equal(image.status, 200);
+  assert.equal(images.renders, 1);
+  assert.equal(images.gets, 2);
+  assert.equal(Buffer.from(image.body).toString(), 'PNG body');
 });
 
 test('short-link endpoints reject invalid and missing records', async () => {
