@@ -27,6 +27,18 @@ function expandedEmblems(state) {
   return emblems;
 }
 
+function teamProfile(champions) {
+  const profile = { tanks: 0, AD: 0, AP: 0, Hybrid: 0 };
+  for (const champion of champions) {
+    const role = champion.role || '';
+    if (role.endsWith('Tank')) profile.tanks++;
+    else if (champion.traits.includes('Adaptor') || role.startsWith('Hybrid')) profile.Hybrid++;
+    else if (role.startsWith('AD')) profile.AD++;
+    else if (role.startsWith('AP')) profile.AP++;
+  }
+  return profile;
+}
+
 function previewState(state) {
   const size = Number.isInteger(state.l) && state.l >= 2 && state.l <= 10 ? state.l : 8;
   const emblems = expandedEmblems(state);
@@ -47,9 +59,11 @@ function previewState(state) {
     const signature = validated.indexes.slice().sort((a, b) => a - b).join(',');
     if (seen.has(signature)) continue;
     seen.add(signature);
+    const champions = validated.indexes.map(index => data.champions[index]);
     selected.push({
       keys: roster.slice(),
-      champions: validated.indexes.map(index => data.champions[index]),
+      champions,
+      profile: teamProfile(champions),
       row: validated.row,
       traits: validated.row.active.slice(0, 10).map(([trait, count]) => ({
         count,
@@ -71,7 +85,7 @@ function previewState(state) {
 function etag(token) {
   return '"' + crypto.createHash('sha256')
     .update(data.builtAt)
-    .update('\0portraits-v1')
+    .update('\0portraits-profile-v1')
     .update('\0')
     .update(token)
     .digest('base64url')

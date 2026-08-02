@@ -48,9 +48,8 @@ function previewText(preview) {
       description: 'Open this shared TFT Trait Explorer search.',
     };
   }
-  const row = preview.featured.row;
   return {
-    title: `${row.live} active traits · ${row.waste} wasted`,
+    title: `${preview.featured.row.live} active traits`,
     description: preview.featured.champions.map(champion => champion.name).join(', '),
   };
 }
@@ -150,8 +149,16 @@ function previewTree(preview) {
   const champions = featured?.champions || [];
   const traits = featured?.traits || [];
   const headline = featured
-    ? `${featured.row.live} active traits · ${featured.row.waste} wasted`
+    ? `${featured.row.live} active traits`
     : 'Shared Trait Explorer search';
+  const profile = featured
+    ? [
+      { count: featured.profile.tanks, label: 'Tank', color: '#e0b243' },
+      { count: featured.profile.AD, label: 'AD', color: '#fb923c' },
+      { count: featured.profile.AP, label: 'AP', color: '#8b7cf6' },
+      { count: featured.profile.Hybrid, label: 'Hybrid', color: '#d879f1' },
+    ].filter(item => item.label === 'Tank' || item.count)
+    : [];
   const summary = featured
     ? `${featured.row.gold}g · Level ${preview.size}` +
       (preview.otherCount ? ` · +${preview.otherCount} other selected` : '')
@@ -180,7 +187,37 @@ function previewTree(preview) {
           props: {
             style: { display: 'flex', flexDirection: 'column', gap: 18 },
             children: [
-              { type: 'div', props: { style: { fontSize: 38, fontWeight: 700 }, children: headline } },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  },
+                  children: [
+                    {
+                      type: 'div',
+                      props: { style: { fontSize: 38, fontWeight: 700 }, children: headline },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', gap: 9 },
+                        children: profile.map(item => ({
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex', padding: '6px 12px', borderRadius: 16,
+                              border: `1px solid ${item.color}`, background: '#131822',
+                              color: item.color, fontSize: 20, fontWeight: 700,
+                            },
+                            children: `${item.count} ${item.label}`,
+                          },
+                        })),
+                      },
+                    },
+                  ],
+                },
+              },
               {
                 type: 'div',
                 props: {
