@@ -24,15 +24,16 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install API dependencies
+        run: npm --prefix api ci
+
       - name: Test
         run: npm test
 
       - name: Check JavaScript
         run: |
           npm run check
-          npm --prefix api ci
           npm --prefix api run check
-          npm --prefix api test
 
       - name: Check Python
         run: |
