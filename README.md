@@ -95,7 +95,7 @@ npm run check
 
 ## Data
 
-`web/data.json` is generated from the checked-in `set18-roster.json`,
+`web/traits/data.json` is generated from the checked-in `set18-roster.json`,
 [CommunityDragon](https://communitydragon.org), Riot's team-planner data,
 [LoLChess](https://lolchess.gg), and a checked-in origin/class taxonomy sourced
 from [Blitz](https://utils.iesdev.com/static/json/tftTest/set18/en_us/traits).
@@ -108,7 +108,7 @@ python3 build_set18.py
 
 The builder caches large downloads under the operating system's temporary directory.
 It validates roster joins, trait breakpoints, icons, champion stats, and abilities before
-replacing `web/data.json`. Node.js is also required because the builder regenerates the
+replacing `web/traits/data.json`. Node.js is also required because the builder regenerates the
 versioned default-search snapshot alongside the dataset.
 
 To compare a directory of archived patch-note JSON files with the generated data:

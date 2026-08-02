@@ -275,6 +275,8 @@ test('the generated data and checked-in roster are internally consistent', () =>
   assert.equal(data.traits.Ravager.category, 'class');
   assert.match(builder, /TRAIT_CATEGORIES = \{/);
   assert.match(builder, /"Blackthorn": "origin"/);
+  assert.match(builder, /OUT = os\.path\.join\(HERE, "web", "traits", "data\.json"\)/);
+  assert.doesNotMatch(builder, /OUT = os\.path\.join\(HERE, "web", "data\.json"\)/);
   const duplicatePlannerCodes = [...Map.groupBy(data.champions, champion => champion.teamPlannerCode)]
     .filter(([, champions]) => champions.length > 1);
   assert.equal(duplicatePlannerCodes.length, 1);

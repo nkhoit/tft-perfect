@@ -7,7 +7,7 @@ This stitches:
   - icons                             <- CommunityDragon pbe game assets, path-verified
                                          against cdragon/files.exported.txt
 
-Usage: python3 build_set18.py [--out web/data.json]
+Usage: python3 build_set18.py [--out web/traits/data.json]
 """
 import argparse, json, os, re, sys, urllib.request, urllib.error, datetime, hashlib, concurrent.futures, html, tempfile
 import subprocess
@@ -15,7 +15,7 @@ import xxhash
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REVEAL = os.path.join(HERE, "set18-roster.json")
-OUT = os.path.join(HERE, "web", "data.json")
+OUT = os.path.join(HERE, "web", "traits", "data.json")
 
 UA = {"User-Agent": "Mozilla/5.0 (kuro-tft-perfect)"}
 PBE = "https://raw.communitydragon.org/pbe"
