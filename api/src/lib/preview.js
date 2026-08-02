@@ -5,6 +5,7 @@ const WIDTH = 1200;
 const HEIGHT = 630;
 let rendererPromise = null;
 let resvgPromise = null;
+const portraitSources = new Map();
 
 function publicOrigin(request) {
   const originalUrl = request.headers.get('x-ms-original-url');
@@ -86,21 +87,56 @@ function shareHtml(origin, token, preview) {
 </html>`;
 }
 
+function portraitSource(champion) {
+  if (!portraitSources.has(champion.key)) {
+    if (!/^[A-Za-z0-9_-]+$/.test(champion.key)) {
+      throw new Error(`Unsafe champion key: ${champion.key}`);
+    }
+    const portrait = fs.readFileSync(path.resolve(
+      __dirname, '..', '..', 'assets', 'champions', `${champion.key}.png`));
+    portraitSources.set(champion.key, `data:image/png;base64,${portrait.toString('base64')}`);
+  }
+  return portraitSources.get(champion.key);
+}
+
 function previewTree(preview) {
   const costColors = ['#9aa4b2', '#2dd4a7', '#60a5fa', '#c084fc', '#fbbf24'];
-  const card = champion => ({
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex', width: 122, height: 122, borderRadius: 14,
-        border: `4px solid ${costColors[champion.cost - 1] || '#9aa4b2'}`,
-        alignItems: 'center', justifyContent: 'center', textAlign: 'center',
-        background: '#1b2130', color: '#e6edf3', fontSize: 15, fontWeight: 700,
-        lineHeight: 1.1, overflow: 'hidden', wordBreak: 'break-word', padding: 8,
+  const card = champion => {
+    const name = champion.name.replace(/([a-z])([A-Z])/g, '$1 $2');
+    return {
+      type: 'div',
+      props: {
+        style: {
+          display: 'flex', width: 122, height: 122, borderRadius: 14,
+          border: `4px solid ${costColors[champion.cost - 1] || '#9aa4b2'}`,
+          position: 'relative', overflow: 'hidden', background: '#1b2130',
+        },
+        children: [
+          {
+            type: 'img',
+            props: {
+              src: portraitSource(champion),
+              alt: name,
+              style: { width: '100%', height: '100%', objectFit: 'cover' },
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: {
+                display: 'flex', position: 'absolute', left: 0, right: 0, bottom: 0,
+                minHeight: 38, padding: '12px 5px 4px', alignItems: 'flex-end',
+                justifyContent: 'center', textAlign: 'center',
+                background: 'linear-gradient(to bottom, transparent, rgba(5, 8, 14, 0.96))',
+                color: '#f2f5f9', fontSize: 14, fontWeight: 700, lineHeight: 1.05,
+              },
+              children: name,
+            },
+          },
+        ],
       },
-      children: champion.name.replace(/([a-z])([A-Z])/g, '$1 $2'),
-    },
-  });
+    };
+  };
   const featured = preview.featured;
   const champions = featured?.champions || [];
   const traits = featured?.traits || [];
@@ -227,6 +263,7 @@ module.exports = {
   escapeHtml,
   fallbackPng,
   previewPng,
+  previewTree,
   publicOrigin,
   shareHtml,
   previewText,

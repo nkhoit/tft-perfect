@@ -71,6 +71,7 @@ function previewState(state) {
 function etag(token) {
   return '"' + crypto.createHash('sha256')
     .update(data.builtAt)
+    .update('\0portraits-v1')
     .update('\0')
     .update(token)
     .digest('base64url')

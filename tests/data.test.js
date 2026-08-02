@@ -95,6 +95,7 @@ test('the application contains only Set 18', () => {
   assert.match(app, /const SHARE_SCHEMA_VERSION = 2/);
   assert.match(app, /shared\.v < 1 \|\| shared\.v > SHARE_SCHEMA_VERSION/);
   assert.match(app, /class="previewcomp"/);
+  assert.match(app, /class="previewicon"/);
   assert.match(app, /function renderSavedSearches/);
   assert.match(app, /function restoreSavedEntry/);
   assert.match(app, /history\.replaceState/);

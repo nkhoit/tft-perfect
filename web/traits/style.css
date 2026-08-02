@@ -235,7 +235,9 @@ button:hover{border-color:var(--acc2)}
   transition:opacity .1s,transform .1s,visibility .1s}
 .pincomp:hover::after,.pincomp:focus-visible::after{visibility:visible;opacity:1;transform:translateY(0)}
 .previewcomp{position:relative;flex:none;width:30px;height:30px;margin:0;padding:0;
-  border-color:#4d4a35;background:#18170f;color:#756f50;font-size:17px;line-height:1}
+  display:grid;place-items:center;border-color:#4d4a35;background:#18170f;color:#756f50;line-height:1}
+.previewicon{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
 .previewcomp[aria-pressed="true"]{border-color:var(--gold);color:#ffe38c;background:#342b10}
 .previewcomp:hover,.previewcomp:focus-visible{border-color:var(--gold);color:#ffe38c}
 .selnotice{margin:0 0 8px;padding:7px 9px;border:1px solid #674434;border-radius:6px;
