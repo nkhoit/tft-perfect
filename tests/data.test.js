@@ -128,6 +128,17 @@ test('unit picker portraits include role badges', () => {
   assert.match(addUnit[1], /\$\{portraitRoleBadge\(c\)\}/);
 });
 
+test('result unit portraits toggle required state', () => {
+  const app = read('web/app.js');
+  const css = read('web/style.css');
+
+  assert.match(app, /e\.target\.closest\('\.uc\[data-key\]'\)/);
+  assert.match(app,
+    /setUnitState\(unit\.dataset\.key, state\.get\(unit\.dataset\.key\) === 1 \? 0 : 1\)/);
+  assert.match(app, /querySelectorAll\('\.u\[data-key\], \.uc\[data-key\]'\)/);
+  assert.match(css, /\.uc\{[^}]*cursor:pointer/);
+});
+
 test('unit picker switches between cost, origin, and class groups', () => {
   const html = read('web/index.html');
   const app = read('web/app.js');

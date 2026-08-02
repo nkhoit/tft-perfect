@@ -831,7 +831,7 @@ function setUnitState(key, value) {
   const champion = DB.champions.find(unit => unit.key === key);
   if (champion && isGroupExcluded(champion)) return;
   state.set(key, value);
-  for (const tile of $('pool').querySelectorAll('.u[data-key]')) {
+  for (const tile of document.querySelectorAll('.u[data-key], .uc[data-key]')) {
     if (tile.dataset.key !== key) continue;
     tile.classList.toggle('req', value === 1);
     tile.classList.toggle('exc', value === 2);
@@ -1462,7 +1462,8 @@ function portraitRoleBadge(champion) {
 
 function unitPortrait(c) {
   const req = state.get(c.key) === 1 ? ' req' : '';
-  return `<span class="uc k${c.cost}${req}" data-key="${c.key}" title="${c.name}">` +
+  return `<span class="uc k${c.cost}${req}" data-key="${c.key}" ` +
+    `title="${c.name} — click to ${req ? 'clear requirement' : 'require'}">` +
     `<img loading="lazy" src="${c.icon}" alt="${c.name}">${portraitRoleBadge(c)}` +
     `<span class="un">${c.name}</span></span>`;
 }
@@ -1631,6 +1632,11 @@ $('list').addEventListener('click', (e) => {
     vt.setAttribute('aria-label',
       `${open ? 'Hide' : 'Show'} ${vt.dataset.count} alternate composition` +
       (vt.dataset.count === '1' ? '' : 's'));
+    return;
+  }
+  const unit = e.target.closest('.uc[data-key]');
+  if (unit) {
+    setUnitState(unit.dataset.key, state.get(unit.dataset.key) === 1 ? 0 : 1);
     return;
   }
   const b = e.target.closest('.tb');
