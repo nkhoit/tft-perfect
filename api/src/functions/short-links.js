@@ -1,7 +1,10 @@
 const { app } = require('@azure/functions');
 
 const { publicOrigin, shortShareHtml } = require('../lib/preview.js');
-const { cachedPreviewPng } = require('../lib/preview-cache.js');
+const {
+  cachedPreviewPng,
+  shortPreviewCacheKey,
+} = require('../lib/preview-cache.js');
 const { previewState } = require('../lib/preview-state.js');
 const { decodeToken, validToken } = require('../lib/share-codec.js');
 const {
@@ -71,6 +74,7 @@ async function shortenHandler(request, context, store, imageOptions = {}) {
       ready = await Promise.race([
         cachedPreviewPng(payload.token, previewState(state), {
           ...cacheOptions,
+          key: shortPreviewCacheKey(saved.id),
           onCacheError(error) {
             cacheOptions.onCacheError?.(error);
             context.warn?.('Preview image cache unavailable during prewarm.', error);

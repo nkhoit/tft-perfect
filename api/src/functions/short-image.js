@@ -1,7 +1,12 @@
 const { app } = require('@azure/functions');
 
-const { previewImageResponse } = require('./og.js');
+const { pngResponse, previewImageResponse } = require('./og.js');
 const { fallbackPng } = require('../lib/preview.js');
+const {
+  readCachedPreview,
+  shortPreviewCacheKey,
+  shortPreviewEtag,
+} = require('../lib/preview-cache.js');
 const { previewState } = require('../lib/preview-state.js');
 const { decodeToken } = require('../lib/share-codec.js');
 const {
@@ -36,6 +41,23 @@ async function shortImageHandler(request, context, shareStore, imageOptions) {
   }
   const id = request.params.id;
   if (!validShortId(id)) return text(400, 'Invalid short link.');
+  const key = shortPreviewCacheKey(id);
+  const tag = shortPreviewEtag(id);
+  if (request.headers.get('if-none-match') === tag) {
+    return { status: 304, headers: { etag: tag } };
+  }
+  const cacheOptions = {
+    ...imageOptions,
+    onCacheError(error) {
+      imageOptions?.onCacheError?.(error);
+      context.warn?.('Preview image cache unavailable.', error);
+    },
+  };
+  const cached = await readCachedPreview(key, cacheOptions);
+  if (cached) {
+    return pngResponse(
+      request, cached, tag, 'public, max-age=31536000, immutable');
+  }
 
   let token;
   try {
@@ -57,7 +79,12 @@ async function shortImageHandler(request, context, shareStore, imageOptions) {
     return fallback(request);
   }
   return previewImageResponse(request, token, preview, context,
-    'public, max-age=31536000, immutable', imageOptions);
+    'public, max-age=31536000, immutable', {
+      ...cacheOptions,
+      key,
+      skipRead: true,
+      tag,
+    });
 }
 
 app.http('shortImage', {
