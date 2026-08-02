@@ -116,6 +116,15 @@ test('required units use check badges without replacing cost borders', () => {
   assert.match(css, /\.u\.req::before,\.uc\.req::before\{[^}]*top:[^;]+;right:/);
 });
 
+test('featured preview controls only render in the selected section', () => {
+  const app = read('web/traits/app.js');
+
+  assert.match(app, /function compCard\(r, \{ selected = false, showPreview = false \} = \{\}\)/);
+  assert.match(app, /const previewButton = showPreview/);
+  assert.match(app, /compCard\(r, \{ selected: true, showPreview: true \}\)/);
+  assert.match(app, /card\.querySelector\('\.previewcomp'\)\?\.remove\(\)/);
+});
+
 test('selection badges contrast with role badge styling', () => {
   const css = read('web/traits/style.css');
   const badge = css.match(/\.u\.req::before,\.uc\.req::before\{([^}]*)\}/)?.[1];
