@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 
 const BoardScore = require('../../generated/board-score.js');
 const data = require('../../generated/data.json');
+const SearchUtils = require('../../generated/search-utils.js');
 
 const tables = BoardScore.tables(data);
 
@@ -16,7 +17,10 @@ function expandedEmblems(state) {
   for (const entry of Array.isArray(state.e) ? state.e.slice(0, 35) : []) {
     if (!Array.isArray(entry) || entry.length !== 2) continue;
     const [key, count] = entry;
-    if (!tables.traitIndex.has(key) || !Number.isInteger(count) || count < 1) continue;
+    const trait = data.traits[key];
+    if (!trait || !Number.isFinite(SearchUtils.scoreFloor(trait))
+        || SearchUtils.antiStack(trait)
+        || !Number.isInteger(count) || count < 1) continue;
     for (let i = 0; i < Math.min(count, 20 - emblems.length); i++) emblems.push(key);
     if (emblems.length >= 20) break;
   }
@@ -26,8 +30,9 @@ function expandedEmblems(state) {
 function previewState(state) {
   const size = Number.isInteger(state.l) && state.l >= 2 && state.l <= 10 ? state.l : 8;
   const emblems = expandedEmblems(state);
-  const muted = strings(state.m, 35).map(key => tables.traitIndex.get(key))
-    .filter(index => index !== undefined);
+  const muted = strings(state.m, 35)
+    .filter(key => data.traits[key] && Number.isFinite(SearchUtils.scoreFloor(data.traits[key])))
+    .map(key => tables.traitIndex.get(key));
   const selected = [];
   let dropped = 0;
   const seen = new Set();

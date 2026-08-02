@@ -4,6 +4,7 @@ const path = require('node:path');
 const WIDTH = 1200;
 const HEIGHT = 630;
 let rendererPromise = null;
+let resvgPromise = null;
 
 function publicOrigin(request) {
   const originalUrl = request.headers.get('x-ms-original-url');
@@ -94,7 +95,7 @@ function previewTree(preview) {
         display: 'flex', width: 122, height: 122, borderRadius: 14,
         border: `4px solid ${costColors[champion.cost - 1] || '#9aa4b2'}`,
         alignItems: 'center', justifyContent: 'center', textAlign: 'center',
-        background: '#1b2130', color: '#e6edf3', fontSize: 18, fontWeight: 700,
+        background: '#1b2130', color: '#e6edf3', fontSize: 15, fontWeight: 700,
         lineHeight: 1.1, overflow: 'hidden', wordBreak: 'break-word', padding: 8,
       },
       children: champion.name.replace(/([a-z])([A-Z])/g, '$1 $2'),
@@ -174,22 +175,38 @@ function previewTree(preview) {
   };
 }
 
+function loadResvg() {
+  if (!resvgPromise) {
+    resvgPromise = (async () => {
+      const resvg = await import('@resvg/resvg-wasm');
+      const wasm = fs.readFileSync(require.resolve('@resvg/resvg-wasm/index_bg.wasm'));
+      await resvg.initWasm(wasm);
+      return resvg.Resvg;
+    })().catch(error => {
+      resvgPromise = null;
+      throw error;
+    });
+  }
+  return resvgPromise;
+}
+
 async function renderer() {
   if (!rendererPromise) {
     rendererPromise = (async () => {
-      const [{ default: satori }, resvg] = await Promise.all([
+      const [{ default: satori }, Resvg] = await Promise.all([
         import('satori'),
-        import('@resvg/resvg-wasm'),
+        loadResvg(),
       ]);
-      const wasm = fs.readFileSync(require.resolve('@resvg/resvg-wasm/index_bg.wasm'));
-      await resvg.initWasm(wasm);
       const regular = fs.readFileSync(require.resolve('@fontsource/inter/files/inter-latin-400-normal.woff'));
       const bold = fs.readFileSync(require.resolve('@fontsource/inter/files/inter-latin-700-normal.woff'));
-      return { satori, Resvg: resvg.Resvg, fonts: [
+      return { satori, Resvg, fonts: [
         { name: 'Inter', data: regular, weight: 400, style: 'normal' },
         { name: 'Inter', data: bold, weight: 700, style: 'normal' },
       ] };
-    })();
+    })().catch(error => {
+      rendererPromise = null;
+      throw error;
+    });
   }
   return rendererPromise;
 }

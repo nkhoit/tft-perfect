@@ -3,6 +3,14 @@ const { fallbackPng, previewPng } = require('../lib/preview.js');
 const { decodeToken, validToken } = require('../lib/share-codec.js');
 const { etag, previewState } = require('../lib/preview-state.js');
 
+const renderedEtags = new Set();
+
+function rememberEtag(tag) {
+  renderedEtags.delete(tag);
+  renderedEtags.add(tag);
+  while (renderedEtags.size > 100) renderedEtags.delete(renderedEtags.values().next().value);
+}
+
 async function ogHandler(request) {
   const token = request.params.token;
   if (!validToken(token)) {
@@ -23,15 +31,23 @@ async function ogHandler(request) {
     };
   }
   const tag = etag(token);
-  if (request.headers.get('if-none-match') === tag) {
+  if (request.headers.get('if-none-match') === tag && renderedEtags.has(tag)) {
     return { status: 304, headers: { etag: tag } };
   }
   let body;
   try {
     body = await previewPng(preview);
   } catch (error) {
-    body = fallbackPng();
+    return {
+      status: 200,
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': 'no-store',
+      },
+      body: request.method === 'HEAD' ? null : fallbackPng(),
+    };
   }
+  rememberEtag(tag);
   return {
     status: 200,
     headers: {

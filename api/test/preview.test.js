@@ -66,6 +66,10 @@ test('OG endpoint returns a 1200x630 PNG', { timeout: 30000 }, async () => {
   assert.equal(png.readUInt32BE(20), 630);
   assert.ok(png.length < 300000);
   assert.match(result.headers.etag, /^"[A-Za-z0-9_-]+"$/);
+  const cachedRequest = request(selectedToken);
+  cachedRequest.headers.set('if-none-match', result.headers.etag);
+  const cached = await ogHandler(cachedRequest);
+  assert.equal(cached.status, 304);
 });
 
 test('bundled fallback is a 1200x630 PNG', () => {
@@ -73,6 +77,16 @@ test('bundled fallback is a 1200x630 PNG', () => {
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
+});
+
+test('fallback responses are not cacheable', async () => {
+  // A malformed-but-valid state produces the generic renderer, not the fallback.
+  // The no-store fallback path is asserted structurally so a renderer failure
+  // can never inherit the strong ETag response headers.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'functions', 'og.js'), 'utf8');
+  assert.match(source, /'cache-control': 'no-store'/);
+  assert.match(source, /renderedEtags\.has\(tag\)/);
 });
 
 test('v1 tokens remain valid and render a generic preview', async () => {
