@@ -5,7 +5,12 @@ const test = require('node:test');
 
 const { shareHandler } = require('../src/functions/share.js');
 const { ogHandler } = require('../src/functions/og.js');
-const { fallbackPng, previewTree, shareHtml } = require('../src/lib/preview.js');
+const {
+  fallbackPng,
+  previewText,
+  previewTree,
+  shareHtml,
+} = require('../src/lib/preview.js');
 const { data, previewState } = require('../src/lib/preview-state.js');
 const { decodeToken, validToken } = require('../src/lib/share-codec.js');
 
@@ -111,6 +116,34 @@ test('preview cards use bundled portraits with bottom name labels', () => {
     assert.equal(label.props.style.position, 'absolute');
     assert.equal(label.props.style.bottom, 0);
   }
+});
+
+test('preview emphasizes active traits and team composition instead of waste', () => {
+  const preview = previewState({
+    v: 2,
+    l: 8,
+    sel: [[
+      'Pebbles', 'AncientSentinel', 'Morgana', 'Rakan',
+      'Xayah', 'Yorick', 'Fiddlesticks', 'Raptor',
+    ]],
+  });
+  const text = previewText(preview);
+  const tree = previewTree(preview);
+  const labels = [];
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.props?.children === 'string') labels.push(node.props.children);
+    const children = node.props?.children;
+    for (const child of Array.isArray(children) ? children : [children]) visit(child);
+  };
+  visit(tree);
+
+  assert.equal(text.title, '8 active traits');
+  assert.deepEqual(preview.featured.profile, { tanks: 4, AD: 2, AP: 2, Hybrid: 0 });
+  assert.ok(labels.includes('4 Tank'));
+  assert.ok(labels.includes('2 AD'));
+  assert.ok(labels.includes('2 AP'));
+  assert.doesNotMatch(labels.join(' '), /wasted/);
 });
 
 test('fallback responses are not cacheable', async () => {
