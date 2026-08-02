@@ -3,3 +3,4 @@ Disallow: /api/share/
 Disallow: /api/og/
 Disallow: /api/s/
 Disallow: /api/i/
+Disallow: /api/prewarm/

@@ -474,7 +474,14 @@ async function previewShareUrl(shared = sharedSearchState()) {
     if (typeof payload.id !== 'string' || !/^[A-Za-z0-9_-]{12,43}$/.test(payload.id)) {
       throw new Error('Short-link service returned an invalid ID.');
     }
+    if (payload.prewarm !== `/api/prewarm/${payload.id}`) {
+      throw new Error('Short-link service returned an invalid prewarm path.');
+    }
     url.pathname = `/api/s/${payload.id}`;
+    void fetch(payload.prewarm, {
+      method: 'POST',
+      keepalive: true,
+    }).catch(error => console.warn('Could not prewarm the Discord preview.', error));
     return url;
   } catch (error) {
     console.warn('Falling back to the stateless share URL.', error);
