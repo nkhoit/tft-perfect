@@ -48,6 +48,10 @@ const MAX_SHARED_EMBLEMS = 20;
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
+// Comps the user set aside, keyed by roster signature -> the full row object.
+// A Map keeps insertion order, so the section reads in the order things were
+// picked rather than reshuffling on every re-render.
+const selectedComps = new Map();
 const costOn = new Set([1, 2, 3, 4, 5]);
 const emblems = [];               // trait keys
 const reqTraits = [];             // [{key, n}] — trait floors, e.g. Invoker 4
@@ -55,8 +59,9 @@ const muted = new Set();          // trait keys that still show but earn no scor
 const excludedGroups = new Set();
 let poolView = 'cost';
 
-const { algorithmVersion, antiStack, breakpoints, isUnique, mergeSearchResults,
-  scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey, summary } = SearchUtils;
+const { algorithmVersion, antiStack, breakpoints, compSignature, isUnique,
+  mergeSearchResults, scoreFloor, scoresAt, scoringBreakpoints, searchCacheKey,
+  summary, toggleSelection } = SearchUtils;
 
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
@@ -1684,6 +1689,98 @@ function teamProfile(units, compact = false) {
   return `<div class="teamprofile${compact ? ' compact' : ''}">${parts.join('')}</div>`;
 }
 
+// Build one board card. Shared by the results list and the selected-comps
+// section above it, so a pinned comp is byte-for-byte the card it was pinned
+// from — no second renderer to drift out of sync.
+function compCard(r, { selected = false } = {}) {
+  const embCount = {};
+  emblems.forEach(k => embCount[k] = (embCount[k] || 0) + 1);
+  const tkeys = Object.keys(DB.traits);
+
+  const overBy = {};
+  (r.over || []).forEach(([ti, w]) => overBy[ti] = w);
+
+  // Dead traits used to be a "Dead: X, Y" sentence under the board. Render
+  // them as grey badges inline instead, and show n/next so the gap is
+  // legible at a glance ("3/4 Riftbeast" = one unit short).
+  const deadBadges = (r.dead || []).map(([ti, n]) => {
+    const key = tkeys[ti], t = DB.traits[key];
+    const bp = breakpoints(t);
+    const nxt = bp.find(x => x > n) || bp[bp.length - 1];
+    return `<span class="tb dead" data-tk="${key}" data-tn="${n}" ` +
+      `title="${t.name} ${n}/${nxt} — ${nxt - n} more to activate">` +
+      `${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}<i>/${nxt}</i></b> ${t.name}</span>`;
+  }).join('');
+
+  const badges = r.active.map(([ti, n]) => {
+    const key = tkeys[ti], t = DB.traits[key];
+    const cls = styleAt(t, n);
+    const isEmb = embCount[key] ? ' emb' : '';
+    const unique = isUnique(t);
+    const canScore = scoresAt(t, n);
+    const uq = unique ? ' uq' : '';
+    const ns = !unique && !canScore ? ' ns' : '';
+    const mu = muted.has(key) ? ' mut' : '';
+    const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} trait point(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
+    const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
+    const nop = filterable(t) && canScore ? '' : ' nopin';
+    return `<span class="tb ${cls}${isEmb}${uq}${ns}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
+  }).join('');
+
+  const units = r.units.map(i => DB.champions[i])
+    .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+    .map(unitPortrait)
+    .join('');
+  const profile = teamProfile(r.units, true);
+  const occupiedSlots = r.slots ?? r.units.length;
+  const slotMeta = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
+    ? `<span class="slots" title="Occupied team slots">${occupiedSlots} slots</span>`
+    : '';
+
+  // Same trait signature, different roster. Offered per-board instead of as a
+  // global toggle, because the question is "swap THIS board", not "show me
+  // every permutation of everything".
+  const nv = (r.variants || []).length;
+  const varTag = nv
+    ? `<button type="button" class="vtag" aria-expanded="false" data-count="${nv}" ` +
+      `aria-label="Show ${nv} alternate composition${nv > 1 ? 's' : ''}" ` +
+      `title="Same traits and counts, different units">${nv} alternate${nv > 1 ? 's' : ''}` +
+      `<i class="vchev" aria-hidden="true"></i></button>`
+    : '';
+  const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
+    `<div class="comprow alternate">` + v.units.map(i => DB.champions[i])
+      .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
+      .map(unitPortrait)
+      .join('') +
+    teamProfile(v.units, true) +
+    `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
+    copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
+
+  const signature = compSignature(r.units);
+  const pinButton = `<button type="button" class="pincomp" data-sig="${signature}" ` +
+    `aria-pressed="${selected}" ` +
+    `data-tip="${selected ? 'Remove from selected' : 'Select this comp'}" ` +
+    `aria-label="${selected ? 'Remove this comp from the selected section' : 'Select this comp and pin it above the results'}"></button>`;
+
+  const d = document.createElement('div');
+  d.className = 'comp' + (selected ? ' selected' : '');
+  d.dataset.sig = signature;
+  // Stash the row on the node: pinning needs the full scored board, and
+  // re-deriving it from the DOM would mean a second scoring implementation.
+  d.__row = r;
+  d.innerHTML =
+    `<div class="comphead"><div class="tline">${badges}${deadBadges}</div>` +
+    `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
+    (r.uniqN ? `<span class="unique">+${r.uniqN} unique</span>` : '') +
+    `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
+    `<div class="comprow primary">${units}${varTag}${profile}` +
+    `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
+    copyCodeButton(r.units) + pinButton + `</div>` +
+    varRows;
+  return d;
+}
+
+
 function render(m) {
   const list = $('list'), cnt = $('count');
   if (m.error) {
@@ -1699,94 +1796,62 @@ function render(m) {
 
   if (!m.rows.length) {
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;
+    renderSelectedComps();
     return;
   }
 
-  const embCount = {};
-  emblems.forEach(k => embCount[k] = (embCount[k] || 0) + 1);
-  const tkeys = Object.keys(DB.traits);
   const frag = document.createDocumentFragment();
-
   for (const r of m.rows) {
-    const overBy = {};
-    (r.over || []).forEach(([ti, w]) => overBy[ti] = w);
-
-    // Dead traits used to be a "Dead: X, Y" sentence under the board. Render
-    // them as grey badges inline instead, and show n/next so the gap is
-    // legible at a glance ("3/4 Riftbeast" = one unit short).
-    const deadBadges = (r.dead || []).map(([ti, n]) => {
-      const key = tkeys[ti], t = DB.traits[key];
-      const bp = breakpoints(t);
-      const nxt = bp.find(x => x > n) || bp[bp.length - 1];
-      return `<span class="tb dead" data-tk="${key}" data-tn="${n}" ` +
-        `title="${t.name} ${n}/${nxt} — ${nxt - n} more to activate">` +
-        `${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}<i>/${nxt}</i></b> ${t.name}</span>`;
-    }).join('');
-
-    const badges = r.active.map(([ti, n]) => {
-      const key = tkeys[ti], t = DB.traits[key];
-      const cls = styleAt(t, n);
-      const isEmb = embCount[key] ? ' emb' : '';
-      const unique = isUnique(t);
-      const canScore = scoresAt(t, n);
-      const uq = unique ? ' uq' : '';
-      const ns = !unique && !canScore ? ' ns' : '';
-      const mu = muted.has(key) ? ' mut' : '';
-      const ov = overBy[ti] ? ` <i class="ov" title="${overBy[ti]} trait point(s) past the ${t.name} breakpoint">+${overBy[ti]}</i>` : '';
-      const req = reqTraits.some(r => r.key === key) ? ' pin' : '';
-      const nop = filterable(t) && canScore ? '' : ' nopin';
-      return `<span class="tb ${cls}${isEmb}${uq}${ns}${mu}${req}${nop}" data-tk="${key}" data-tn="${n}">${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}</b> ${t.name}${ov}</span>`;
-    }).join('');
-
-    const units = r.units.map(i => DB.champions[i])
-      .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(unitPortrait)
-      .join('');
-    const profile = teamProfile(r.units, true);
-    const occupiedSlots = r.slots ?? r.units.length;
-    const slotMeta = occupiedSlots !== +$('size').value || occupiedSlots !== r.units.length
-      ? `<span class="slots" title="Occupied team slots">${occupiedSlots} slots</span>`
-      : '';
-
-
-    // Same trait signature, different roster. Offered per-board instead of as a
-    // global toggle, because the question is "swap THIS board", not "show me
-    // every permutation of everything".
-    const nv = (r.variants || []).length;
-    const varTag = nv
-      ? `<button type="button" class="vtag" aria-expanded="false" data-count="${nv}" ` +
-        `aria-label="Show ${nv} alternate composition${nv > 1 ? 's' : ''}" ` +
-        `title="Same traits and counts, different units">${nv} alternate${nv > 1 ? 's' : ''}` +
-        `<i class="vchev" aria-hidden="true"></i></button>`
-      : '';
-    const varRows = nv ? `<div class="vlist">` + r.variants.map(v =>
-      `<div class="comprow alternate">` + v.units.map(i => DB.champions[i])
-        .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-        .map(unitPortrait)
-        .join('') +
-      teamProfile(v.units, true) +
-      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${v.gold}g</span>` +
-      copyCodeButton(v.units) + `</div>`).join('') + `</div>` : '';
-
-    const d = document.createElement('div');
-    d.className = 'comp';
-    d.innerHTML =
-      `<div class="comphead"><div class="tline">${badges}${deadBadges}</div>` +
-      `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
-      (r.uniqN ? `<span class="unique">+${r.uniqN} unique</span>` : '') +
-      `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
-      `<div class="comprow primary">${units}${varTag}${profile}` +
-      `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
-      copyCodeButton(r.units) + `</div>` +
-      varRows;
-    frag.appendChild(d);
+    frag.appendChild(compCard(r, { selected: selectedComps.has(compSignature(r.units)) }));
   }
   list.innerHTML = '';
   list.appendChild(frag);
+  renderSelectedComps();
+}
+
+// The selected section sits above the results and survives re-searching: these
+// are boards the user deliberately set aside to compare or share, so a slider
+// nudge must not throw them away.
+function renderSelectedComps() {
+  const host = $('selected');
+  if (!host) return;
+  if (!selectedComps.size) {
+    host.innerHTML = '';
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const frag = document.createDocumentFragment();
+  const head = document.createElement('div');
+  head.className = 'selhead';
+  head.innerHTML = `<h2>SELECTED <span class="tag">${selectedComps.size}</span></h2>` +
+    `<button type="button" class="clearsel">Clear</button>`;
+  frag.appendChild(head);
+  for (const r of selectedComps.values()) {
+    frag.appendChild(compCard(r, { selected: true }));
+  }
+  host.innerHTML = '';
+  host.appendChild(frag);
 }
 
 // Click any trait badge in the results to pin it as a requirement at that count.
-$('list').addEventListener('click', (e) => {
+// Bound to both containers so a selected comp behaves exactly like a result row.
+function onCompClick(e) {
+  // Select / deselect. Held in memory as the whole row, so the pinned card
+  // needs no recompute and survives the next search unchanged.
+  const pin = e.target.closest('.pincomp');
+  if (pin) {
+    const sig = pin.dataset.sig;
+    const card = pin.closest('.comp');
+    toggleSelection(selectedComps, sig, card && card.__row);
+    syncSelectedState();
+    return;
+  }
+  if (e.target.closest('.clearsel')) {
+    selectedComps.clear();
+    syncSelectedState();
+    return;
+  }
   const copy = e.target.closest('.copycode');
   if (copy) {
     const champions = copy.dataset.units.split(',').map(i => DB.champions[+i]);
@@ -1837,7 +1902,27 @@ $('list').addEventListener('click', (e) => {
   else if (cur) cur.n = n;
   else reqTraits.push({ key, n });
   renderTraitGrid(); run();
-});
+}
+
+$('list').addEventListener('click', onCompClick);
+$('selected').addEventListener('click', onCompClick);
+
+// Re-render the selected section and flip the pin state on any matching result
+// row, without rebuilding the whole results list.
+function syncSelectedState() {
+  renderSelectedComps();
+  for (const card of $('list').querySelectorAll('.comp[data-sig]')) {
+    const on = selectedComps.has(card.dataset.sig);
+    card.classList.toggle('selected', on);
+    const button = card.querySelector('.pincomp');
+    if (!button) continue;
+    button.setAttribute('aria-pressed', String(on));
+    button.dataset.tip = on ? 'Remove from selected' : 'Select this comp';
+    button.setAttribute('aria-label', on
+      ? 'Remove this comp from the selected section'
+      : 'Select this comp and pin it above the results');
+  }
+}
 
 // Sticky sidebar offset must equal the real header height, or the panel slides
 // a few px under it before locking. Measured, not hardcoded.

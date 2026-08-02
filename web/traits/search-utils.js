@@ -185,11 +185,31 @@
     return { statusHtml, countHtml, title };
   }
 
+  // Identity for a board: its roster, order-independent. Two rows with the same
+  // units are the same comp even if the search returned them in different orders.
+  function compSignature(units) {
+    return [...units].sort((a, b) => a - b).join(',');
+  }
+
+  // Flip a comp's selection in the given Map. Returns the resulting state:
+  // true when it is now selected, false when it is not.
+  function toggleSelection(selected, sig, row) {
+    if (selected.has(sig)) {
+      selected.delete(sig);
+      return false;
+    }
+    if (!row) return false;
+    selected.set(sig, row);
+    return true;
+  }
+
   return {
     algorithmVersion: ALGORITHM_VERSION,
     antiStack,
     breakpoints,
+    compSignature,
     comparator,
+    toggleSelection,
     isUnique,
     mergeSearchResults,
     scoreFloor,
