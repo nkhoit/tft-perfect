@@ -114,7 +114,9 @@ function search(o) {
   }
 
   const pool = poolIdx;
-  const results = [];
+  const uniqueCap = Math.max(limit || 100, o.returnN || limit || 100);
+  const kept = [];
+  const bySignature = new Map();
   let nodes = 0, truncated = false;
   // Shards split the top-level branch round-robin across workers.
   const shards = o.shards || 1, shard = o.shard || 0;
@@ -122,7 +124,6 @@ function search(o) {
   // wildly uneven in size, so dividing the budget starves whichever shard drew
   // the fat branches and silently truncates boards the serial search finds.
   const NODE_BUDGET = 40e6;
-  const RESULT_CAP = Math.max(20000, Math.ceil(120000 / shards));
 
   // Maximum trait points reachable from each pool suffix for every remaining
   // slot capacity. This is a 0/1 knapsack because Elder Dragon consumes two
@@ -177,14 +178,13 @@ function search(o) {
     return true;
   }
 
-  // Comparator is known up front, so instead of stopping at an arbitrary cap
-  // (which biases results toward whatever DFS happened to reach first) we keep
-  // the best RESULT_CAP boards seen and drop the worst half when we overflow.
+  // Retain only the best unique trait signatures this shard can contribute to
+  // the global top-K. Each signature also keeps its best roster alternates.
   const order = SearchUtils.sortOrder(o.sortMode, o.sortMode2);
   const cmp = SearchUtils.comparator(o.sortMode, o.sortMode2);
-  let trimmed = false;   // true once we've discarded boards that ranked poorly
-  let found = 0;         // total matching boards, including any we trimmed
-  let worst = null;      // worst board currently kept, once we've trimmed once
+  let trimmed = false;
+  let found = 0;
+  let worst = null;
 
   // Same ordering as cmp, but on raw scalars so we can reject a candidate
   // before allocating its result object.
@@ -200,6 +200,60 @@ function search(o) {
     }
     return 0;
   };
+
+  function insertEntry(entry) {
+    let low = 0, high = kept.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (cmp(entry.row, kept[middle].row) < 0) high = middle;
+      else low = middle + 1;
+    }
+    kept.splice(low, 0, entry);
+  }
+
+  function insertVariant(entry, row) {
+    let index = entry.variants.findIndex(variant => cmp(row, variant) < 0);
+    if (index < 0) index = entry.variants.length;
+    if (index < 24) entry.variants.splice(index, 0, row);
+    if (entry.variants.length > 24) entry.variants.length = 24;
+  }
+
+  function refreshWorst() {
+    worst = kept.length >= uniqueCap ? kept[kept.length - 1].row : null;
+  }
+
+  function retainCandidate(signature, row) {
+    const existing = bySignature.get(signature);
+    if (existing) {
+      if (cmp(row, existing.row) < 0) {
+        const previous = existing.row;
+        kept.splice(kept.indexOf(existing), 1);
+        existing.row = row;
+        insertEntry(existing);
+        insertVariant(existing, previous);
+      } else {
+        insertVariant(existing, row);
+      }
+      refreshWorst();
+      return;
+    }
+
+    const entry = { signature, row, variants: [] };
+    if (kept.length < uniqueCap) {
+      bySignature.set(signature, entry);
+      insertEntry(entry);
+      refreshWorst();
+      return;
+    }
+    if (cmp(row, kept[kept.length - 1].row) < 0) {
+      const evicted = kept.pop();
+      bySignature.delete(evicted.signature);
+      bySignature.set(signature, entry);
+      insertEntry(entry);
+    }
+    trimmed = true;
+    refreshWorst();
+  }
 
   // Exact-slot suffix knapsacks provide admissible cost bounds for weighted
   // units. Group conflicts are intentionally ignored, making the bounds more
@@ -339,17 +393,33 @@ function search(o) {
     return gold + addition;
   }
 
-  // Prune only on the primary sort key. Deeper keys are tie-breakers, and a
-  // bound that's optimistic on key 1 says nothing about key 2, so comparing
-  // past the first strict decision would not be admissible.
-  const primary = order[0];
+  // Compare an optimistic tuple in the same lexicographic order as completed
+  // boards. Independent bounds remain safe: later keys matter only when every
+  // earlier optimistic key exactly ties the retained cutoff.
   function canBeat(start, capacity, gold) {
-    if (!worst) return true;                    // buffer not full: keep everything
-    if (primary === 'live')  return boundLive(start, capacity) >= worst.live;
-    if (primary === 'tier')  return boundTier(start, capacity) >= worst.tierSum;
-    if (primary === 'waste') return wasteLB(start, capacity) <= worst.waste;
-    if (primary === 'cost')  return boundGold(start, capacity, gold) <= worst.gold;
-    if (primary === 'rich')  return boundGoldMax(start, capacity, gold) >= worst.gold;
+    if (!worst) return true;
+    let live, tier, waste, cheapest, richest;
+    for (const key of order) {
+      let difference = 0;
+      if (key === 'live') {
+        live ??= boundLive(start, capacity);
+        difference = worst.live - live;
+      } else if (key === 'tier') {
+        tier ??= boundTier(start, capacity);
+        difference = worst.tierSum - tier;
+      } else if (key === 'waste') {
+        waste ??= wasteLB(start, capacity);
+        difference = waste - worst.waste;
+      } else if (key === 'rich') {
+        richest ??= boundGoldMax(start, capacity, gold);
+        difference = worst.gold - richest;
+      } else {
+        cheapest ??= boundGold(start, capacity, gold);
+        difference = cheapest - worst.gold;
+      }
+      if (difference < 0) return true;
+      if (difference > 0) return false;
+    }
     return true;
   }
 
@@ -359,9 +429,11 @@ function search(o) {
     if (!reqSatisfied()) return;
     let live = 0, uniqN = 0, waste = 0, tierSum = 0;
     const active = [], dead = [], over = [];
+    let signature = '';
     for (let t = 0; t < nT; t++) {
       const c = counts[t];
       if (!c) continue;
+      signature += (signature ? '|' : '') + `${t}:${c}`;
       const bp = BPS[t];
       const w = wasteOf(bp, c);
       if (w) {
@@ -377,20 +449,24 @@ function search(o) {
     }
     if (waste > maxWaste) return;
     found++;
-    // Once we're at capacity, reject candidates that can't beat the worst
-    // board we're keeping — avoids allocating millions of doomed results.
-    if (worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) return;
+    const existing = bySignature.get(signature);
+    if (!existing && worst && cmpScore(live, tierSum, waste, gold, worst) >= 0) {
+      trimmed = true;
+      return;
+    }
+    if (existing && cmpScore(live, tierSum, waste, gold, existing.row) >= 0
+        && existing.variants.length >= 24
+        && cmpScore(live, tierSum, waste, gold, existing.variants[23]) >= 0) {
+      trimmed = true;
+      return;
+    }
     const units = reqIdx.concat(Array.from(pick.subarray(0, depth)));
     // uniques last so the meaningful traits read first
     const dim = x => (UNIQ[x] || MUTE[x] || counts[x] < SCORE1[x]) ? 1 : 0;
     active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
-    results.push({ units, active, dead, over, live, uniqN, waste, tierSum, gold, slots: usedSlots });
-    if (results.length >= RESULT_CAP) {
-      results.sort(cmp);
-      results.length = RESULT_CAP >> 1;   // keep the better half, keep searching
-      worst = results[results.length - 1];
-      trimmed = true;
-    }
+    retainCandidate(signature, {
+      units, active, dead, over, live, uniqN, waste, tierSum, gold, slots: usedSlots,
+    });
   }
 
   function dfs(start, depth, usedSlots, gold, targetSlots, expectedBonus) {
@@ -445,11 +521,11 @@ function search(o) {
     }
   }
 
-  results.sort(cmp);
-  // Dedup happens at the merge step: a signature can span shards, so a worker
-  // can't know whether its board is a duplicate of one another worker found.
   return {
-    rows: results.slice(0, o.returnN || limit),
+    rows: kept.slice(0, o.returnN || limit).map(entry => ({
+      ...entry.row,
+      variants: entry.variants,
+    })),
     total: found, truncated, capped: trimmed, nodes,
   };
 }

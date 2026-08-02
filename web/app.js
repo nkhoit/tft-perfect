@@ -1316,9 +1316,9 @@ function buildSearchOptions() {
     muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
     sortMode: $('sort').value, sortMode2: $('sort2').value,
     limit: 100, uniq: true,
-    // Shards over-return so the global dedup has spare rows to draw from,
-    // and so collapsed rows have real alternates to offer.
-    returnN: 800,
+    // Each shard's top 100 unique signatures are sufficient to recover the
+    // global top 100; retained signatures carry their best found alternates.
+    returnN: 100,
     shards: NW,
   };
 }

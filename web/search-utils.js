@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  const ALGORITHM_VERSION = 'weighted-v2';
+  const ALGORITHM_VERSION = 'weighted-v3-topk';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -66,25 +66,37 @@
   }
 
   function mergeSearchResults(parts, primary, secondary, limit = 100) {
+    const compare = comparator(primary, secondary);
     const merged = {
-      rows: [].concat(...parts.map(part => part.rows)).sort(comparator(primary, secondary)),
+      rows: [],
       total: parts.reduce((total, part) => total + part.total, 0),
       truncated: parts.some(part => part.truncated),
       capped: parts.some(part => part.capped),
       ms: Math.max(...parts.map(part => part.ms)),
     };
-    const bySignature = new Map();
-    for (const row of merged.rows) {
-      const signature = traitSignature(row);
-      const existing = bySignature.get(signature);
-      if (existing) {
-        if (existing.variants.length < 24) existing.variants.push(row);
-      } else {
-        row.variants = [];
-        bySignature.set(signature, row);
+    const candidatesBySignature = new Map();
+    const plain = row => {
+      const copy = { ...row };
+      delete copy.variants;
+      return copy;
+    };
+    for (const part of parts) {
+      for (const row of part.rows) {
+        const signature = traitSignature(row);
+        if (!candidatesBySignature.has(signature)) candidatesBySignature.set(signature, []);
+        const candidates = candidatesBySignature.get(signature);
+        candidates.push(plain(row));
+        for (const variant of (row.variants || [])) candidates.push(plain(variant));
       }
     }
-    merged.rows = [...bySignature.values()].slice(0, limit);
+    for (const candidates of candidatesBySignature.values()) {
+      candidates.sort(compare);
+      const representative = candidates[0];
+      representative.variants = candidates.slice(1, 25);
+      merged.rows.push(representative);
+    }
+    merged.rows.sort(compare);
+    merged.rows.length = Math.min(merged.rows.length, limit);
     return merged;
   }
 

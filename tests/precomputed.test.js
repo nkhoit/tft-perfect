@@ -22,7 +22,7 @@ function defaultOptions() {
     sortMode2: 'cost',
     limit: 100,
     uniq: true,
-    returnN: 800,
+    returnN: 100,
     shards: 8,
   };
 }

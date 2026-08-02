@@ -187,8 +187,9 @@ test('shard results merge, sort, and retain roster variants', () => {
   const first = { units: [0], active: [[0, 2]], dead: [], live: 1, tierSum: 1, waste: 0, gold: 3 };
   const variant = { units: [1], active: [[0, 2]], dead: [], live: 1, tierSum: 1, waste: 0, gold: 6 };
   const better = { units: [2], active: [[1, 3]], dead: [], live: 2, tierSum: 2, waste: 0, gold: 9 };
+  first.variants = [variant];
   const merged = mergeSearchResults([
-    { rows: [first, variant], total: 2, truncated: false, capped: false, ms: 10 },
+    { rows: [first], total: 2, truncated: false, capped: false, ms: 10 },
     { rows: [better], total: 1, truncated: true, capped: true, ms: 20 },
   ], 'live', 'cost');
 
