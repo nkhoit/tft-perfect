@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { shortImageHandler } = require('../src/functions/short-image.js');
-const { clearMemoryCache } = require('../src/lib/preview-cache.js');
+const {
+  clearMemoryCache,
+  shortPreviewCacheKey,
+} = require('../src/lib/preview-cache.js');
 const { PREVIEW_ROUTE_VERSION } = require('../src/lib/preview-state.js');
 const { saveToken } = require('../src/lib/short-links.js');
 
@@ -11,16 +14,22 @@ const selectedToken = token({ v: 2, l: 2, sel: [['Shen', 'Teemo']] });
 
 function shareStore() {
   const rows = new Map();
-  return {
+  const store = {
+    gets: 0,
     async create(row) { rows.set(row.id, row); },
-    async get(id) { return rows.get(id) || null; },
+    async get(id) {
+      store.gets++;
+      return rows.get(id) || null;
+    },
   };
+  return store;
 }
 
 function imageOptions() {
   const rows = new Map();
   const options = {
     gets: 0,
+    rows,
     store: {
       async get(key) {
         options.gets++;
@@ -65,6 +74,21 @@ test('short image route resolves IDs and returns immutable cached PNGs', async (
   assert.equal(notModified.status, 304);
   assert.equal(head.status, 200);
   assert.equal(head.body, null);
+  assert.equal(images.gets, 1);
+});
+
+test('prewarmed short images bypass Table Storage', async () => {
+  const id = 'B'.repeat(12);
+  const shares = shareStore();
+  const images = imageOptions();
+  images.rows.set(shortPreviewCacheKey(id), Buffer.from('cached PNG'));
+
+  const result = await shortImageHandler(
+    request(id), context, shares, images);
+
+  assert.equal(result.status, 200);
+  assert.equal(Buffer.from(result.body).toString(), 'cached PNG');
+  assert.equal(shares.gets, 0);
   assert.equal(images.gets, 1);
 });
 

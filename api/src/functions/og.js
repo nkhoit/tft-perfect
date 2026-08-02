@@ -12,6 +12,19 @@ function rememberEtag(tag) {
   while (renderedEtags.size > 100) renderedEtags.delete(renderedEtags.values().next().value);
 }
 
+function pngResponse(request, body, tag, cacheControl) {
+  rememberEtag(tag);
+  return {
+    status: 200,
+    headers: {
+      'content-type': 'image/png',
+      'cache-control': cacheControl,
+      etag: tag,
+    },
+    body: request.method === 'HEAD' ? null : body,
+  };
+}
+
 async function previewImageResponse(
   request,
   token,
@@ -20,16 +33,16 @@ async function previewImageResponse(
   cacheControl = 'public, max-age=300',
   cacheOptions = {},
 ) {
-  const tag = etag(token);
+  const { tag = etag(token), ...renderOptions } = cacheOptions;
   if (request.headers.get('if-none-match') === tag && renderedEtags.has(tag)) {
     return { status: 304, headers: { etag: tag } };
   }
   let body;
   try {
     body = await cachedPreviewPng(token, preview, {
-      ...cacheOptions,
+      ...renderOptions,
       onCacheError(error) {
-        cacheOptions.onCacheError?.(error);
+        renderOptions.onCacheError?.(error);
         context?.warn?.('Preview image cache unavailable.', error);
       },
     });
@@ -44,16 +57,7 @@ async function previewImageResponse(
       body: request.method === 'HEAD' ? null : fallbackPng(),
     };
   }
-  rememberEtag(tag);
-  return {
-    status: 200,
-    headers: {
-      'content-type': 'image/png',
-      'cache-control': cacheControl,
-      etag: tag,
-    },
-    body: request.method === 'HEAD' ? null : body,
-  };
+  return pngResponse(request, body, tag, cacheControl);
 }
 
 async function ogHandler(request, context) {
@@ -85,4 +89,4 @@ app.http('og', {
   handler: ogHandler,
 });
 
-module.exports = { ogHandler, previewImageResponse };
+module.exports = { ogHandler, pngResponse, previewImageResponse };

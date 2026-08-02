@@ -5,6 +5,7 @@ const {
   cachedPreviewPng,
   clearMemoryCache,
   previewCacheKey,
+  shortPreviewCacheKey,
 } = require('../src/lib/preview-cache.js');
 
 function memoryStore(initial = []) {
@@ -25,6 +26,11 @@ function memoryStore(initial = []) {
 }
 
 test.beforeEach(() => clearMemoryCache());
+
+test('short preview cache keys use the content-addressed share ID', () => {
+  assert.match(shortPreviewCacheKey('A'.repeat(12)),
+    /^p[0-9]+-[A-Za-z0-9_-]{10}\/A{12}\.png$/);
+});
 
 test('durable cache hits skip preview rendering', async () => {
   const token = 'r-cache-hit';
@@ -85,7 +91,7 @@ test('cache failures are surfaced while rendering still succeeds', async () => {
   });
 
   assert.equal(body.toString(), 'rendered');
-  assert.deepEqual(failures, ['Blob read failed']);
+  assert.deepEqual(failures, ['Blob read failed', 'Blob write failed']);
 });
 
 test('cache write failures do not discard a rendered preview', async () => {

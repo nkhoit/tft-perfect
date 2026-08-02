@@ -1,3 +1,5 @@
+const crypto = require('node:crypto');
+
 const { BlobServiceClient } = require('@azure/storage-blob');
 
 const { PREVIEW_ROUTE_VERSION, previewDigest } = require('./preview-state.js');
@@ -14,6 +16,19 @@ function isStatus(error, statusCode) {
 
 function previewCacheKey(token) {
   return `${PREVIEW_ROUTE_VERSION}/${previewDigest(token)}.png`;
+}
+
+function shortPreviewCacheKey(id) {
+  return `${PREVIEW_ROUTE_VERSION}/${id}.png`;
+}
+
+function shortPreviewEtag(id) {
+  return '"' + crypto.createHash('sha256')
+    .update(PREVIEW_ROUTE_VERSION)
+    .update('\0')
+    .update(id)
+    .digest('base64url')
+    .slice(0, 24) + '"';
 }
 
 function remember(key, body) {
@@ -71,8 +86,7 @@ async function azurePreviewStore() {
   return storePromise;
 }
 
-async function cachedPreviewPng(token, preview, options = {}) {
-  const key = previewCacheKey(token);
+async function readCachedPreview(key, options = {}) {
   const warm = memoryCache.get(key);
   if (warm) {
     remember(key, warm);
@@ -100,7 +114,24 @@ async function cachedPreviewPng(token, preview, options = {}) {
       store = null;
     }
   }
+  return null;
+}
 
+async function cachedPreviewPng(token, preview, options = {}) {
+  const key = options.key || previewCacheKey(token);
+  if (!options.skipRead) {
+    const cached = await readCachedPreview(key, options);
+    if (cached) return cached;
+  }
+
+  let store = options.store;
+  if (!store) {
+    try {
+      store = await azurePreviewStore();
+    } catch (error) {
+      options.onCacheError?.(error);
+    }
+  }
   if (!inFlight.has(key)) {
     const render = options.render || previewPng;
     const pending = (async () => {
@@ -125,4 +156,7 @@ module.exports = {
   cachedPreviewPng,
   clearMemoryCache,
   previewCacheKey,
+  readCachedPreview,
+  shortPreviewCacheKey,
+  shortPreviewEtag,
 };
