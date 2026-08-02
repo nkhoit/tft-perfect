@@ -460,7 +460,26 @@ async function previewShareUrl(shared = sharedSearchState()) {
   url.pathname = `/api/share/${token}`;
   url.search = '';
   url.hash = '';
-  return url;
+  try {
+    const response = await fetch('/api/shorten', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+      signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+        ? AbortSignal.timeout(12000)
+        : undefined,
+    });
+    if (!response.ok) throw new Error(`Short-link service returned HTTP ${response.status}.`);
+    const payload = await response.json();
+    if (typeof payload.id !== 'string' || !/^[A-Za-z0-9_-]{12,43}$/.test(payload.id)) {
+      throw new Error('Short-link service returned an invalid ID.');
+    }
+    url.pathname = `/api/s/${payload.id}`;
+    return url;
+  } catch (error) {
+    console.warn('Falling back to the stateless share URL.', error);
+    return url;
+  }
 }
 
 async function syncSearchUrl(generation) {

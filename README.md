@@ -74,10 +74,12 @@ session's memory cache. Local counters are available at `window.TFTSearchMetrics
 ### Discord previews
 
 Selecting multiple comps preserves their display order. The first selected comp
-is featured in Discord previews; use its star action to move another comp to the
-front. **Copy link** emits a managed Azure Function URL that serves Open Graph
+is featured in Discord previews; use the preview-image action to move another
+comp to the front. **Copy link** emits a managed Azure Function URL that serves Open Graph
 HTML and a generated 1200×630 PNG, then redirects browsers back to the client app.
-Search itself remains entirely client-side.
+The API stores validated tokens in Azure Table Storage and returns compact,
+content-addressed links; if storage is unavailable, the client falls back to the
+full stateless token URL. Search itself remains entirely client-side.
 
 To run the static app and managed API together locally:
 
@@ -85,6 +87,14 @@ To run the static app and managed API together locally:
 npm --prefix api install
 npx @azure/static-web-apps-cli start web --api-location api --func-args "--javascript"
 ```
+
+Set `SHARE_STORAGE_CONNECTION_STRING` to enable short links locally. Without it,
+Copy link falls back to the full stateless token URL.
+
+Production requires `SHARE_STORAGE_CONNECTION_STRING` and
+`SHARE_STORAGE_TABLE` in the Static Web App application settings. The table must
+already exist. Short-link rows are immutable and retained so shared URLs do not
+expire; `createdAt` is stored for operational cleanup if abuse ever requires it.
 
 ## Team Planner Codes
 

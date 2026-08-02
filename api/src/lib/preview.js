@@ -55,9 +55,10 @@ function previewText(preview) {
   };
 }
 
-function shareHtml(origin, token, preview) {
+function shareDocument(origin, token, preview, sharePath) {
   const escapedOrigin = escapeHtml(origin);
   const escapedToken = escapeHtml(token);
+  const escapedSharePath = escapeHtml(sharePath);
   const text = previewText(preview);
   const appUrl = `${escapedOrigin}/traits/?s=${escapedToken}`;
   const imageUrl = `${escapedOrigin}/api/og/${escapedToken}`;
@@ -72,7 +73,7 @@ function shareHtml(origin, token, preview) {
 <meta property="og:type" content="website">
 <meta property="og:title" content="${escapeHtml(text.title)}">
 <meta property="og:description" content="${escapeHtml(text.description)}">
-<meta property="og:url" content="${escapedOrigin}/api/share/${escapedToken}">
+<meta property="og:url" content="${escapedOrigin}${escapedSharePath}">
 <meta property="og:image" content="${imageUrl}">
 <meta property="og:image:width" content="${WIDTH}">
 <meta property="og:image:height" content="${HEIGHT}">
@@ -85,6 +86,14 @@ function shareHtml(origin, token, preview) {
 <script>location.replace(${JSON.stringify(`/traits/?s=${token}`)});</script>
 </body>
 </html>`;
+}
+
+function shareHtml(origin, token, preview) {
+  return shareDocument(origin, token, preview, `/api/share/${token}`);
+}
+
+function shortShareHtml(origin, id, token, preview) {
+  return shareDocument(origin, token, preview, `/api/s/${id}`);
 }
 
 function portraitSource(champion) {
@@ -266,5 +275,6 @@ module.exports = {
   previewTree,
   publicOrigin,
   shareHtml,
+  shortShareHtml,
   previewText,
 };
