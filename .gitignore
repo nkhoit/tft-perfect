@@ -4,3 +4,4 @@ __pycache__/
 /tmp/
 .venv/
 node_modules/
+local.settings.json
