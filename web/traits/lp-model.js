@@ -26,40 +26,15 @@
 // SEMANTICS come from search-utils.js (breakpoints / isUnique / scoreFloor) so
 // this model and the DFS score identically. tests/lp-model.test.js asserts that.
 (function (root, factory) {
-  const api = factory(root.SearchUtils || require('./search-utils.js'));
+  const api = factory(
+    root.SearchUtils || require('./search-utils.js'),
+    root.BoardScore || require('./board-score.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.LpModel = api;
-}(typeof self !== 'undefined' ? self : globalThis, function (SU) {
+}(typeof self !== 'undefined' ? self : globalThis, function (SU, BoardScore) {
   'use strict';
 
-  // Derive the per-trait / per-champion tables the model needs.
-  function tables(db) {
-    const traitKeys = Object.keys(db.traits);
-    const traitIndex = new Map(traitKeys.map((k, i) => [k, i]));
-    const bps = traitKeys.map(k => SU.breakpoints(db.traits[k]));
-    const floors = traitKeys.map(k => {
-      const floor = SU.scoreFloor(db.traits[k]);
-      return Number.isFinite(floor) ? floor : null;
-    });
-    const points = db.champions.map(champion => {
-      const row = new Map();
-      const weights = champion.traitPoints || {};
-      for (const key of champion.traits) {
-        if (!traitIndex.has(key)) continue;
-        const t = traitIndex.get(key);
-        row.set(t, (row.get(t) || 0) + (weights[key] || 1));
-      }
-      return row;
-    });
-    const teamSize = traitKeys.map(k =>
-      (db.traits[k].teamSize || []).slice().sort((a, b) => a.min - b.min));
-    return {
-      traitKeys, traitIndex, bps, floors, points, teamSize,
-      slots: db.champions.map(c => c.slots || 1),
-      cost: db.champions.map(c => c.cost),
-      group: db.champions.map(c => c.group || null),
-    };
-  }
+  const tables = BoardScore.tables;
 
   // Team-size bonuses are enumerated, not modelled: there is exactly one
   // capacity trait in practice and folding it in as a variable would make the

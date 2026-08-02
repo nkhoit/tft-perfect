@@ -1,7 +1,11 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { compSignature, toggleSelection } = require('../web/traits/search-utils.js');
+const {
+  compSignature,
+  moveSelectionFirst,
+  toggleSelection,
+} = require('../web/traits/search-utils.js');
 
 // A comp's identity is its roster, not the order the search happened to emit
 // units in. If this breaks, pinned comps silently duplicate or fail to match
@@ -68,4 +72,17 @@ test('selections are independent across distinct comps and survive each other', 
   assert.equal(selected.get(compSignature(b.units)), b);
   // Insertion order is the pin order shown in the SELECTED section.
   assert.deepEqual([...selected.keys()], ['3,4']);
+});
+
+test('featured selection moves to the front without losing rows', () => {
+  const selected = new Map([
+    ['1,2', { units: [1, 2] }],
+    ['3,4', { units: [3, 4] }],
+    ['5,6', { units: [5, 6] }],
+  ]);
+
+  assert.equal(moveSelectionFirst(selected, '5,6'), true);
+  assert.deepEqual([...selected.keys()], ['5,6', '1,2', '3,4']);
+  assert.equal(moveSelectionFirst(selected, '5,6'), false);
+  assert.equal(moveSelectionFirst(selected, 'missing'), false);
 });

@@ -4,7 +4,11 @@
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/lib/preview.js",
+    "sync:traits": "node scripts/sync-traits.js",
+    "postinstall": "npm run sync:traits",
+    "precheck": "npm run sync:traits",
+    "check": "node --check src/index.js && node --check src/functions/share.js && node --check src/functions/og.js && node --check src/lib/preview.js && node --check src/lib/preview-state.js && node --check src/lib/share-codec.js",
+    "pretest": "npm run sync:traits",
     "test": "node --test"
   },
   "dependencies": {

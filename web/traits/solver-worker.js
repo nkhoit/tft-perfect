@@ -8,7 +8,7 @@
 // The WASM payload is ~1.1MB gzipped and is fetched only when a search actually
 // runs, so the landing path is unaffected.
 
-importScripts('search-utils.js', 'lp-model.js', 'vendor/highs.js');
+importScripts('search-utils.js', 'board-score.js', 'lp-model.js', 'vendor/highs.js');
 
 let DB = null;
 let TABLES = null;
@@ -23,57 +23,6 @@ function loadHighs() {
     });
   }
   return highsPromise;
-}
-
-// Score a roster with the same rules worker.js uses in evaluate(), so a solver
-// row and a DFS row for the same board are byte-for-byte comparable.
-function scoreRoster(roster, emblems, muted) {
-  const traitKeys = TABLES.traitKeys;
-  const nT = traitKeys.length;
-  const counts = new Int32Array(nT);
-  for (const emblem of emblems || []) {
-    const t = typeof emblem === 'string' ? TABLES.traitIndex.get(emblem) : emblem;
-    if (t >= 0 && t < nT) counts[t]++;
-  }
-  let gold = 0, usedSlots = 0;
-  for (const c of roster) {
-    gold += TABLES.cost[c] * 3;
-    usedSlots += TABLES.slots[c];
-    for (const [t, p] of TABLES.points[c]) counts[t] += p;
-  }
-
-  const mutedSet = new Set(muted || []);
-  let live = 0, uniqN = 0, waste = 0, tierSum = 0;
-  const active = [], dead = [], over = [];
-  let signature = '';
-  for (let t = 0; t < nT; t++) {
-    const count = counts[t];
-    if (!count) continue;
-    signature += (signature ? '|' : '') + `${t}:${count}`;
-    const bp = TABLES.bps[t];
-    let reached = 0, tier = -1;
-    for (let j = 0; j < bp.length; j++) {
-      if (count >= bp[j]) { reached = bp[j]; tier = j; }
-    }
-    const wasted = count - reached;
-    if (wasted) {
-      if (!mutedSet.has(t)) waste += wasted;
-      if (tier >= 0) over.push([t, wasted]); else dead.push([t, count]);
-    }
-    if (tier >= 0) {
-      active.push([t, count, tier]);
-      const floor = TABLES.floors[t];
-      if (floor === null) uniqN++;
-      else if (!mutedSet.has(t) && count >= floor) { live++; tierSum += tier + 1; }
-    }
-  }
-  const dim = t => (TABLES.floors[t] === null || mutedSet.has(t)
-    || counts[t] < TABLES.floors[t]) ? 1 : 0;
-  active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
-  return {
-    units: roster.slice(), active, dead, over,
-    live, uniqN, waste, tierSum, gold, slots: usedSlots, signature,
-  };
 }
 
 async function solve(opts, onProgress) {
@@ -119,7 +68,7 @@ async function solve(opts, onProgress) {
     if (!solution || solution.Status !== 'Optimal') continue;
     const roster = LpModel.rosterOf(solution);
     if (!roster.length) continue;
-    const row = scoreRoster(roster, opts.emblems, opts.muted);
+    const row = BoardScore.scoreRoster(DB, TABLES, roster, opts.emblems, opts.muted);
     // The model enforces the waste cap, but re-check with the shipped scoring
     // rules: if these ever disagree the DFS answer must win, not ours.
     if (row.waste > opts.maxWaste) continue;
@@ -160,7 +109,7 @@ async function solve(opts, onProgress) {
       if (!solution || solution.Status !== 'Optimal') break;
       const roster = LpModel.rosterOf(solution);
       if (!roster.length) break;
-      const row = scoreRoster(roster, opts.emblems, opts.muted);
+      const row = BoardScore.scoreRoster(DB, TABLES, roster, opts.emblems, opts.muted);
       if (row.waste > opts.maxWaste) break;
       if (!seenSignature.has(row.signature)) {
         seenSignature.add(row.signature);

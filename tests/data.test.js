@@ -22,6 +22,8 @@ test('the application contains only Set 18', () => {
   assert.match(html, /id="effort"/);
   assert.match(html, /id="refine"/);
   assert.match(html, /id="share"/);
+  assert.match(html, /property="og:image"/);
+  assert.match(html, /twitter:card/);
   assert.match(html, /id="saveSearch"/);
   assert.match(html, /id="savedList"/);
   assert.match(html, /src="saved-searches\.js"/);
@@ -88,6 +90,11 @@ test('the application contains only Set 18', () => {
   assert.match(app, /cached: 'precomputed'/);
   assert.match(app, /function sharedSearchState/);
   assert.match(app, /function applySharedSearchState/);
+  assert.match(app, /function previewShareUrl/);
+  assert.match(app, /shared\.sel/);
+  assert.match(app, /const SHARE_SCHEMA_VERSION = 2/);
+  assert.match(app, /shared\.v < 1 \|\| shared\.v > SHARE_SCHEMA_VERSION/);
+  assert.match(app, /class="previewcomp"/);
   assert.match(app, /function renderSavedSearches/);
   assert.match(app, /function restoreSavedEntry/);
   assert.match(app, /history\.replaceState/);

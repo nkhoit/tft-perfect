@@ -203,6 +203,15 @@
     return true;
   }
 
+  function moveSelectionFirst(selected, sig) {
+    if (!selected.has(sig) || selected.keys().next().value === sig) return false;
+    const row = selected.get(sig);
+    const reordered = [[sig, row], ...[...selected].filter(([key]) => key !== sig)];
+    selected.clear();
+    for (const [key, value] of reordered) selected.set(key, value);
+    return true;
+  }
+
   return {
     algorithmVersion: ALGORITHM_VERSION,
     antiStack,
@@ -212,6 +221,7 @@
     toggleSelection,
     isUnique,
     mergeSearchResults,
+    moveSelectionFirst,
     scoreFloor,
     scoringBreakpoints,
     scoresAt,

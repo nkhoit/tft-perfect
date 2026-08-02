@@ -1,9 +1,15 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const { shareHandler } = require('../src/functions/share.js');
 const { ogHandler } = require('../src/functions/og.js');
-const { shareHtml, validToken } = require('../src/lib/preview.js');
+const { fallbackPng, shareHtml } = require('../src/lib/preview.js');
+const { decodeToken, validToken } = require('../src/lib/share-codec.js');
+
+const token = state => 'r' + Buffer.from(JSON.stringify(state)).toString('base64url');
+const selectedToken = token({ v: 2, l: 2, sel: [['Shen', 'Teemo']] });
 
 function request(token, method = 'GET') {
   return {
@@ -15,28 +21,31 @@ function request(token, method = 'GET') {
 }
 
 test('share HTML contains server-rendered metadata and a safe app redirect', async () => {
-  const result = await shareHandler(request('rYWJj'));
+  const result = await shareHandler(request(selectedToken));
   assert.equal(result.status, 200);
   assert.match(result.body, /property="og:image"/);
-  assert.match(result.body, /https:\/\/preview\.example\.test\/api\/og\/rYWJj/);
-  assert.match(result.body, /location\.replace\("\/traits\/\?s=rYWJj"\)/);
+  assert.match(result.body, new RegExp(
+    `https:\\/\\/preview\\.example\\.test\\/api\\/og\\/${selectedToken}`));
+  assert.match(result.body, new RegExp(
+    `location\\.replace\\("\\/traits\\/\\?s=${selectedToken}"\\)`));
+  assert.match(result.body, /Shen, Teemo/);
   assert.match(result.body, /noindex,nofollow/);
 });
 
 test('public metadata uses the Static Web Apps origin', async () => {
-  const req = request('rYWJj');
+  const req = request(selectedToken);
   req.headers.set(
     'x-ms-original-url',
-    'https://preview-host.azurestaticapps.net/api/share/rYWJj');
+    `https://preview-host.azurestaticapps.net/api/share/${selectedToken}`);
   const result = await shareHandler(req);
-  assert.match(result.body,
-    /https:\/\/preview-host\.azurestaticapps\.net\/api\/og\/rYWJj/);
+  assert.match(result.body, new RegExp(
+    `https:\\/\\/preview-host\\.azurestaticapps\\.net\\/api\\/og\\/${selectedToken}`));
   assert.doesNotMatch(result.body, /azurewebsites\.net/);
 });
 
 test('share HTML escapes reflected values', () => {
-  const html = shareHtml('https://example.test', 'rYWJj');
-  assert.doesNotMatch(html, /<script[^>]*>.*rYWJj.*<\/script>.*<script/s);
+  const html = shareHtml('https://example.test', selectedToken, { featured: null });
+  assert.doesNotMatch(html, /<script[^>]*>.*<script/s);
 });
 
 test('share endpoints reject malformed and oversized tokens', async () => {
@@ -48,7 +57,7 @@ test('share endpoints reject malformed and oversized tokens', async () => {
 });
 
 test('OG endpoint returns a 1200x630 PNG', { timeout: 30000 }, async () => {
-  const result = await ogHandler(request('rYWJj'));
+  const result = await ogHandler(request(selectedToken));
   assert.equal(result.status, 200);
   assert.equal(result.headers['content-type'], 'image/png');
   const png = Buffer.from(result.body);
@@ -56,4 +65,42 @@ test('OG endpoint returns a 1200x630 PNG', { timeout: 30000 }, async () => {
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
   assert.ok(png.length < 300000);
+  assert.match(result.headers.etag, /^"[A-Za-z0-9_-]+"$/);
+});
+
+test('bundled fallback is a 1200x630 PNG', () => {
+  const png = Buffer.from(fallbackPng());
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
+});
+
+test('v1 tokens remain valid and render a generic preview', async () => {
+  const v1 = token({ v: 1, l: 8 });
+  assert.equal(decodeToken(v1).v, 1);
+  const result = await shareHandler(request(v1));
+  assert.equal(result.status, 200);
+  assert.match(result.body, /TFT Trait Explorer search/);
+});
+
+test('invalid selected rosters are dropped rather than repaired', async () => {
+  const invalid = token({
+    v: 2,
+    l: 2,
+    sel: [['LuxBlossom', 'LuxCoven'], ['Shen', 'Teemo']],
+  });
+  const result = await shareHandler(request(invalid));
+  assert.equal(result.status, 200);
+  assert.match(result.body, /Shen, Teemo/);
+  assert.doesNotMatch(result.body, /Lux/);
+});
+
+test('API generated scoring files match the browser sources', () => {
+  const root = path.resolve(__dirname, '..', '..');
+  for (const file of ['search-utils.js', 'board-score.js', 'data.json']) {
+    assert.equal(
+      fs.readFileSync(path.join(root, 'api', 'generated', file), 'utf8'),
+      fs.readFileSync(path.join(root, 'web', 'traits', file), 'utf8'),
+      `${file} drifted from its browser source`);
+  }
 });

@@ -1,9 +1,21 @@
 const { app } = require('@azure/functions');
-const { publicOrigin, shareHtml, validToken } = require('../lib/preview.js');
+const { publicOrigin, shareHtml } = require('../lib/preview.js');
+const { decodeToken, validToken } = require('../lib/share-codec.js');
+const { previewState } = require('../lib/preview-state.js');
 
 async function shareHandler(request) {
   const token = request.params.token;
   if (!validToken(token)) {
+    return {
+      status: 400,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      body: 'Invalid shared composition.',
+    };
+  }
+  let preview;
+  try {
+    preview = previewState(decodeToken(token));
+  } catch {
     return {
       status: 400,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
@@ -17,7 +29,9 @@ async function shareHandler(request) {
       'cache-control': 'public, max-age=300',
       'x-robots-tag': 'noindex, nofollow',
     },
-    body: request.method === 'HEAD' ? null : shareHtml(publicOrigin(request), token),
+    body: request.method === 'HEAD'
+      ? null
+      : shareHtml(publicOrigin(request), token, preview),
   };
 }
 
