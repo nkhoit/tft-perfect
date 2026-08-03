@@ -287,6 +287,27 @@ test('roster summary controls fill the available row height', () => {
   assert.match(css, /\.compfoot\{/);
 });
 
+test('touch devices can preview a unit without applying a filter', () => {
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
+  // Hover cards are mouseover-only, so touch users had no way to read a
+  // unit's ability text: tapping a tile immediately required the unit.
+  // A bottom sheet gives them the same content plus explicit actions.
+  assert.match(app, /function openSheet/);
+  assert.match(app, /function closeSheet/);
+  // Must be gated on a coarse pointer, or desktop clicks would open it too.
+  assert.match(app, /\(pointer:\s*coarse\)/);
+  // The sheet reuses the desktop card renderer rather than duplicating copy.
+  assert.match(app, /openSheet\(unitCard\(/);
+  // Explicit actions replace the tap-to-filter shortcut on touch.
+  assert.match(app, /data-act="req"/);
+  assert.match(app, /data-act="exc"/);
+  // Capped height with internal scroll: a full-height sheet is just a modal
+  // and loses the context the sheet exists to preserve.
+  assert.match(css, /\.sheet\{/);
+  assert.match(css, /\.sheetbody\{[^}]*overflow-y:auto/);
+  assert.match(css, /\.sheetbody\{[^}]*overscroll-behavior:contain/);
+});
 test('the generated data and checked-in roster are internally consistent', () => {
   const data = JSON.parse(read('web/traits/data.json'));
   const roster = JSON.parse(read('set18-roster.json'));

@@ -601,3 +601,27 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
   .deadgrp.open .tb.dead{display:inline-flex}
   .deadgrp.open .deadsum{color:#aab3c0;border-style:solid}
 }
+
+/* Touch info sheet. Bottom-anchored rather than centred: the action buttons
+   sit in the thumb zone, and leaving the grid visible above keeps the tile
+   you tapped in context so you can browse several units in a row. */
+.sheetwrap{position:fixed;inset:0;z-index:60;display:none}
+.sheetwrap.show{display:block}
+.sheetscrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.sheet{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;
+  max-height:70vh;background:var(--panel,#151922);border-top:1px solid var(--line,#2a3040);
+  border-radius:14px 14px 0 0;box-shadow:0 -8px 28px rgba(0,0,0,.5);
+  padding:6px 14px calc(14px + env(safe-area-inset-bottom));
+  animation:sheetup .18s ease-out}
+@keyframes sheetup{from{transform:translateY(14px);opacity:.6}to{transform:none;opacity:1}}
+.sheetgrip{flex:none;width:36px;height:4px;margin:2px auto 8px;border-radius:2px;
+  background:var(--line,#2a3040)}
+/* Capped + internally scrollable: a full-height sheet is just a modal.
+   overscroll-behavior stops a flick inside the sheet scrolling the page. */
+.sheetbody{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.sheetfoot{flex:none;display:flex;gap:8px;padding-top:10px}
+.sheetbtn{flex:1;min-height:42px;border-radius:9px;border:1px solid var(--line,#2a3040);
+  background:var(--chip,#1b212c);color:var(--fg,#e8ecf3);font-size:13px;font-weight:600}
+.sheetbtn.on{border-color:var(--acc,#7aa2f7);color:var(--acc,#7aa2f7)}
+/* Pointer devices keep the hover card; never show the sheet there. */
+@media (pointer:fine){.sheetwrap{display:none!important}}

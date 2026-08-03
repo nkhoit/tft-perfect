@@ -1159,7 +1159,12 @@ function addUnit(el, c, group) {
     const value = isGroupExcluded(c) ? 2 : (state.get(c.key) || 0);
     d.classList.toggle('req', value === 1);
     d.classList.toggle('exc', value === 2);
-    d.onclick = () => setUnitState(c.key, state.get(c.key) === 1 ? 0 : 1);
+    d.onclick = () => {
+      // Touch has no hover, so a tap must be able to mean "tell me about
+      // this" -- the sheet carries require/exclude as explicit buttons.
+      if (isTouch()) return openSheet(unitCard(c.key), 'unit', c.key);
+      setUnitState(c.key, state.get(c.key) === 1 ? 0 : 1);
+    };
     d.oncontextmenu = e => {
       e.preventDefault();
       setUnitState(c.key, state.get(c.key) === 2 ? 0 : 2);
@@ -1613,6 +1618,72 @@ function unitCard(key) {
     <div class="cchs">${traits}</div>${role}${stats}${ability}`;
 }
 
+// ---------- touch info sheet ----------
+// Hover cards are pointer-only. On a touch device tapping a tile went
+// straight to require/exclude, so there was no way to read a unit's ability
+// or a trait's breakpoints at all. The sheet reuses unitCard()/traitCard()
+// and moves filtering behind explicit buttons.
+const isTouch = () => matchMedia('(pointer: coarse)').matches;
+let sheetEl = null;
+let sheetKey = null;
+let sheetKind = null;
+
+function closeSheet() {
+  if (sheetEl) sheetEl.classList.remove('show');
+  sheetKey = sheetKind = null;
+}
+
+function sheetActions(kind, key) {
+  if (kind === 'unit') {
+    const st = state.get(key) || 0;
+    return '<button class="sheetbtn' + (st === 1 ? ' on' : '') + '" data-act="req">' +
+      (st === 1 ? 'Required \u2713' : 'Require') + '</button>' +
+      '<button class="sheetbtn' + (st === 2 ? ' on' : '') + '" data-act="exc">' +
+      (st === 2 ? 'Excluded \u2713' : 'Exclude') + '</button>';
+  }
+  return '<button class="sheetbtn" data-act="req">Require trait</button>' +
+    '<button class="sheetbtn" data-act="exc">Mute trait</button>';
+}
+
+function openSheet(html, kind, key) {
+  hideCard();
+  if (!sheetEl) {
+    sheetEl = document.createElement('div');
+    sheetEl.className = 'sheetwrap';
+    sheetEl.innerHTML = '<div class="sheetscrim"></div><div class="sheet" role="dialog" ' +
+      'aria-modal="true"><div class="sheetgrip"></div>' +
+      '<div class="sheetbody"></div><div class="sheetfoot"></div></div>';
+    document.body.appendChild(sheetEl);
+    sheetEl.querySelector('.sheetscrim').addEventListener('click', closeSheet);
+    sheetEl.querySelector('.sheetfoot').addEventListener('click', onSheetAction);
+  }
+  sheetKind = kind;
+  sheetKey = key;
+  sheetEl.querySelector('.sheetbody').innerHTML = html;
+  sheetEl.querySelector('.sheetfoot').innerHTML = sheetActions(kind, key);
+  sheetEl.querySelector('.sheetbody').scrollTop = 0;
+  sheetEl.classList.add('show');
+}
+
+function onSheetAction(e) {
+  const b = e.target.closest('[data-act]');
+  if (!b || !sheetKey) return;
+  const act = b.dataset.act;
+  if (sheetKind === 'unit') {
+    const st = state.get(sheetKey) || 0;
+    const want = act === 'req' ? 1 : 2;
+    setUnitState(sheetKey, st === want ? 0 : want);
+  } else if (act === 'req') {
+    cycleTrait(sheetKey, false);
+  } else {
+    cycleTrait(sheetKey, true);
+  }
+  closeSheet();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSheet();
+});
 let cardEl = null;
 function hideCard() { if (cardEl) cardEl.classList.remove('show'); }
 
@@ -2165,7 +2236,8 @@ function onCompClick(e) {
   }
   const unit = e.target.closest('.uc[data-key]');
   if (unit) {
-    setUnitState(unit.dataset.key, state.get(unit.dataset.key) === 1 ? 0 : 1);
+    if (isTouch()) openSheet(unitCard(unit.dataset.key), 'unit', unit.dataset.key);
+    else setUnitState(unit.dataset.key, state.get(unit.dataset.key) === 1 ? 0 : 1);
     return;
   }
   const b = e.target.closest('.tb');
