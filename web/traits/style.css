@@ -564,3 +564,24 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
 .more::after{content:'';display:inline-block;width:6px;height:6px;margin-left:5px;
   border-radius:50%;background:var(--acc2);animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* Inactive ("partial") traits are informational. Group them so mobile can
+   fold them behind a single chip instead of spending rows on them. */
+.deadgrp{display:contents}
+.deadsum{display:none}
+
+@media(max-width:820px){
+  /* the trait block was 120px of a 315px card -- 12 badges over 5 ragged rows.
+     Tighten every badge, and collapse the inactive ones behind a "+N partial"
+     chip that expands on tap. */
+  .tb{font-size:10px;padding:1px 6px 1px 4px;gap:3px;border-radius:9px}
+  .tb img{width:12px;height:12px}
+  .tline{gap:4px}
+  .deadgrp{display:inline-flex;flex-wrap:wrap;gap:4px}
+  .deadgrp .tb.dead{display:none}
+  .deadsum{display:inline-flex;align-items:center;padding:1px 8px;border-radius:9px;
+    border:1px dashed #39424f;background:transparent;color:#7c8695;font-size:10px;
+    font-style:normal;cursor:pointer;white-space:nowrap}
+  .deadgrp.open .tb.dead{display:inline-flex}
+  .deadgrp.open .deadsum{color:#aab3c0;border-style:solid}
+}

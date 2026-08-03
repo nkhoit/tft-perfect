@@ -1889,6 +1889,11 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
       `${t.icon ? `<img src="${t.icon}">` : ''}<b>${n}<i>/${nxt}</i></b> ${t.name}</span>`;
   }).join('');
 
+  const deadN = (r.dead || []).length;
+  const deadGroup = deadN
+    ? `<span class="deadgrp"><i class="deadsum" aria-hidden="true">+${deadN} partial</i>${deadBadges}</span>`
+    : '';
+
   const badges = r.active.map(([ti, n]) => {
     const key = tkeys[ti], t = DB.traits[key];
     const cls = styleAt(t, n);
@@ -1941,7 +1946,7 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
   // re-deriving it from the DOM would mean a second scoring implementation.
   d.__row = r;
   d.innerHTML =
-    `<div class="comphead"><div class="tline">${badges}${deadBadges}</div>` +
+    `<div class="comphead"><div class="tline">${badges}${deadGroup}</div>` +
     `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
     (r.uniqN ? `<span class="unique">+${r.uniqN} unique</span>` : '') +
     `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
@@ -2096,6 +2101,14 @@ function renderSelectedComps() {
 // Click any trait badge in the results to pin it as a requirement at that count.
 // Bound to both containers so a selected comp behaves exactly like a result row.
 function onCompClick(e) {
+  // Expand the collapsed "+N partial" trait chip (mobile only; the group is
+  // display:contents on desktop so the badges are always visible there).
+  const deadsum = e.target.closest('.deadsum');
+  if (deadsum) {
+    const grp = deadsum.closest('.deadgrp');
+    if (grp) grp.classList.toggle('open');
+    return;
+  }
   const preview = e.target.closest('.previewcomp');
   if (preview) {
     if (moveSelectionFirst(selectedComps, preview.dataset.sig)) syncSelectedState();
