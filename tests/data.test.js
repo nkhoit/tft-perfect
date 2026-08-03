@@ -229,7 +229,8 @@ test('group exclusions collapse all champion forms into one control', () => {
   assert.match(app, /function setGroupExcluded\(/);
   assert.match(app, /function isGroupExcluded\(/);
   assert.match(app, /else if \(s === 2 \|\| isGroupExcluded\(c\)\) return/);
-  assert.match(app, /class="selc group" data-group="/);
+  // group exclusions now surface as chips in the active filter bar
+  assert.match(app, /chipHtml\('group', group, group \+ ' forms'/);
   assert.match(app, /shared\.xg = \[\.\.\.excludedGroups\]\.sort\(\)/);
   assert.match(app, /strings\(shared\.xg,/);
   assert.match(css, /\.groupex\{/);
@@ -297,6 +298,29 @@ test('hover cards stay out of the way on touch devices', () => {
   assert.match(body, /canHover\(\)/);
 });
 
+test('the active filter bar summarises every non-default filter', () => {
+  const app = read('web/traits/app.js');
+  const html = read('web/traits/index.html');
+  const css = read('web/traits/style.css');
+  // One bar, mounted above the results it explains.
+  assert.match(html, /id="activeFilters"/);
+  assert.ok(html.indexOf('id="activeFilters"') < html.indexOf('class="results"'),
+    'the bar must render above the results');
+  // The old duplicate strip is absorbed, not left behind.
+  assert.doesNotMatch(html, /id="selReqC"/);
+  assert.doesNotMatch(html, /id="selExcC"/);
+  // Every filter family is represented, not just units.
+  for (const kind of ['unit', 'trait', 'emblem', 'cost', 'size', 'waste', 'group', 'mute']) {
+    assert.ok(app.includes("'" + kind + "'"), 'no chip kind: ' + kind);
+  }
+  assert.match(app, /function renderActiveFilters/);
+  // Defaults stay silent: a chip only appears once a value moves off default.
+  assert.match(app, /DEFAULT_SIZE/);
+  assert.match(app, /DEFAULT_WASTE/);
+  // Removable only -- no click-to-jump machinery.
+  assert.match(app, /function clearChip/);
+  assert.match(css, /\.afbar\{/);
+});
 test('touch devices can preview a unit without applying a filter', () => {
   const app = read('web/traits/app.js');
   const css = read('web/traits/style.css');

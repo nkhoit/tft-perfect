@@ -145,19 +145,15 @@ Deep uses the full search budget.">?</i></h2>
         </div>
       </div>
       <div class="grid" id="pool"></div>
-      <div class="sel" id="sel" hidden>
-        <div class="selgrp" id="selReq" hidden>
-          <span class="sellbl g">Required</span>
-          <div class="selchips" id="selReqC"></div>
-        </div>
-        <div class="selgrp" id="selExc" hidden>
-          <span class="sellbl r">Excluded</span>
-          <div class="selchips" id="selExcC"></div>
-        </div>
-      </div>
     </div>
 
     <div class="selected" id="selected" hidden></div>
+    <div class="afbar" id="activeFilters" hidden>
+      <span class="aflbl">Filtering</span>
+      <div class="afchips" id="afChips"></div>
+      <button class="afclear" id="afClear" type="button">Clear all</button>
+    </div>
+
     <div class="results">
       <div class="rhead"><h2>Results</h2><div class="status" id="status"></div><div class="count" id="count">—</div></div>
       <div id="list"></div>

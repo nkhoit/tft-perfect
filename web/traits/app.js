@@ -34,6 +34,7 @@ const METRICS_KEY = 'tft-search-metrics-v1';
 const SHARE_SCHEMA_VERSION = 2;
 const DEFAULT_LEVEL = 8;
 const DEFAULT_WASTE = 10;
+const DEFAULT_SIZE = 8;
 const DEFAULT_SORT = ['live', 'cost'];
 const DEFAULT_EFFORT = 'deep';
 const EFFORT_ORDER = ['quick', 'balanced', 'deep'];
@@ -1205,43 +1206,135 @@ function updPickN() {
 
 // The pool is 73 tiles deep and your picks scatter across five cost rows, so a
 // selection is easy to lose track of. Mirror them into one strip.
-function renderSel() {
+// Active filters used to live in six places -- a strip under the grid for
+// units, bare counts in the sidebar for traits and emblems, dimmed swatches
+// for costs, slider positions for level and waste. On mobile the sidebar
+// collapses and half of them vanish entirely. One bar, above the results
+// they shape, so the sidebar is an input surface and not a source of truth.
+
+function chipHtml(kind, id, label, icon, cls) {
+  const art = icon ? `<img loading="lazy" src="${icon}">` : '';
+  return `<span class="afchip ${cls || ''}" data-kind="${kind}" data-id="${id}" ` +
+    `title="${label} \u2014 click to clear">${art}<span class="afct">${label}</span>` +
+    '<b class="x">\u2715</b></span>';
+}
+
+function activeChips() {
+  const out = [];
   const req = [], exc = [];
   for (const c of DB.champions) {
     const v = state.get(c.key);
     if (v === 1) req.push(c); else if (v === 2) exc.push(c);
   }
-  const fill = (el, arr, kind) => {
-    el.innerHTML = arr
-      .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-      .map(c => `<span class="selc k${c.cost}" data-key="${c.key}" data-kind="${kind}" ` +
-        `title="${c.name} — click to clear"><img loading="lazy" src="${c.icon}">` +
-        `${c.name}<b class="x">\u2715</b></span>`).join('');
-  };
-  fill($('selReqC'), req, 'req');
-  fill($('selExcC'), exc, 'exc');
-  const excludedFormGroups = formGroups()
-    .filter(({ group }) => excludedGroups.has(group));
-  $('selExcC').insertAdjacentHTML('beforeend', excludedFormGroups
-    .map(({ group, champions }) =>
-      `<span class="selc group" data-group="${group}" title="Click to allow all ${group} forms">` +
-      `<img loading="lazy" src="${champions[0].icon}">${group} forms<b class="x">\u2715</b></span>`)
-    .join(''));
-  $('selReq').hidden = !req.length;
-  $('selExc').hidden = !exc.length && !excludedFormGroups.length;
-  $('sel').hidden = !req.length && !exc.length && !excludedFormGroups.length;
+  const byCost = (a, b) => a.cost - b.cost || a.name.localeCompare(b.name);
+  for (const c of req.sort(byCost))
+    out.push(chipHtml('unit', c.key, c.name, c.icon, 'req k' + c.cost));
+  for (const c of exc.sort(byCost))
+    out.push(chipHtml('unit', c.key, c.name, c.icon, 'exc k' + c.cost));
+  for (const { group, champions } of formGroups()) {
+    if (!excludedGroups.has(group)) continue;
+    out.push(chipHtml('group', group, group + ' forms', champions[0].icon, 'exc'));
+  }
+  for (const { key, n } of reqTraits) {
+    const t = DB.traits[key];
+    if (t) out.push(chipHtml('trait', key, n + ' ' + t.name, t.icon, 'req'));
+  }
+  for (const key of muted) {
+    const t = DB.traits[key];
+    if (t) out.push(chipHtml('mute', key, t.name + ' muted', t.icon, 'mute'));
+  }
+  const seen = new Map();
+  for (const key of emblems) seen.set(key, (seen.get(key) || 0) + 1);
+  for (const [key, n] of seen) {
+    const t = DB.traits[key];
+    if (!t) continue;
+    const label = (n > 1 ? n + '\u00D7 ' : '') + t.name + ' emblem';
+    out.push(chipHtml('emblem', key, label, t.icon, 'emb'));
+  }
+  for (let c = 1; c <= 5; c++)
+    if (!costOn.has(c)) out.push(chipHtml('cost', c, 'no ' + c + '\u2605', '', 'off'));
+  const size = +$('size').value;
+  if (size !== DEFAULT_SIZE) out.push(chipHtml('size', size, 'Level ' + size, '', 'num'));
+  const waste = +$('waste').value;
+  if (waste !== DEFAULT_WASTE)
+    out.push(chipHtml('waste', waste, waste + ' waste', '', 'num'));
+  return out;
 }
 
-// Clearing from the strip has to drive the pool tile too, or the two views drift.
-$('sel').addEventListener('click', e => {
-  const c = e.target.closest('.selc');
-  if (!c) return;
-  if (c.dataset.group) {
-    setGroupExcluded(c.dataset.group, false);
+function renderActiveFilters() {
+  const chips = activeChips();
+  $('afChips').innerHTML = chips.join('');
+  $('activeFilters').hidden = !chips.length;
+}
+
+function renderSel() { renderActiveFilters(); }
+
+// Rather than call renderActiveFilters at every mutation site, wrap the two
+// renderers each sidebar control already funnels through, plus the sliders.
+function syncFilterBar(fn) {
+  return function (...args) {
+    const out = fn.apply(this, args);
+    if (typeof DB !== 'undefined' && DB && DB.champions) renderActiveFilters();
+    return out;
+  };
+}
+
+// Removable only -- a chip clears its own filter and nothing else.
+function clearChip(kind, id) {
+  if (kind === 'unit') return setUnitState(id, 0);
+  if (kind === 'group') return setGroupExcluded(id, false);
+  if (kind === 'trait') {
+    const i = reqTraits.findIndex(r => r.key === id);
+    if (i >= 0) reqTraits.splice(i, 1);
+    renderTraitGrid(); applyFilter(); return run();
+  }
+  if (kind === 'mute') {
+    muted.delete(id);
+    renderTraitGrid(); applyFilter(); return run();
+  }
+  if (kind === 'emblem') {
+    for (let i = emblems.length - 1; i >= 0; i--)
+      if (emblems[i] === id) emblems.splice(i, 1);
+    renderEmblems(); return run();
+  }
+  if (kind === 'cost') {
+    costOn.add(+id);
+    for (const b of $('costs').children)
+      b.classList.toggle('on', costOn.has(+b.dataset.cost));
+    applyFilter(); return run();
+  }
+  if (kind === 'size' || kind === 'waste') {
+    const el = $(kind);
+    el.value = kind === 'size' ? DEFAULT_SIZE : DEFAULT_WASTE;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
     return;
   }
-  setUnitState(c.dataset.key, 0);
+}
+
+$('afChips').addEventListener('click', e => {
+  const chip = e.target.closest('.afchip');
+  if (!chip) return;
+  clearChip(chip.dataset.kind, chip.dataset.id);
+  renderActiveFilters();
 });
+// The sidebar Clear button predates the cost filter and the sliders and
+// resets neither, so delegating to it would strand chips in the bar. Clear
+// all means all: every chip the bar can show must go.
+$('afClear').addEventListener('click', () => {
+  for (let c = 1; c <= 5; c++) costOn.add(c);
+  for (const b of $('costs').children) b.classList.add('on');
+  $('size').value = DEFAULT_SIZE;
+  $('sizeV').textContent = DEFAULT_SIZE;
+  $('waste').value = DEFAULT_WASTE;
+  $('wasteV').textContent = DEFAULT_WASTE;
+  $('clear').click();
+  renderActiveFilters();
+});
+renderEmblems = syncFilterBar(renderEmblems);
+renderTraitGrid = syncFilterBar(renderTraitGrid);
+for (const id of ['size', 'waste'])
+  $(id).addEventListener('input', renderActiveFilters);
+$('costs').addEventListener('click', () => setTimeout(renderActiveFilters, 0));
 
 // Only traits with real breakpoints can exist as emblems -- a unique trait
 // belongs to exactly one champion and has no spatula version in game.
