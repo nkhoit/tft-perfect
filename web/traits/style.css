@@ -183,6 +183,10 @@ button:hover{border-color:var(--acc2)}
 .compfoot>.copycode{flex:none;width:30px;height:30px;margin:0 0 0 4px}
 .compfoot>.copycode .copyicon{width:18px;height:18px}
 .compfoot .teamprofile{margin-top:0}
+/* Roster profile reads as a caption for the portraits above it, so it
+   starts at the same left edge; gold and the buttons are pushed to the
+   far end instead. */
+.compfoot .teamprofile.compact{margin-left:0}
 .compfoot .vg{margin-left:auto}
 /* At phone widths the footer itself wrapped and dropped the pin button onto
    a second line, so the cluster height varied card to card. Let the roster
