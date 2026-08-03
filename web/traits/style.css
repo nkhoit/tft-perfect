@@ -301,7 +301,14 @@ button:hover{border-color:var(--acc2)}
   .grid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr))}
   .comphead{flex-direction:column;gap:5px}
   .score{justify-content:flex-start}
-  .pickctl input{width:130px}
+  /* margin-left:auto + justify-content:flex-end made every wrapped row of the
+     control cluster right-align independently, giving a ragged staircase with
+     dead space on the left. On a phone let it start at the left edge and let
+     the search box take the leftover width instead of a fixed 130px. */
+  .pickctl{margin-left:0;justify-content:flex-start;width:100%;gap:6px}
+  .pickctl input{flex:1 1 100%;width:auto;min-width:0}
+  .savedmenu{flex:0 0 auto}
+  .pickctl button,.savedmenu>summary{flex:1 1 auto;text-align:center;white-space:nowrap}
 }
 
 /* unique traits: shown but not scored */
