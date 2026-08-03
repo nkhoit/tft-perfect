@@ -89,13 +89,19 @@
     for (const part of parts) {
       for (const row of part.rows) {
         const signature = traitSignature(row);
-        if (!candidatesBySignature.has(signature)) candidatesBySignature.set(signature, []);
+        if (!candidatesBySignature.has(signature)) candidatesBySignature.set(signature, new Map());
         const candidates = candidatesBySignature.get(signature);
-        candidates.push(plain(row));
-        for (const variant of (row.variants || [])) candidates.push(plain(variant));
+        const add = candidate => {
+          const roster = compSignature(candidate.units);
+          const previous = candidates.get(roster);
+          if (!previous || compare(candidate, previous) < 0) candidates.set(roster, candidate);
+        };
+        add(plain(row));
+        for (const variant of (row.variants || [])) add(plain(variant));
       }
     }
-    for (const candidates of candidatesBySignature.values()) {
+    for (const candidatesByRoster of candidatesBySignature.values()) {
+      const candidates = [...candidatesByRoster.values()];
       candidates.sort(compare);
       const representative = candidates[0];
       representative.variants = candidates.slice(1, 25);

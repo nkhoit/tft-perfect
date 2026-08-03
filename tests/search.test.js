@@ -204,6 +204,30 @@ test('shard results merge, sort, and retain roster variants', () => {
   assert.equal(merged.stopReason, 'time');
 });
 
+test('merged variants exclude duplicate champion rosters', () => {
+  const { mergeSearchResults } = require('../web/traits/search-utils.js');
+  const primary = {
+    units: [0, 1], active: [[0, 2]], dead: [],
+    live: 1, tierSum: 1, waste: 0, gold: 6,
+  };
+  const duplicate = {
+    units: [1, 0], active: [[0, 2]], dead: [],
+    live: 1, tierSum: 1, waste: 0, gold: 6,
+  };
+  const alternate = {
+    units: [2, 3], active: [[0, 2]], dead: [],
+    live: 1, tierSum: 1, waste: 0, gold: 9,
+  };
+
+  const merged = mergeSearchResults([
+    { rows: [{ ...primary, variants: [alternate] }], total: 2, ms: 1 },
+    { rows: [duplicate], total: 1, ms: 1 },
+  ], 'live', 'cost');
+
+  assert.deepEqual(merged.rows[0].units, [0, 1]);
+  assert.deepEqual(merged.rows[0].variants.map(row => row.units), [[2, 3]]);
+});
+
 test('champions can contribute multiple points to a trait', () => {
   const send = loadWorker();
   const db = {
