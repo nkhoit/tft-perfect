@@ -287,6 +287,16 @@ test('roster summary controls fill the available row height', () => {
   assert.match(css, /\.compfoot\{/);
 });
 
+test('hover cards stay out of the way on touch devices', () => {
+  const app = read('web/traits/app.js');
+  // Touch taps synthesise mouseover on iOS, which raced the sheet and
+  // produced the small hover card instead. The listener must opt out
+  // whenever the device has no true hover.
+  const handler = app.slice(app.indexOf("addEventListener('mouseover'"));
+  const body = handler.slice(0, handler.indexOf('\n});'));
+  assert.match(body, /canHover\(\)/);
+});
+
 test('touch devices can preview a unit without applying a filter', () => {
   const app = read('web/traits/app.js');
   const css = read('web/traits/style.css');

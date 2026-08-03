@@ -1700,7 +1700,15 @@ function showCard(html, ev) {
   cardEl.style.top = Math.max(pad, y) + 'px';
 }
 
+// iOS synthesises mouseover on tap, so an unguarded hover listener races
+// the touch sheet and shows the small card instead. Trust the media query
+// over event type: it is the only signal that survives synthetic events.
+function canHover() {
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
 document.addEventListener('mouseover', e => {
+  if (!canHover()) return;
   // "?" header affordance: same card, plain text, newlines become breaks
   const q = e.target.closest('.q[data-tip]');
   if (q) return showCard(q.dataset.tip.split('\n')
