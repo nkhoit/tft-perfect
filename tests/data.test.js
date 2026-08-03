@@ -130,6 +130,22 @@ test('featured preview controls only render in the selected section', () => {
   assert.match(app, /card\.querySelector\('\.previewcomp'\)\?\.remove\(\)/);
 });
 
+test('filters collapse responsively and remember the user preference', () => {
+  const html = read('web/traits/index.html');
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
+
+  assert.match(html, /id="filtersToggle"[^>]*aria-controls="filtersContent"[^>]*aria-expanded="true"/);
+  assert.match(html, /id="filtersContent"/);
+  assert.match(app, /const FILTERS_STORAGE_KEY/);
+  assert.match(app, /matchMedia\('\(max-width: 820px\)'\)\.matches/);
+  assert.match(app, /localStorage\.setItem\(FILTERS_STORAGE_KEY/);
+  assert.match(app, /function setFiltersCollapsed/);
+  assert.match(css, /\.wrap\.filters-collapsed\{grid-template-columns:/);
+  assert.match(css, /\.sidecontent\[hidden\]\{display:none\}/);
+  assert.match(css, /@media\(max-width:820px\)\{[\s\S]*\.wrap\.filters-collapsed\{grid-template-columns:1fr\}/);
+});
+
 test('selection badges contrast with role badge styling', () => {
   const css = read('web/traits/style.css');
   const badge = css.match(/\.u\.req::before,\.uc\.req::before\{([^}]*)\}/)?.[1];

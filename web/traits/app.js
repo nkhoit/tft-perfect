@@ -45,6 +45,7 @@ const EFFORTS = {
 const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
 const POOL_VIEWS = new Set(['cost', 'origin', 'class']);
 const MAX_SHARED_EMBLEMS = 20;
+const FILTERS_STORAGE_KEY = 'tftkit:filters-collapsed';
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
@@ -70,6 +71,49 @@ let savedSearches = [], savedSearchesAvailable = true;
 let BOARD_TABLES = null;
 let selectedRestoreNotice = '';
 let lastShareApiWarmAt = 0;
+let filtersPreferenceExplicit = false;
+
+function setFiltersCollapsed(collapsed, persist = false) {
+  const wrap = document.querySelector('.wrap');
+  const panel = $('filtersPanel');
+  const content = $('filtersContent');
+  const toggle = $('filtersToggle');
+  wrap.classList.toggle('filters-collapsed', collapsed);
+  panel.dataset.collapsed = String(collapsed);
+  content.hidden = collapsed;
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-label', collapsed ? 'Show filters' : 'Hide filters');
+  toggle.title = collapsed ? 'Show filters' : 'Hide filters';
+  if (!persist) return;
+  filtersPreferenceExplicit = true;
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch (error) {
+    console.warn('Could not save the filter panel preference.', error);
+  }
+}
+
+function initialFiltersCollapsed() {
+  try {
+    const stored = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (stored === '1' || stored === '0') {
+      filtersPreferenceExplicit = true;
+      return stored === '1';
+    }
+  } catch (error) {
+    console.warn('Could not read the filter panel preference.', error);
+  }
+  return matchMedia('(max-width: 820px)').matches;
+}
+
+const filtersMedia = matchMedia('(max-width: 820px)');
+setFiltersCollapsed(initialFiltersCollapsed());
+$('filtersToggle').addEventListener('click', () => {
+  setFiltersCollapsed(!$('filtersContent').hidden, true);
+});
+filtersMedia.addEventListener?.('change', event => {
+  if (!filtersPreferenceExplicit) setFiltersCollapsed(event.matches);
+});
 
 function loadMetrics() {
   const empty = {
