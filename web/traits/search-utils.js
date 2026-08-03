@@ -3,9 +3,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  // Bumped for the MILP hybrid: cached rows from the DFS-only era lack the
-  // optimality proof, so they must not satisfy a new-format query.
-  const ALGORITHM_VERSION = 'milp-hybrid-v5';
+  // Cache identity includes result-shaping semantics, not just scoring. V6
+  // removes duplicate champion rosters from merged alternates.
+  const ALGORITHM_VERSION = 'milp-hybrid-v6';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
