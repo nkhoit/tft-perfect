@@ -1480,6 +1480,18 @@ function cycleTrait(key, back) {
   renderTraitGrid(); run();
 }
 
+// Touch picks a breakpoint outright instead of cycling to it.
+function setTraitReq(key, n) {
+  const i = reqTraits.findIndex(r => r.key === key);
+  if (n == null) {
+    if (i >= 0) reqTraits.splice(i, 1);
+  } else {
+    muted.delete(key);                  // requiring a trait un-ignores it
+    if (i >= 0) reqTraits[i].n = n;
+    else reqTraits.push({ key, n });
+  }
+  renderTraitGrid(); run();
+}
 // Muted traits still appear on boards, but contribute neither score nor waste.
 function toggleMute(key) {
   if (muted.has(key)) muted.delete(key);
@@ -1504,7 +1516,12 @@ function buildTraitGrid() {
     d.dataset.search = t.name.toLowerCase();
     d.innerHTML = (t.icon ? `<img src="${t.icon}">` : '<span class="noimg"></span>') +
       `<span class="tgn">${t.name}</span><span class="tgv"></span>`;
-    d.onclick = () => cycleTrait(t.key, false);
+    d.onclick = () => {
+      // No hover on touch, so the tile has to double as the way in to the
+      // description. Cycling by tap is replaced by explicit sheet buttons.
+      if (isTouch()) return openSheet(traitCard(t.key), 'trait', t.key);
+      cycleTrait(t.key, false);
+    };
     d.oncontextmenu = (e) => { e.preventDefault(); cycleTrait(t.key, true); };
     el.appendChild(d);
   });
@@ -1734,8 +1751,22 @@ function sheetActions(kind, key) {
       '<button class="sheetbtn' + (st === 2 ? ' on' : '') + '" data-act="exc">' +
       (st === 2 ? 'Excluded \u2713' : 'Exclude') + '</button>';
   }
-  return '<button class="sheetbtn" data-act="req">Require trait</button>' +
-    '<button class="sheetbtn" data-act="exc">Mute trait</button>';
+  // Traits have several breakpoints, so offer them directly rather than
+  // making someone tap through the cycle to reach the tier they want.
+  const bp = scoringBreakpoints(DB.traits[key]) || [];
+  const cur = reqTraits.find(r => r.key === key);
+  const ign = muted.has(key);
+  let out = '<div class="sheetbp">';
+  for (const n of bp) {
+    const on = cur && cur.n === n ? ' on' : '';
+    out += '<button class="sheetbtn bp' + on + '" data-act="bp" data-n="' + n + '">' + n + '</button>';
+  }
+  out += '</div><div class="sheetrow">';
+  out += '<button class="sheetbtn' + (ign ? ' on' : '') + '" data-act="exc">' +
+    (ign ? 'Ignored \u2713' : 'Ignore for scoring') + '</button>';
+  if (cur || ign) out += '<button class="sheetbtn" data-act="clr">Clear</button>';
+  out += '</div>';
+  return out;
 }
 
 function openSheet(html, kind, key) {
@@ -1753,7 +1784,9 @@ function openSheet(html, kind, key) {
   sheetKind = kind;
   sheetKey = key;
   sheetEl.querySelector('.sheetbody').innerHTML = html;
-  sheetEl.querySelector('.sheetfoot').innerHTML = sheetActions(kind, key);
+  const foot = sheetEl.querySelector('.sheetfoot');
+  foot.className = 'sheetfoot' + (kind === 'trait' ? ' trait' : '');
+  foot.innerHTML = sheetActions(kind, key);
   sheetEl.querySelector('.sheetbody').scrollTop = 0;
   sheetEl.classList.add('show');
 }
@@ -1766,10 +1799,23 @@ function onSheetAction(e) {
     const st = state.get(sheetKey) || 0;
     const want = act === 'req' ? 1 : 2;
     setUnitState(sheetKey, st === want ? 0 : want);
-  } else if (act === 'req') {
-    cycleTrait(sheetKey, false);
   } else {
-    cycleTrait(sheetKey, true);
+    const cur = reqTraits.find(r => r.key === sheetKey);
+    if (act === 'bp') {
+      const n = Number(b.dataset.n);
+      setTraitReq(sheetKey, cur && cur.n === n ? null : n);   // tapping the live tier clears it
+    } else if (act === 'exc') {
+      toggleMute(sheetKey);
+    } else {
+      setTraitReq(sheetKey, null);
+      if (muted.has(sheetKey)) toggleMute(sheetKey);
+    }
+    // Trait choices are exploratory, so keep the sheet up and restate
+    // the new state rather than dumping the user back to the grid.
+    const f = sheetEl.querySelector('.sheetfoot');
+    f.className = 'sheetfoot trait';
+    f.innerHTML = sheetActions('trait', sheetKey);
+    return;
   }
   closeSheet();
 }

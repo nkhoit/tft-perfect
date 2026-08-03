@@ -645,3 +645,12 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
   .aflbl{padding-top:0}
   .afclear{margin-left:auto}
 }
+
+/* Breakpoint picker inside the trait sheet. Tiers sit on their own row so
+   they read as a scale, with the wordier controls beneath them. */
+.sheetfoot.trait{flex-direction:column;align-items:stretch}
+.sheetbp{display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-bottom:8px}
+.sheetbp .sheetbtn.bp{flex:1 1 0;min-width:44px;padding:9px 4px;
+  font-variant-numeric:tabular-nums;font-size:14px}
+.sheetrow{display:flex;gap:6px;width:100%}
+.sheetrow .sheetbtn{flex:1 1 auto}

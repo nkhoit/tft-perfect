@@ -298,6 +298,29 @@ test('hover cards stay out of the way on touch devices', () => {
   assert.match(body, /canHover\(\)/);
 });
 
+test('touch devices pick trait breakpoints from a sheet', () => {
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
+
+  // tapping a trait opens the sheet instead of cycling
+  assert.match(app, /if \(isTouch\(\)\) return openSheet\(traitCard\(t\.key\), 'trait', t\.key\)/);
+
+  // every scoring breakpoint is its own button, so no repeat tapping
+  assert.match(app, /scoringBreakpoints\(DB\.traits\[key\]\)/);
+  assert.match(app, /data-act="bp" data-n=/);
+
+  // mute is reachable and uses plain wording rather than jargon
+  assert.match(app, /Ignore for scoring/);
+  assert.doesNotMatch(app, /Mute trait/);
+
+  // and the sheet can clear the requirement outright
+  assert.match(app, /data-act="clr"/);
+
+  // acting on a breakpoint sets it directly rather than stepping
+  assert.match(app, /setTraitReq\(/);
+
+  assert.match(css, /\.sheetbp\{/);
+});
 test('the active filter bar summarises every non-default filter', () => {
   const app = read('web/traits/app.js');
   const html = read('web/traits/index.html');
