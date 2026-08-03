@@ -299,6 +299,12 @@ button:hover{border-color:var(--acc2)}
   .wrap.filters-collapsed .filterchev{display:block}
   .wrap.filters-collapsed .filterchev{margin-left:auto}
   .grid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr))}
+  /* the unit grid ran ~1950px tall on a phone, pushing the first result to
+     y~2130 -- you scrolled past every champion before seeing a single comp.
+     Cap it and let the tiles scroll inside the picker: the head and the
+     search box stay put, and results land near the fold. */
+  .grid{max-height:38vh;overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;padding-right:2px}
   .comphead{flex-direction:column;gap:5px}
   .score{justify-content:flex-start}
   .pickctl input{width:130px}
