@@ -197,11 +197,25 @@ test('muted traits are excluded from score and waste', { timeout: 120000 }, asyn
   assert.equal(scored.live, best.sc.live, 'muted trait does not inflate the live count');
 });
 
+test('optimal is claimed exactly once across status and count', () => {
+  const base = { ms: 120, rows: [{}], total: 5, truncated: false, stopReason: null };
+  const hits = (h) => (h.match(/optimal/g) || []).length;
+  // The status line and the count line both derived from `proved`, so the
+  // UI rendered two identical 'optimal' badges side by side.
+  const proved = SearchUtils.summary({ ...base, proved: true });
+  assert.equal(hits(proved.statusHtml) + hits(proved.countHtml), 1);
+  const partial = SearchUtils.summary({ ...base, proved: true, partial: true });
+  assert.equal(hits(partial.statusHtml) + hits(partial.countHtml), 1);
+  const cached = SearchUtils.summary({ ...base, proved: true, cached: 'memory' });
+  assert.equal(hits(cached.statusHtml) + hits(cached.countHtml), 1);
+});
+
 test('summary reports optimal only when the solver proved it', () => {
   const base = { ms: 120, rows: [{}], total: 5, truncated: false, stopReason: null };
   const proved = SearchUtils.summary({ ...base, proved: true });
   assert.match(proved.statusHtml, /optimal/);
-  assert.match(proved.countHtml, /optimal/);
+  // The count line no longer repeats the badge; the status line owns it.
+  assert.doesNotMatch(proved.countHtml, /optimal/);
 
   const unproved = SearchUtils.summary({ ...base, proved: false, truncated: true, stopReason: 'nodes' });
   assert.doesNotMatch(unproved.statusHtml, /optimal/);

@@ -169,14 +169,14 @@
           : result.truncated
             ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
             : `searched in ${seconds}s`);
+    // `optimal` is owned by the status line. It used to be repeated here too,
+    // which rendered two identical badges once both lines sat in the results
+    // header. The count keeps only the warning, which the status may omit.
     const countHtml = partial
       ? `best <b>${result.rows.length}</b> so far` +
-        (result.total ? ` of ${result.total.toLocaleString()}+ scored` : '') +
-        (proved ? ' <span class="tag ok">optimal</span>' : '')
+        (result.total ? ` of ${result.total.toLocaleString()}+ scored` : '')
       : `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
-        (proved
-          ? ' <span class="tag ok">optimal</span>'
-          : result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
+        (!proved && result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
     const title = cachedTitle + (partial
       ? (proved
         ? 'The top board is already proved optimal. Lower-ranked boards are still filling in.'
