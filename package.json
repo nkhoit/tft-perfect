@@ -4,6 +4,8 @@
   "scripts": {
     "check": "node --check precompute_default.js && node --check web/traits/search-utils.js && node --check web/traits/board-score.js && node --check web/traits/saved-searches.js && node --check web/traits/share-state.js && node --check web/traits/team-code.js && node --check web/traits/lp-model.js && node --check web/traits/solver-worker.js && node --check web/traits/worker.js && node --check web/traits/app.js",
     "precompute": "node precompute_default.js",
+    "pretest": "npm run api:setup",
+    "api:setup": "cd api && (test -d node_modules || npm install) && npm run sync:traits",
     "test": "node --test"
   },
   "optionalDependencies": {
