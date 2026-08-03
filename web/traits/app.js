@@ -1950,7 +1950,8 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
     `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
     (r.uniqN ? `<span class="unique">+${r.uniqN} unique</span>` : '') +
     `<span class="w"><b>${r.waste}</b> wasted</span>${slotMeta}</div></div>` +
-    `<div class="comprow primary">${units}${varTag}${profile}` +
+    `<div class="comprow primary">${units}${varTag}</div>` +
+    `<div class="compfoot">${profile}` +
     `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
     copyCodeButton(r.units) + previewButton + pinButton + `</div>` +
     varRows;
@@ -1991,8 +1992,7 @@ function syncVariants(card, row) {
         `Hide ${tag.dataset.count} alternate composition${tag.dataset.count === '1' ? '' : 's'}`);
     }
     if (oldTag) oldTag.replaceWith(tag);
-    else card.querySelector('.comprow.primary').insertBefore(
-      tag, card.querySelector('.teamprofile'));
+    else card.querySelector('.comprow.primary').appendChild(tag);
   } else if (oldTag) {
     oldTag.remove();
   }

@@ -176,6 +176,22 @@ button:hover{border-color:var(--acc2)}
 .tb.unique{border-color:#7c6cf5;color:#c3bbff}
 .tb.emb{border-style:dashed}
 .comprow{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+/* The gold/profile/copy/pin cluster used to be the tail of .comprow, so its
+   position floated with the portrait wrap: beside the last row at 8 units,
+   dropped below at 6. Its own row pins it to the bottom of every card. */
+.compfoot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.compfoot>.copycode{flex:none;width:30px;height:30px;margin:0 0 0 4px}
+.compfoot>.copycode .copyicon{width:18px;height:18px}
+.compfoot .teamprofile{margin-top:0}
+.compfoot .vg{margin-left:auto}
+/* At phone widths the footer itself wrapped and dropped the pin button onto
+   a second line, so the cluster height varied card to card. Let the roster
+   profile shrink instead: the buttons stay put and it keeps one row. */
+@media(max-width:820px){
+  .compfoot{flex-wrap:nowrap}
+  .compfoot .teamprofile{flex:0 1 auto;min-width:0;overflow:hidden}
+  .compfoot .vg{flex:none}
+}
 .comprow.alternate{gap:4px}
 .uc{position:relative;display:block;flex:none;width:56px;height:56px;overflow:hidden;
   background:var(--panel2);border:2px solid var(--edge);border-radius:8px;cursor:pointer;

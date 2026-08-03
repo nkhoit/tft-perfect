@@ -271,6 +271,7 @@ test('team composition renders as one segmented strip', () => {
 
 test('roster summary controls fill the available row height', () => {
   const css = read('web/traits/style.css');
+  const app = read('web/traits/app.js');
 
   assert.match(css, /\.teamprofile\{[^}]*font-size:11px/);
   assert.match(css, /\.profilepart\{[^}]*padding:3px 8px/);
@@ -278,6 +279,12 @@ test('roster summary controls fill the available row height', () => {
   assert.match(css, /\.profilepart b\{[^}]*font-size:11px/);
   assert.match(css, /\.comprow>\.copycode\{[^}]*width:30px;height:30px/);
   assert.match(css, /\.vg\{font-size:12px/);
+  // The footer used to live inside .comprow, so its position depended on
+  // how many portraits wrapped: with 8 units the gold/copy/pin cluster sat
+  // beside the last row, with 6 it dropped below. Pin it to its own row.
+  assert.match(app, /class="compfoot"/);
+  assert.doesNotMatch(app, /class="comprow primary">\$\{units\}\$\{varTag\}\$\{profile\}/);
+  assert.match(css, /\.compfoot\{/);
 });
 
 test('the generated data and checked-in roster are internally consistent', () => {
