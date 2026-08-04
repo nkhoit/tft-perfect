@@ -143,8 +143,13 @@ test('result cards expose isolated desktop and mobile upgrade paths', () => {
   assert.match(app, /openSheet\(upgradePanelMarkup\(upgradeState\), 'upgrade'/);
   assert.match(app, /if \(kind === 'upgrade'\) return ''/);
   assert.match(app, /No board that keeps exactly \$\{upgradeState\.keep\}/);
-  assert.match(css, /\.upunit\.add\{color:var\(--acc\)\}/);
-  assert.match(css, /\.upunit\.remove\{color:var\(--red\)\}/);
+  assert.match(app, /class="upchamp \$\{kind\}"/);
+  assert.match(app, /class="upchampmark"/);
+  assert.match(app, /class="uptrait \$\{kind\}"/);
+  assert.match(css, /\.upchamp\.add\{[^}]*border-color:var\(--acc\)/);
+  assert.match(css, /\.upchamp\.remove\{[^}]*border-color:var\(--red\)/);
+  assert.match(css, /\.uptrait\.add\{[^}]*color:var\(--acc\)/);
+  assert.match(css, /\.uptrait\.remove\{[^}]*color:var\(--red\)/);
   assert.match(css, /\.sheetfoot\[hidden\]\{display:none\}/);
 });
 

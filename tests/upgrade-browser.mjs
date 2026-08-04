@@ -21,6 +21,19 @@ test('upgrade paths render without replacing desktop results', { timeout: 120000
     assert.equal(after, before);
     assert.equal(await session.cdp.evaluate(
       `document.querySelectorAll('#list .upgradepanel').length`), 1);
+    assert.equal(await session.cdp.evaluate(
+      `Boolean(document.querySelector('#list .upchamp.add img')
+        && document.querySelector('#list .upchamp.add .upchampmark')
+        && document.querySelector('#list .uptrait.add'))`), true);
+    await session.cdp.evaluate(`(() => {
+      const keep = document.querySelector('#list .upgradepanel [data-upfield="keep"]');
+      keep.value = String(Number(keep.value) - 1);
+      keep.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await waitFor(() => session.cdp.evaluate(
+      `Boolean(document.querySelector('#list .upgradepanel .upchamp.remove img')
+        && !document.querySelector('#list .upgradepanel')?.textContent.includes('Finding'))`),
+    60000);
     await session.cdp.evaluate(
       `document.querySelector('#list .comp .upgradepath').click()`);
     await waitFor(() => session.cdp.evaluate(
@@ -57,6 +70,9 @@ test('coarse pointers use the existing mobile sheet', { timeout: 120000 }, async
     60000);
     assert.equal(await session.cdp.evaluate(
       `document.querySelector('.sheetfoot').hidden`), true);
+    assert.equal(await session.cdp.evaluate(
+      `Boolean(document.querySelector('.sheetwrap.show .upchamp.add img')
+        && document.querySelector('.sheetwrap.show .uptrait'))`), true);
   } finally {
     await session.cleanup();
   }

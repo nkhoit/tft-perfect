@@ -2423,39 +2423,54 @@ function traitMap(row, context) {
     }));
 }
 
-function moveTraitSummary(source, candidate, context) {
+function traitPill(kind, trait, label) {
+  const data = trait === null ? null : DB.traits[BOARD_TABLES.traitKeys[trait]];
+  return `<span class="uptrait ${kind}">` +
+    (data?.icon ? `<img src="${data.icon}" alt="">` : '') +
+    `${label}</span>`;
+}
+
+function moveTraitPills(source, candidate, context) {
   const before = traitMap(source, context);
   const after = traitMap(candidate, context);
   const traitName = index => DB.traits[BOARD_TABLES.traitKeys[index]].name;
-  const upgraded = [...after]
-    .filter(([trait, value]) => before.has(trait)
-      && value.tier > before.get(trait).tier)
-    .sort(([a], [b]) => a - b);
-  if (upgraded.length) {
-    const [trait, value] = upgraded[0];
-    return `${traitName(trait)} ${before.get(trait).count} to ${value.count}` +
-      (upgraded.length > 1 ? ` +${upgraded.length - 1} more` : '');
+  const pills = [];
+  const traits = [...new Set([...before.keys(), ...after.keys()])].sort((a, b) => a - b);
+  for (const trait of traits) {
+    const oldValue = before.get(trait);
+    const newValue = after.get(trait);
+    if (!oldValue) {
+      pills.push(traitPill('add', trait, `+ ${traitName(trait)} ${newValue.count}`));
+    } else if (!newValue) {
+      pills.push(traitPill('remove', trait, `- ${traitName(trait)} ${oldValue.count}`));
+    } else if (newValue.count > oldValue.count) {
+      pills.push(traitPill(
+        'add', trait, `+ ${traitName(trait)} ${oldValue.count} to ${newValue.count}`));
+    } else if (newValue.count < oldValue.count) {
+      pills.push(traitPill(
+        'remove', trait, `- ${traitName(trait)} ${oldValue.count} to ${newValue.count}`));
+    }
   }
-  const added = [...after].filter(([trait]) => !before.has(trait)).sort(([a], [b]) => a - b);
-  if (added.length) {
-    const [trait, value] = added[0];
-    return `${traitName(trait)} 0 to ${value.count}` +
-      (added.length > 1 ? ` +${added.length - 1} more` : '');
-  }
-  const identical = before.size === after.size
-    && [...before].every(([trait, value]) =>
-      after.get(trait)?.tier === value.tier && after.get(trait)?.count === value.count);
-  if (identical) return `same ${candidate.live} traits`;
-  const removed = [...before].find(([trait]) => !after.has(trait));
-  if (removed && added.length) return `${traitName(removed[0])} to ${traitName(added[0][0])}`;
-  return `${candidate.live} active traits`;
+  return pills.length
+    ? pills.join('')
+    : traitPill('same', null, `same ${candidate.live} traits`);
+}
+
+function upgradeChampionMarkup(index, kind) {
+  const champion = DB.champions[index];
+  const action = kind === 'add' ? 'Add' : 'Remove';
+  const mark = kind === 'add' ? '+' : '-';
+  return `<span class="upchamp ${kind}" title="${action} ${champion.name}">` +
+    `<img src="${champion.icon}" alt="${champion.name}">` +
+    `<span class="upchampmark" aria-hidden="true">${mark}</span>` +
+    `<span class="upchampname">${champion.name}</span></span>`;
 }
 
 function upgradeMoveMarkup(row) {
   const diff = championDiff(upgradeState.source.units, row.units);
   const changes = [
-    ...diff.added.map(index => `<span class="upunit add">+ ${DB.champions[index].name}</span>`),
-    ...diff.removed.map(index => `<span class="upunit remove">- ${DB.champions[index].name}</span>`),
+    ...diff.added.map(index => upgradeChampionMarkup(index, 'add')),
+    ...diff.removed.map(index => upgradeChampionMarkup(index, 'remove')),
   ].join('');
   const gold = diff.added.reduce((total, index) => total + DB.champions[index].cost * 3, 0)
     - diff.removed.reduce((total, index) => total + DB.champions[index].cost * 3, 0);
@@ -2463,7 +2478,7 @@ function upgradeMoveMarkup(row) {
   const keys = row.units.map(index => DB.champions[index].key).join(',');
   return `<div class="upmove" data-units="${keys}" data-kept="${diff.kept.length}">` +
     `<div class="upchange">${changes}</div>` +
-    `<div class="upbuy">${moveTraitSummary(upgradeState.source, row, upgradeState.context)}</div>` +
+    `<div class="uptraits">${moveTraitPills(upgradeState.source, row, upgradeState.context)}</div>` +
     `<div class="upgold" title="Assumes every unit at 2★ (3 copies)">${goldText}</div></div>`;
 }
 
