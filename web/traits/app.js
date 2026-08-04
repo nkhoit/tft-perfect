@@ -1353,7 +1353,12 @@ function buildEmblemGrid() {
     d.dataset.search = t.name.toLowerCase();
     d.innerHTML = (t.icon ? `<img src="${t.icon}">` : '<span class="noimg"></span>') +
       `<span class="tgn">${t.name}</span><span class="tgv"></span>`;
-    d.onclick = () => { emblems.push(t.key); renderEmblems(); run(); };
+    d.onclick = () => {
+      // Emblems stack and removal was right-click only, so touch could add
+      // but never take away. The sheet carries both.
+      if (isTouch()) return openSheet(traitCard(t.key), 'emblem', t.key);
+      emblems.push(t.key); renderEmblems(); run();
+    };
     d.oncontextmenu = (e) => {
       e.preventDefault();
       const i = emblems.lastIndexOf(t.key);
@@ -1739,11 +1744,26 @@ let sheetKey = null;
 let sheetKind = null;
 
 function closeSheet() {
-  if (sheetEl) sheetEl.classList.remove('show');
+  if (sheetEl) {
+    sheetEl.classList.remove('show');
+    // A dragged sheet keeps its offset otherwise and reopens off screen.
+    const s = sheetEl.querySelector('.sheet');
+    s.style.transition = ''; s.style.transform = '';
+  }
   sheetKey = sheetKind = null;
 }
 
 function sheetActions(kind, key) {
+  if (kind === 'emblem') {
+    // A stepper, not a toggle: several copies of one emblem is a real board.
+    const n = emblems.filter(k => k === key).length;
+    return '<div class="sheetrow">' +
+      '<button class="sheetbtn" data-act="embminus"' + (n ? '' : ' disabled') +
+      ' aria-label="Remove one">\u2212</button>' +
+      '<span class="sheetcount">' + n + ' equipped</span>' +
+      '<button class="sheetbtn" data-act="embplus" aria-label="Add one">+</button>' +
+      '</div>';
+  }
   if (kind === 'unit') {
     const st = state.get(key) || 0;
     return '<button class="sheetbtn' + (st === 1 ? ' on' : '') + '" data-act="req">' +
@@ -1769,16 +1789,46 @@ function sheetActions(kind, key) {
   return out;
 }
 
+// The grip looked draggable, so make it drag rather than removing it.
+// Only the header is a drag surface: the body scrolls, and stealing
+// touches from it would break scrolling a long ability description.
+function bindSheetDrag(head, sheet) {
+  let y0 = 0, dy = 0, dragging = false;
+  head.addEventListener('touchstart', e => {
+    dragging = true; dy = 0; y0 = e.touches[0].clientY;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+  head.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);   // down only
+    sheet.style.transform = 'translateY(' + dy + 'px)';
+  }, { passive: true });
+  head.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = 'transform .16s ease-out';
+    // Past a quarter of the sheet reads as intent to dismiss.
+    if (dy > sheet.getBoundingClientRect().height * 0.25) {
+      sheet.style.transform = 'translateY(100%)';
+      setTimeout(closeSheet, 150);
+    } else {
+      sheet.style.transform = '';
+    }
+  });
+}
 function openSheet(html, kind, key) {
   hideCard();
   if (!sheetEl) {
     sheetEl = document.createElement('div');
     sheetEl.className = 'sheetwrap';
     sheetEl.innerHTML = '<div class="sheetscrim"></div><div class="sheet" role="dialog" ' +
-      'aria-modal="true"><div class="sheetgrip"></div>' +
+      'aria-modal="true"><div class="sheethead"><div class="sheetgrip"></div>' +
+      '<button class="sheetx" type="button" aria-label="Close">\u2715</button></div>' +
       '<div class="sheetbody"></div><div class="sheetfoot"></div></div>';
     document.body.appendChild(sheetEl);
     sheetEl.querySelector('.sheetscrim').addEventListener('click', closeSheet);
+    sheetEl.querySelector('.sheetx').addEventListener('click', closeSheet);
+    bindSheetDrag(sheetEl.querySelector('.sheethead'), sheetEl.querySelector('.sheet'));
     sheetEl.querySelector('.sheetfoot').addEventListener('click', onSheetAction);
   }
   sheetKind = kind;
@@ -1795,6 +1845,17 @@ function onSheetAction(e) {
   const b = e.target.closest('[data-act]');
   if (!b || !sheetKey) return;
   const act = b.dataset.act;
+  if (sheetKind === 'emblem') {
+    if (act === 'embplus') emblems.push(sheetKey);
+    else {
+      const i = emblems.lastIndexOf(sheetKey);
+      if (i >= 0) emblems.splice(i, 1);
+    }
+    renderEmblems(); run();
+    // Stay open and restate the count -- adjusting a stack is iterative.
+    sheetEl.querySelector('.sheetfoot').innerHTML = sheetActions('emblem', sheetKey);
+    return;
+  }
   if (sheetKind === 'unit') {
     const st = state.get(sheetKey) || 0;
     const want = act === 'req' ? 1 : 2;

@@ -603,8 +603,22 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
   padding:6px 14px calc(14px + env(safe-area-inset-bottom));
   animation:sheetup .18s ease-out}
 @keyframes sheetup{from{transform:translateY(14px);opacity:.6}to{transform:none;opacity:1}}
-.sheetgrip{flex:none;width:36px;height:4px;margin:2px auto 8px;border-radius:2px;
-  background:var(--line,#2a3040)}
+/* The header is the drag surface, so it needs enough height to grab. The
+   grip stays centred while the close button sits in the corner. */
+.sheethead{position:relative;flex:none;height:26px;touch-action:none}
+.sheetgrip{position:absolute;left:50%;top:6px;transform:translateX(-50%);
+  width:36px;height:4px;border-radius:2px;background:var(--line,#2a3040)}
+/* 44px tap target, pulled into the padding so it hugs the corner. */
+.sheetx{position:absolute;top:-4px;right:-6px;width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;padding:0;
+  border:0;background:none;color:var(--dim,#8b94a3);font-size:17px;line-height:1;
+  cursor:pointer}
+.sheetx:active{color:var(--fg,#e8ecf3)}
+/* Emblem stepper: the count is the subject, so it takes the middle. */
+.sheetcount{flex:1;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:600;color:var(--fg,#e8ecf3);
+  font-variant-numeric:tabular-nums}
+.sheetbtn[disabled]{opacity:.4}
 /* Capped + internally scrollable: a full-height sheet is just a modal.
    overscroll-behavior stops a flick inside the sheet scrolling the page. */
 .sheetbody{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}

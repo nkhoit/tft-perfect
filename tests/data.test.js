@@ -298,6 +298,27 @@ test('hover cards stay out of the way on touch devices', () => {
   assert.match(body, /canHover\(\)/);
 });
 
+test('the sheet can be dismissed without tapping outside it', () => {
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
+  // An explicit close button, not just a scrim tap.
+  assert.match(app, /class="sheetx"[^>]*aria-label="Close"/);
+  assert.match(css, /\.sheetx\{/);
+  // The grip implied a drag, so make the drag real rather than decorative.
+  assert.match(app, /touchstart/);
+  assert.match(app, /touchmove/);
+  assert.match(app, /closeSheet\(\)/);
+});
+
+test('touch can remove emblems, not just add them', () => {
+  const app = read('web/traits/app.js');
+  // Emblems stack, so the sheet needs add/remove rather than a toggle.
+  assert.match(app, /openSheet\(traitCard\(t\.key\), 'emblem', t\.key\)/);
+  assert.match(app, /data-act="embminus"/);
+  assert.match(app, /data-act="embplus"/);
+  // and the count has to be visible while adjusting it
+  assert.match(app, /sheetcount/);
+});
 test('the sheet shares the desktop hover card styling', () => {
   const css = read('web/traits/style.css');
   // The sheet renders the very same markup unitCard()/traitCard() produce,
