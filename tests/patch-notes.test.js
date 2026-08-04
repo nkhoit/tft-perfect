@@ -55,3 +55,22 @@ test('patch-note checker fails when a checked value drifts', () => {
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stdout, /DRIFT/);
 });
+
+test('checked-in patch notes match the shipped data', () => {
+  // The 2026-08-04 PBE values were hand-applied because CommunityDragon had
+  // not shipped that patch. Run the real checker against the real data so a
+  // rebuild that reverts them fails here instead of silently shipping.
+  const notes = path.join(ROOT, 'patch_notes');
+  assert.ok(fs.existsSync(notes), 'patch_notes directory should exist');
+  const files = fs.readdirSync(notes).filter(f => f.endsWith('.json'));
+  assert.ok(files.length > 0, 'expected at least one patch-note file');
+
+  const res = spawnSync(PYTHON, [
+    path.join(ROOT, 'check_patch_notes.py'),
+    notes,
+    '--data', path.join(ROOT, 'web', 'traits', 'data.json'),
+  ], { encoding: 'utf8' });
+
+  assert.equal(res.status, 0,
+    `patch-note drift against shipped data:\n${res.stdout}${res.stderr}`);
+});

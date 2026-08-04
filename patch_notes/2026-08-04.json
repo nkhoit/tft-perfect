@@ -1,0 +1,78 @@
+{
+  "label": "PBE 2026-08-04",
+  "source": "https://x.com/TheTruexy/status/2084692206330544336",
+  "champions": [
+    {
+      "name": "Krug",
+      "changes": [
+        {
+          "field": "Spell Damage %HP Damage",
+          "from": "10%",
+          "to": "8%"
+        }
+      ]
+    },
+    {
+      "name": "Gnar",
+      "changes": [
+        {
+          "field": "Leap Damage",
+          "from": "150/225 AD",
+          "to": "100/150 AD"
+        }
+      ]
+    },
+    {
+      "name": "Amumu",
+      "changes": [
+        {
+          "field": "3* Max HP Heal",
+          "from": "2.2%",
+          "to": "4%"
+        }
+      ]
+    },
+    {
+      "name": "Lillia",
+      "changes": [
+        {
+          "field": "3* Heal",
+          "from": "600 AP",
+          "to": "800 AP"
+        }
+      ]
+    },
+    {
+      "name": "Nidalee",
+      "changes": [
+        {
+          "field": "3* Armor Ignore",
+          "from": "40%",
+          "to": "80%"
+        }
+      ]
+    }
+  ],
+  "traits": [
+    {
+      "name": "Blossom",
+      "changes": [
+        {
+          "field": "Gold Per Charm Purchased",
+          "from": "5",
+          "to": "4"
+        }
+      ]
+    },
+    {
+      "name": "Coven",
+      "changes": [
+        {
+          "field": "500 Essence Cashout",
+          "from": "4 random emblems",
+          "to": "removed"
+        }
+      ]
+    }
+  ]
+}
