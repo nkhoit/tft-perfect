@@ -4,9 +4,8 @@
   },
   "routes": [
     { "route": "/traits", "redirect": "/traits/", "statusCode": 301 },
-    { "route": "/traits/data.json", "headers": { "Cache-Control": "no-cache" } },
-    { "route": "/traits/precomputed-default.json", "headers": { "Cache-Control": "no-cache" } },
-    { "route": "/traits/vendor/*", "headers": { "Cache-Control": "public, max-age=31536000, immutable" } }
+    { "route": "/traits/vendor/*", "headers": { "Cache-Control": "public, max-age=31536000, immutable" } },
+    { "route": "/traits/*", "headers": { "Cache-Control": "no-cache" } }
   ],
   "navigationFallback": {
     "rewrite": "/404.html",
