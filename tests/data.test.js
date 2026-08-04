@@ -310,6 +310,31 @@ test('the sheet can be dismissed without tapping outside it', () => {
   assert.match(app, /closeSheet\(\)/);
 });
 
+test('trait breakpoints carry no duplicate unit counts', () => {
+  const data = JSON.parse(read('web/traits/data.json'));
+  // Riot encodes a label row and the real effect at the same minUnits for
+  // Rival (1/25000 with empty variables, then 1/1 with the payload), so a
+  // naive read stored bp [1, 1, 2]. The duplicate never reached scoring --
+  // breakpoints() dedupes -- but it leaked into the sheet and the tooltips.
+  for (const [key, trait] of Object.entries(data.traits)) {
+    const bp = trait.bp || [];
+    const uniq = [...new Set(bp)];
+    assert.deepEqual(bp, uniq, `${key} has duplicate breakpoints: ${bp}`);
+    const sorted = [...bp].sort((x, y) => x - y);
+    assert.deepEqual(bp, sorted, `${key} breakpoints out of order: ${bp}`);
+  }
+});
+
+test('a style range exists for every breakpoint', () => {
+  const data = JSON.parse(read('web/traits/data.json'));
+  // The phantom effect also added a styles entry, so Rival claimed gold at
+  // 1 while the real capped bronze tier sat behind it.
+  for (const [key, trait] of Object.entries(data.traits)) {
+    const mins = (trait.styles || []).map(s => s.min);
+    assert.deepEqual(mins, [...new Set(mins)],
+      `${key} has duplicate style minimums: ${mins}`);
+  }
+});
 test('touch can remove emblems, not just add them', () => {
   const app = read('web/traits/app.js');
   // Emblems stack, so the sheet needs add/remove rather than a toggle.

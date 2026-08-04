@@ -504,6 +504,18 @@ def main():
         name = t["name"]
         key = re.sub(r"[^A-Za-z0-9]", "", name)
         effects = sorted(t.get("effects") or [], key=lambda e: e.get("minUnits", 0))
+        # Rival carries two effects at minUnits 1: an uncapped label row with
+        # no variables, and the real 1/1 payload. Keeping both gave bp
+        # [1, 1, 2] plus a phantom gold style that masked the capped bronze
+        # tier. When several effects share a minUnits, keep only the ones
+        # carrying variables -- a real tier always has some. Order-independent,
+        # so it does not matter which way Riot lists them.
+        by_min = {}
+        for e in effects:
+            by_min.setdefault(e.get("minUnits"), []).append(e)
+        effects = [e for e in effects
+                   if len(by_min[e.get("minUnits")]) == 1
+                   or e.get("variables")]
         styles, bp, effs = [], [], []
         for e in effects:
             mn = e.get("minUnits")
