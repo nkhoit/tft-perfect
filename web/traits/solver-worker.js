@@ -1,28 +1,64 @@
-// solver-worker.js — proves the optimum with a MILP solver (HiGHS via WASM).
-//
-// Runs alongside the DFS shards in worker.js. The DFS is good at enumerating
-// many boards but its bounds are too loose to prove optimality inside a user's
-// patience; HiGHS proves the ceiling in ~100-400ms. We emit rows in the exact
-// shape worker.js emits so mergeSearchResults() can combine them blindly.
-//
-// The WASM payload is ~1.1MB gzipped and is fetched only when a search actually
-// runs, so the landing path is unaffected.
+// solver-worker.js — proves the optimum with HiGHS and enumerates a small frontier.
 
-importScripts('search-utils.js', 'board-score.js', 'lp-model.js', 'vendor/highs.js');
+importScripts(
+  'search-utils.js?v=milp-hybrid-v7',
+  'solver-status.js?v=milp-hybrid-v7',
+  'board-score.js?v=milp-hybrid-v7',
+  'lp-model.js?v=milp-hybrid-v7',
+  'vendor/highs.js');
 
 let DB = null;
 let TABLES = null;
 let highsPromise = null;
+let initializePromise = null;
+let initialized = false;
+let initializeError = null;
+const queuedSearches = [];
+const INITIALIZE_TIMEOUT_MS = 15000;
 
-// Module is the Emscripten factory from vendor/highs.js.
 function loadHighs() {
   if (!highsPromise) {
     highsPromise = Module({
-      // The worker's base URL is /traits/, so the wasm sits under vendor/.
       locateFile: file => (file.endsWith('.wasm') ? 'vendor/' + file : file),
     });
   }
   return highsPromise;
+}
+
+function timeout(promise, ms, message) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(value => {
+      clearTimeout(timer);
+      resolve(value);
+    }, error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+function resultKey(row, opts) {
+  return opts.resultMode === 'roster'
+    ? SearchUtils.compSignature(row.units)
+    : row.signature;
+}
+
+function validatedRow(roster, opts) {
+  const keys = roster.map(index => DB.champions[index]?.key);
+  if (keys.some(key => !key)) return null;
+  const validated = BoardScore.validateRoster(DB, TABLES, keys, {
+    size: opts.size,
+    emblems: opts.emblems,
+    muted: opts.muted,
+  });
+  if (validated.error || validated.row.waste > opts.maxWaste) return null;
+
+  const counts = new Map();
+  for (const [trait, count] of validated.row.active) counts.set(trait, count);
+  for (const [trait, count] of validated.row.dead) counts.set(trait, count);
+  if ((opts.reqTraits || []).some(({ t, n }) => (counts.get(t) || 0) < n)) return null;
+  return validated.row;
 }
 
 async function solve(opts, onProgress) {
@@ -32,28 +68,42 @@ async function solve(opts, onProgress) {
     ? opts.solverBudgetMs
     : 3000;
   const want = Math.max(1, opts.solverRows || 8);
-
-  const rows = [];
-  const seenSignature = new Set();
-  let proved = false;          // did we prove the top row optimal?
-  let infeasible = true;
-
-  // Phase 1 — prove the ceiling. Solve the i=0 model for EVERY team-size bonus
-  // before showing anything. Each of those solves is fast (~100-400ms) and the
-  // best of them is the true optimum, so the board we publish here is the one
-  // that will still be on top after the DFS rows merge in.
-  //
-  // Announcing earlier (after the first bonus) is not safe: a later bonus can
-  // beat it, and the user watches the top row change out from under them.
   const rank = SearchUtils.comparator(opts.sortMode, opts.sortMode2);
   const bonuses = LpModel.bonusOptions(TABLES);
-  const seeds = new Map();     // bonus -> roster proving that bonus's optimum
+  const rows = [];
+  const seen = new Set();
+  const branches = [];
+  const seeds = new Map();
   let best = null;
 
+  const addRow = row => {
+    const key = resultKey(row, opts);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    rows.push(row);
+    if (!best || rank(row, best) < 0) best = row;
+    return true;
+  };
+
+  // Phase one resolves every capacity profile before making an optimality claim.
   for (const bonus of bonuses) {
-    if (performance.now() - started > budget) break;
-    const built = LpModel.buildLP(DB, { ...opts, bonus, cuts: [], tables: TABLES });
-    if (!built) continue;
+    if (performance.now() - started > budget) {
+      branches.push('unresolved');
+      continue;
+    }
+    let built;
+    try {
+      built = LpModel.buildLP(DB, { ...opts, bonus, cuts: [], tables: TABLES });
+    } catch (error) {
+      if (error instanceof RangeError) throw error;
+      branches.push('unresolved');
+      continue;
+    }
+    if (!built) {
+      branches.push('infeasible');
+      continue;
+    }
+
     let solution;
     try {
       solution = highs.solve(built.lp, {
@@ -61,41 +111,66 @@ async function solve(opts, onProgress) {
         time_limit: Math.max(0.25, (budget - (performance.now() - started)) / 1000),
         mip_rel_gap: 0,
       });
-    } catch (err) {
-      // A malformed model or an OOM must not kill the DFS results.
-      return { rows: [], proved: false, error: String(err && err.message || err) };
+    } catch {
+      branches.push('unresolved');
+      continue;
     }
-    if (!solution || solution.Status !== 'Optimal') continue;
+    const status = SolverStatus.classify(solution?.Status);
+    if (status !== 'optimal') {
+      branches.push(status);
+      continue;
+    }
+
     const roster = LpModel.rosterOf(solution);
-    if (!roster.length) continue;
-    const row = BoardScore.scoreRoster(DB, TABLES, roster, opts.emblems, opts.muted);
-    // The model enforces the waste cap, but re-check with the shipped scoring
-    // rules: if these ever disagree the DFS answer must win, not ours.
-    if (row.waste > opts.maxWaste) continue;
-    infeasible = false;
-    proved = true;
-    seeds.set(bonus, roster);
-    if (!seenSignature.has(row.signature)) {
-      seenSignature.add(row.signature);
-      rows.push(row);
+    const row = roster.length ? validatedRow(roster, opts) : null;
+    if (!row) {
+      branches.push('unresolved');
+      continue;
     }
-    if (!best || rank(row, best) < 0) best = row;
+    branches.push('optimal');
+    seeds.set(bonus, { roster, row });
+    addRow(row);
   }
 
-  // Publish the proven optimum now. Enumerating the runners-up costs seconds
-  // (each no-good cut makes the next solve harder) and none of them can beat
-  // this board, so making the user wait for them is pure latency.
-  if (proved && best && onProgress) onProgress([best]);
+  const proof = SolverStatus.proof(branches, rows.length);
+  if (proof.proved && best && onProgress) onProgress([best]);
 
-  // Phase 2 — enumerate runners-up with no-good cuts, per bonus.
-  for (const bonus of bonuses) {
-    if (performance.now() - started > budget) break;
-    if (!seeds.has(bonus)) continue;
-    const cuts = [seeds.get(bonus)];
-    for (let i = 1; i < want; i++) {
-      if (performance.now() - started > budget) break;
-      const built = LpModel.buildLP(DB, { ...opts, bonus, cuts, tables: TABLES });
-      if (!built) break;
+  let rowsComplete = opts.resultMode === 'roster';
+  let enumerationStopReason = null;
+
+  // Phase two enumerates a proven top-L roster frontier with no-good cuts.
+  for (let branchIndex = 0; branchIndex < bonuses.length; branchIndex++) {
+    const bonus = bonuses[branchIndex];
+    const seed = seeds.get(bonus);
+    if (!seed) {
+      if (opts.resultMode === 'roster' && branches[branchIndex] === 'unresolved') {
+        rowsComplete = false;
+      }
+      continue;
+    }
+    const cuts = [seed.roster];
+    let solvedRosters = 1;
+    let exhausted = false;
+    while (solvedRosters < want) {
+      if (performance.now() - started > budget) {
+        rowsComplete = false;
+        enumerationStopReason ||= 'budget';
+        break;
+      }
+      let built;
+      try {
+        built = LpModel.buildLP(DB, { ...opts, bonus, cuts, tables: TABLES });
+      } catch (error) {
+        if (error instanceof RangeError) throw error;
+        rowsComplete = false;
+        enumerationStopReason ||= 'model';
+        break;
+      }
+      if (!built) {
+        exhausted = true;
+        break;
+      }
+
       let solution;
       try {
         solution = highs.solve(built.lp, {
@@ -103,53 +178,134 @@ async function solve(opts, onProgress) {
           time_limit: Math.max(0.25, (budget - (performance.now() - started)) / 1000),
           mip_rel_gap: 0,
         });
-      } catch (err) {
-        break;                 // keep the proven rows we already have
+      } catch {
+        rowsComplete = false;
+        enumerationStopReason ||= 'solver';
+        break;
       }
-      if (!solution || solution.Status !== 'Optimal') break;
+      const status = SolverStatus.classify(solution?.Status);
+      if (status === 'infeasible') {
+        exhausted = true;
+        break;
+      }
+      if (status !== 'optimal') {
+        rowsComplete = false;
+        enumerationStopReason ||= 'status';
+        break;
+      }
+
       const roster = LpModel.rosterOf(solution);
-      if (!roster.length) break;
-      const row = BoardScore.scoreRoster(DB, TABLES, roster, opts.emblems, opts.muted);
-      if (row.waste > opts.maxWaste) break;
-      if (!seenSignature.has(row.signature)) {
-        seenSignature.add(row.signature);
-        rows.push(row);
+      const row = roster.length ? validatedRow(roster, opts) : null;
+      if (!row) {
+        rowsComplete = false;
+        enumerationStopReason ||= 'validation';
+        break;
       }
       cuts.push(roster);
+      solvedRosters++;
+      addRow(row);
+    }
+    if (opts.resultMode === 'roster' && !exhausted && solvedRosters < want) {
+      rowsComplete = false;
     }
   }
 
   rows.sort(rank);
-  return { rows, proved: proved && rows.length > 0, infeasible: infeasible && !rows.length };
+  if (opts.resultMode === 'roster') rows.length = Math.min(rows.length, want);
+  return {
+    rows,
+    ...proof,
+    ...(opts.resultMode === 'roster' ? { rowsComplete } : {}),
+    ...(enumerationStopReason ? { enumerationStopReason } : {}),
+  };
 }
 
-onmessage = async (e) => {
-  const m = e.data;
-  if (m.type === 'init') {
-    DB = m.db;
-    TABLES = LpModel.tables(DB);
-    postMessage({ type: 'ready' });
-    return;
-  }
-  if (m.type === 'search') {
-    const t0 = performance.now();
-    let result;
-    try {
-      result = await solve(m.opts, rows => {
-        // Interim proof — the app can render this while we keep enumerating.
-        postMessage({
-          type: 'solver', id: m.id, partial: true, proved: true, rows,
-          ms: Math.round(performance.now() - t0),
-        });
+async function runSearch(message) {
+  const started = performance.now();
+  postMessage({ type: 'started', id: message.id });
+  let result;
+  try {
+    result = await solve(message.opts, rows => {
+      postMessage({
+        type: 'solver',
+        id: message.id,
+        partial: true,
+        proved: true,
+        rows,
+        ms: Math.round(performance.now() - started),
       });
-    } catch (err) {
-      result = { rows: [], proved: false, error: String(err && err.message || err) };
-    }
+    });
+  } catch (error) {
+    result = {
+      rows: [],
+      proved: false,
+      infeasible: false,
+      error: String(error && error.message || error),
+    };
+  }
+  postMessage({
+    type: 'solver',
+    id: message.id,
+    ms: Math.round(performance.now() - started),
+    ...result,
+  });
+}
+
+async function drainQueuedSearches() {
+  while (queuedSearches.length && initialized) {
+    const message = queuedSearches.shift();
+    await runSearch(message);
+  }
+}
+
+function failQueuedSearches(error) {
+  while (queuedSearches.length) {
+    const message = queuedSearches.shift();
     postMessage({
       type: 'solver',
-      id: m.id,
-      ms: Math.round(performance.now() - t0),
-      ...result,
+      id: message.id,
+      ms: 0,
+      rows: [],
+      proved: false,
+      infeasible: false,
+      error,
     });
   }
+}
+
+async function initialize(db) {
+  DB = db;
+  TABLES = LpModel.tables(DB);
+  try {
+    await timeout(loadHighs(), INITIALIZE_TIMEOUT_MS, 'Solver initialization timed out.');
+    initialized = true;
+    postMessage({
+      type: 'ready',
+      algorithmVersion: SearchUtils.algorithmVersion,
+    });
+    await drainQueuedSearches();
+  } catch (error) {
+    initializeError = String(error && error.message || error);
+    postMessage({ type: 'init-error', error: initializeError });
+    failQueuedSearches(initializeError);
+  }
+}
+
+onmessage = event => {
+  const message = event.data;
+  if (message.type === 'init') {
+    if (!initializePromise) initializePromise = initialize(message.db);
+    return;
+  }
+  if (message.type !== 'search') return;
+  if (initializeError) {
+    queuedSearches.push(message);
+    failQueuedSearches(initializeError);
+    return;
+  }
+  if (!initialized) {
+    queuedSearches.push(message);
+    return;
+  }
+  void runSearch(message);
 };

@@ -3,9 +3,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  // Cache identity includes result-shaping semantics, not just scoring. V6
-  // removes duplicate champion rosters from merged alternates.
-  const ALGORITHM_VERSION = 'milp-hybrid-v6';
+  // Cache identity includes result-shaping semantics, not just scoring. V7
+  // tightens solver proof semantics and invalidates old persisted claims.
+  const ALGORITHM_VERSION = 'milp-hybrid-v7';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -28,6 +28,12 @@
       }
       return 0;
     };
+  }
+
+  function compareTraitQuality(a, b) {
+    return (b.live - a.live)
+      || (b.tierSum - a.tierSum)
+      || (a.waste - b.waste);
   }
 
   function breakpoints(trait) {
@@ -197,6 +203,17 @@
     return [...units].sort((a, b) => a - b).join(',');
   }
 
+  function championDiff(before, after) {
+    const had = new Set(before);
+    const has = new Set(after);
+    const numeric = (a, b) => a - b;
+    return {
+      added: [...has].filter(index => !had.has(index)).sort(numeric),
+      removed: [...had].filter(index => !has.has(index)).sort(numeric),
+      kept: [...had].filter(index => has.has(index)).sort(numeric),
+    };
+  }
+
   // Flip a comp's selection in the given Map. Returns the resulting state:
   // true when it is now selected, false when it is not.
   function toggleSelection(selected, sig, row) {
@@ -222,8 +239,10 @@
     algorithmVersion: ALGORITHM_VERSION,
     antiStack,
     breakpoints,
+    championDiff,
     compSignature,
     comparator,
+    compareTraitQuality,
     toggleSelection,
     isUnique,
     mergeSearchResults,

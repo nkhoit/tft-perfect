@@ -42,7 +42,9 @@ function runShard(dataPath, shard) {
   });
   context.importScripts = (...files) => {
     for (const file of files) {
-      vm.runInContext(fs.readFileSync(path.join(WEB, file), 'utf8'), context);
+      vm.runInContext(
+        fs.readFileSync(path.join(WEB, file.split('?')[0]), 'utf8'),
+        context);
     }
   };
   vm.runInContext(fs.readFileSync(path.join(WEB, 'worker.js'), 'utf8'), context);
@@ -81,10 +83,9 @@ async function main() {
         if (code) reject(new Error(`Precompute shard ${shard} exited with code ${code}.`));
       });
     })));
-  // The landing result must carry the same optimality proof a live search
-  // gets, otherwise the default view would show "incomplete" while every
-  // interactive search shows "optimal" — the exact confusion this is meant to
-  // remove. Falls back to DFS-only output if the solver isn't installed.
+  // The landing result carries the same all-bonus proof as an interactive
+  // search. Missing or unresolved HiGHS is a build failure, not a silent
+  // downgrade to an unproved landing page.
   const baseOptions = options(db, 0);
   const solver = await solveOptimum(db, baseOptions);
   if (solver.rows.length) {
@@ -115,19 +116,17 @@ async function main() {
 
 // Node-side MILP solve for the landing result. Shares lp-model.js with
 // solver-worker.js so the build and the browser agree by construction.
-// HiGHS ships as an optional dependency: if it's missing we degrade to a
-// DFS-only landing result rather than failing the build.
 async function solveOptimum(db, baseOptions) {
-  const empty = { rows: [], proved: false, ms: 0 };
   let highsLoader;
   try {
     highsLoader = require('highs');
   } catch (error) {
-    console.warn('highs not installed — landing result will not be proved optimal.');
-    return empty;
+    throw new Error('highs is required to precompute a proved landing result.');
   }
   const SearchUtils = require('./web/traits/search-utils.js');
+  const BoardScore = require('./web/traits/board-score.js');
   const LpModel = require('./web/traits/lp-model.js');
+  const SolverStatus = require('./web/traits/solver-status.js');
   const tables = LpModel.tables(db);
   // `highs` does not export ./package.json, so resolve the main entry and take
   // its directory — that's where build/highs.wasm sits.
@@ -139,72 +138,81 @@ async function solveOptimum(db, baseOptions) {
   const started = Date.now();
   const rows = [];
   const seen = new Set();
-  let proved = false;
+  const branches = [];
+  const seeds = new Map();
   const bonuses = LpModel.bonusOptions(tables);
   for (const bonus of bonuses) {
-    const cuts = [];
-    for (let i = 0; i < 8; i++) {
-      const built = LpModel.buildLP(db, { ...baseOptions, bonus, cuts, tables });
+    const built = LpModel.buildLP(db, { ...baseOptions, bonus, cuts: [], tables });
+    if (!built) {
+      branches.push('infeasible');
+      continue;
+    }
+    const solution = highs.solve(
+      built.lp,
+      { output_flag: false, time_limit: 30, mip_rel_gap: 0 });
+    const status = SolverStatus.classify(solution?.Status);
+    if (status !== 'optimal') {
+      branches.push(status);
+      continue;
+    }
+    const roster = LpModel.rosterOf(solution);
+    const validated = BoardScore.validateRoster(
+      db,
+      tables,
+      roster.map(index => db.champions[index]?.key),
+      baseOptions);
+    if (validated.error || validated.row.waste > baseOptions.maxWaste) {
+      branches.push('unresolved');
+      continue;
+    }
+    branches.push('optimal');
+    seeds.set(bonus, roster);
+    if (!seen.has(validated.row.signature)) {
+      seen.add(validated.row.signature);
+      rows.push(validated.row);
+    }
+  }
+  const proof = SolverStatus.proof(branches, rows.length);
+  if (!proof.proved) {
+    throw new Error('Could not prove the landing result across every capacity profile.');
+  }
+
+  for (const [bonus, seed] of seeds) {
+    const cuts = [seed];
+    for (let i = 1; i < 8; i++) {
+      let built;
+      try {
+        built = LpModel.buildLP(db, { ...baseOptions, bonus, cuts, tables });
+      } catch (error) {
+        console.warn('Runner-up model failed:', error.message);
+        break;
+      }
       if (!built) break;
       let solution;
       try {
-        solution = highs.solve(built.lp, { output_flag: false, time_limit: 30, mip_rel_gap: 0 });
+        solution = highs.solve(
+          built.lp,
+          { output_flag: false, time_limit: 30, mip_rel_gap: 0 });
       } catch (error) {
-        console.warn('HiGHS solve failed:', error.message);
+        console.warn('Runner-up solve failed:', error.message);
         break;
       }
-      if (!solution || solution.Status !== 'Optimal') break;
+      if (SolverStatus.classify(solution?.Status) !== 'optimal') break;
       const roster = LpModel.rosterOf(solution);
-      if (!roster.length) break;
-      const row = scoreRosterNode(db, tables, roster, baseOptions);
-      if (row.waste > baseOptions.maxWaste) break;
-      if (i === 0 && bonus === bonuses[0]) proved = true;
-      if (!seen.has(row.signature)) { seen.add(row.signature); rows.push(row); }
+      const validated = BoardScore.validateRoster(
+        db,
+        tables,
+        roster.map(index => db.champions[index]?.key),
+        baseOptions);
+      if (validated.error || validated.row.waste > baseOptions.maxWaste) break;
       cuts.push(roster);
+      if (!seen.has(validated.row.signature)) {
+        seen.add(validated.row.signature);
+        rows.push(validated.row);
+      }
     }
   }
-  return { rows, proved: proved && rows.length > 0, ms: Date.now() - started };
-}
-
-// Mirrors worker.js evaluate() and solver-worker.js scoreRoster().
-function scoreRosterNode(db, T, roster, opts) {
-  const nT = T.traitKeys.length;
-  const counts = new Array(nT).fill(0);
-  for (const emblem of opts.emblems || []) {
-    const t = typeof emblem === 'string' ? T.traitIndex.get(emblem) : emblem;
-    if (t >= 0 && t < nT) counts[t]++;
-  }
-  let gold = 0, slots = 0;
-  for (const c of roster) {
-    gold += T.cost[c] * 3;
-    slots += T.slots[c];
-    for (const [t, p] of T.points[c]) counts[t] += p;
-  }
-  const muted = new Set(opts.muted || []);
-  let live = 0, uniqN = 0, waste = 0, tierSum = 0;
-  const active = [], dead = [], over = [];
-  let signature = '';
-  for (let t = 0; t < nT; t++) {
-    const count = counts[t];
-    if (!count) continue;
-    signature += (signature ? '|' : '') + `${t}:${count}`;
-    const bp = T.bps[t];
-    let reached = 0, tier = -1;
-    for (let j = 0; j < bp.length; j++) if (count >= bp[j]) { reached = bp[j]; tier = j; }
-    const wasted = count - reached;
-    if (wasted) {
-      if (!muted.has(t)) waste += wasted;
-      if (tier >= 0) over.push([t, wasted]); else dead.push([t, count]);
-    }
-    if (tier >= 0) {
-      active.push([t, count, tier]);
-      if (T.floors[t] === null) uniqN++;
-      else if (!muted.has(t) && count >= T.floors[t]) { live++; tierSum += tier + 1; }
-    }
-  }
-  const dim = t => (T.floors[t] === null || muted.has(t) || counts[t] < T.floors[t]) ? 1 : 0;
-  active.sort((a, b) => (dim(a[0]) - dim(b[0])) || b[1] - a[1]);
-  return { units: roster.slice(), active, dead, over, live, uniqN, waste, tierSum, gold, slots, signature };
+  return { rows, proved: true, ms: Date.now() - started };
 }
 
 if (isMainThread) {

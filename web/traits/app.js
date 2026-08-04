@@ -9,6 +9,7 @@ let shardProgress = new Map();
 // from solverInbox so interim renders can include it before the solver
 // finishes enumerating the runners-up.
 let solverBest = null;
+let solverProved = false;
 // Interim-render throttle state. Declared up here with the rest of the module
 // state, NOT next to renderProgress(): stopWorkers() runs during init and calls
 // cancelProgressRender(), and a `let` declared further down would still be in
@@ -22,6 +23,12 @@ let debounceTimer = null, queuedDispatch = null, activeSearch = null;
 // its row is what makes a result trustworthy rather than merely plausible.
 let solverWorker = null, solverReady = false, solverInbox = null;
 let solverBroken = false;
+let solverFailures = 0;
+let solverScheduler = null;
+let queuedMainSolverRequest = null;
+let solverReadyTimer = null;
+let solverResponseTimer = null;
+const solverBudgets = new Map();
 // One worker per core, minus one so the UI thread keeps a lane. Capped at 8:
 // past that the merge cost outweighs the split on this search size.
 const NW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
@@ -47,6 +54,12 @@ const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
 const POOL_VIEWS = new Set(['cost', 'origin', 'class']);
 const MAX_SHARED_EMBLEMS = 20;
 const FILTERS_STORAGE_KEY = 'tftkit:filters-collapsed';
+const MAIN_SOLVER_READY_TIMEOUT_MS = 20000;
+const SOLVER_WATCHDOG_GRACE_MS = 3000;
+const UPGRADE_SOLVER_ROWS = 3;
+const UPGRADE_SOLVER_BUDGET_MS = 10000;
+const UPGRADE_READY_TIMEOUT_MS = 20000;
+const UPGRADE_SOLVE_WATCHDOG_MS = UPGRADE_SOLVER_BUDGET_MS + 5000;
 
 const $ = id => document.getElementById(id);
 const state = new Map();          // champ key -> 0 none / 1 required / 2 excluded
@@ -61,9 +74,25 @@ const muted = new Set();          // trait keys that still show but earn no scor
 const excludedGroups = new Set();
 let poolView = 'cost';
 
-const { algorithmVersion, antiStack, breakpoints, compSignature, isUnique,
-  mergeSearchResults, moveSelectionFirst, scoreFloor, scoresAt,
+const { algorithmVersion, antiStack, breakpoints, championDiff, compSignature,
+  comparator, compareTraitQuality, isUnique, mergeSearchResults,
+  moveSelectionFirst, scoreFloor, scoresAt,
   scoringBreakpoints, searchCacheKey, summary, toggleSelection } = SearchUtils;
+
+if (algorithmVersion !== 'milp-hybrid-v7'
+    || typeof championDiff !== 'function'
+    || typeof compareTraitQuality !== 'function'
+    || typeof SolverScheduler === 'undefined'
+    || typeof SolverScheduler.create !== 'function') {
+  const reloadKey = 'tftkit:v7-runtime-reload';
+  if (!sessionStorage.getItem(reloadKey)) {
+    sessionStorage.setItem(reloadKey, '1');
+    location.reload();
+    throw new Error('Reloading Trait Explorer to resolve mixed runtime assets.');
+  } else {
+    throw new Error('Trait Explorer assets are from different versions. Reload the page.');
+  }
+}
 
 const memoryCache = new Map();
 let cacheDbPromise = null, metricsStorageWarned = false;
@@ -73,6 +102,18 @@ let BOARD_TABLES = null;
 let selectedRestoreNotice = '';
 let lastShareApiWarmAt = 0;
 let filtersPreferenceExplicit = false;
+let renderedContext = null;
+let renderContextSerial = 0;
+let upgradeState = null;
+let upgradeWorker = null;
+let upgradeReady = false;
+let upgradeScheduler = null;
+let upgradeReadyTimer = null;
+let upgradeResponseTimer = null;
+let upgradeRequestId = 0;
+let sheetEl = null;
+let sheetKey = null;
+let sheetKind = null;
 
 function setFiltersCollapsed(collapsed, persist = false) {
   const wrap = document.querySelector('.wrap');
@@ -168,6 +209,26 @@ function memoryCacheSet(key, result) {
   }
 }
 
+function snapshotSearchOptions(options) {
+  return {
+    ...options,
+    reqIdx: [...(options.reqIdx || [])],
+    poolIdx: [...(options.poolIdx || [])],
+    emblems: [...(options.emblems || [])],
+    reqTraits: (options.reqTraits || []).map(requirement => ({ ...requirement })),
+    muted: [...(options.muted || [])],
+  };
+}
+
+function searchRenderContext(generation, key, options) {
+  return {
+    token: `${generation}:${++renderContextSerial}`,
+    generation,
+    searchKey: key,
+    opts: snapshotSearchOptions(options),
+  };
+}
+
 async function showPrecomputedLanding() {
   if (!isDefaultSharedState(sharedSearchState())) return false;
   const generation = searchGeneration;
@@ -193,7 +254,9 @@ async function showPrecomputedLanding() {
     recordMetric('requests');
     recordMetric('precomputedHits');
     memoryCacheSet(key, result);
-    render({ ...result, cached: 'precomputed' });
+    render(
+      { ...result, cached: 'precomputed' },
+      searchRenderContext(generation, key, opts));
     return true;
   } catch (error) {
     if (generation !== searchGeneration) return true;
@@ -716,6 +779,7 @@ function stopWorkers(cancellation = false) {
   shardProgress = new Map();
   cancelProgressRender();
   solverBest = null;
+  solverProved = false;
   solverInbox = null;
   activeSearch = null;
   reqId++;
@@ -724,30 +788,109 @@ function stopWorkers(cancellation = false) {
   // letting a stale solve finish and be discarded by its request id.
 }
 
+function mainSolverBusy() {
+  return Boolean(
+    solverScheduler?.inFlightId() != null
+    || queuedMainSolverRequest
+    || (solverWorker && !solverReady));
+}
+
+function clearMainSolverTimers() {
+  clearTimeout(solverReadyTimer);
+  clearTimeout(solverResponseTimer);
+  solverReadyTimer = null;
+  solverResponseTimer = null;
+}
+
+function failMainSolver(message) {
+  clearMainSolverTimers();
+  solverFailures++;
+  solverBroken = solverFailures >= 2;
+  solverReady = false;
+  queuedMainSolverRequest = null;
+  solverBudgets.clear();
+  solverScheduler?.terminate();
+  solverScheduler = null;
+  if (solverWorker) solverWorker.terminate();
+  solverWorker = null;
+  solverInbox ||= {
+    rows: [], proved: false, error: message, ms: 0,
+  };
+  syncAllUpgradeTriggers();
+  if (pending && activeSearch && inbox.length >= W.length) finishSearch();
+}
+
+function queueMainSolver(message) {
+  solverBudgets.set(message.id, message.opts.solverBudgetMs || 3000);
+  if (!solverReady || !solverScheduler) {
+    queuedMainSolverRequest = message;
+    return;
+  }
+  solverScheduler.enqueue(message);
+}
+
 // Lazily spin up the MILP solver. Failures are non-fatal by design — if the
 // wasm can't load (old browser, blocked fetch, OOM) the DFS still answers, we
 // just lose the optimality proof.
 function ensureSolver() {
   if (solverBroken || solverWorker) return;
   try {
-    solverWorker = new Worker('solver-worker.js');
+    solverWorker = new Worker('solver-worker.js?v=milp-hybrid-v7');
   } catch (err) {
-    solverBroken = true;
+    failMainSolver(String(err && err.message || err));
     return;
   }
+  solverScheduler = SolverScheduler.create({
+    send: message => solverWorker.postMessage(message),
+    onStarted: id => {
+      clearTimeout(solverResponseTimer);
+      const budget = solverBudgets.get(id) || 3000;
+      solverResponseTimer = setTimeout(
+        () => failMainSolver('Solver response timed out.'),
+        budget + SOLVER_WATCHDOG_GRACE_MS);
+    },
+    onFinished: id => {
+      clearTimeout(solverResponseTimer);
+      solverResponseTimer = null;
+      solverBudgets.delete(id);
+      syncAllUpgradeTriggers();
+    },
+  });
   solverWorker.onmessage = event => {
     const message = event.data;
-    if (message.type === 'ready') { solverReady = true; return; }
-    if (message.type === 'solver') onSolver(message);
+    if (message.type === 'ready') {
+      if (message.algorithmVersion !== algorithmVersion) {
+        failMainSolver('Solver assets are from a different version.');
+        return;
+      }
+      clearTimeout(solverReadyTimer);
+      solverReadyTimer = null;
+      solverReady = true;
+      const queued = queuedMainSolverRequest;
+      queuedMainSolverRequest = null;
+      if (queued) solverScheduler.enqueue(queued);
+      syncAllUpgradeTriggers();
+      return;
+    }
+    if (message.type === 'init-error') {
+      failMainSolver(message.error || 'Solver initialization failed.');
+      return;
+    }
+    if (message.type === 'started') {
+      solverScheduler.started(message.id);
+      return;
+    }
+    if (message.type === 'solver') {
+      if (!message.partial) solverScheduler.finished(message.id);
+      onSolver(message);
+    }
   };
-  solverWorker.onerror = () => {
-    solverBroken = true;
-    solverReady = false;
-    if (solverWorker) { solverWorker.terminate(); solverWorker = null; }
-    // A search waiting only on the solver must not hang forever.
-    if (pending && activeSearch && inbox.length >= W.length) finishSearch();
-  };
+  solverWorker.onerror = event =>
+    failMainSolver(String(event.error || event.message || 'Solver worker failed.'));
   solverWorker.postMessage({ type: 'init', db: DB });
+  solverReadyTimer = setTimeout(
+    () => failMainSolver('Solver initialization timed out.'),
+    MAIN_SOLVER_READY_TIMEOUT_MS);
 }
 
 function ensureWorkers(count, callback) {
@@ -763,7 +906,7 @@ function ensureWorkers(count, callback) {
   const epoch = ++workerEpoch;
   let started = 0;
   for (let i = 0; i < count; i++) {
-    const worker = new Worker('worker.js');
+    const worker = new Worker('worker.js?v=milp-hybrid-v7');
     worker.onmessage = event => {
       if (epoch !== workerEpoch) return;
       if (event.data.type === 'ready') {
@@ -789,6 +932,7 @@ function ensureWorkers(count, callback) {
 }
 
 function loadData() {
+  closeUpgrade();
   dataReady = false;
   clearTimeout(debounceTimer);
   searchGeneration++;
@@ -901,9 +1045,9 @@ function renderProgressNow() {
   const merged = mergeSearchResults(parts, search.opts.sortMode, search.opts.sortMode2);
   if (!merged.rows.length) return;
   merged.effort = search.opts.effort;
-  merged.proved = !!solverBest;
+  merged.proved = solverProved;
   merged.partial = true;
-  render(merged);
+  render(merged, search.context);
 }
 
 function onSolver(m) {
@@ -914,6 +1058,7 @@ function onSolver(m) {
   if (m.partial) {
     if (pending && activeSearch && m.rows && m.rows.length) {
       solverBest = m.rows[0];
+      solverProved = !!m.proved;
       renderProgress();
     }
     return;
@@ -921,6 +1066,7 @@ function onSolver(m) {
   solverInbox = m;
   if (!pending || !activeSearch) return;
   if (m.rows && m.rows.length && !m.error) solverBest = m.rows[0];
+  solverProved = !!m.proved;
   if (inbox.length >= W.length) { finishSearch(); return; }
   // The DFS is still grinding, but the solver has already proved the ceiling.
   // Show it now — waiting means staring at "searching…" for another ten seconds
@@ -945,12 +1091,13 @@ function finishSearch() {
   shardProgress = new Map();
   cancelProgressRender();
   solverBest = null;
+  solverProved = false;
   const solver = solverInbox; solverInbox = null;
   activeSearch = null;
 
   const err = parts.find(p => p.error);
   if (err) {
-    render({ error: err.error });
+    render({ error: err.error }, search.context);
     return;
   }
 
@@ -980,7 +1127,7 @@ function finishSearch() {
   if (merged.proved) recordMetric('proved');
   memoryCacheSet(search.key, merged);
   void deviceCacheSet(search.key, merged);
-  render(merged);
+  render(merged, search.context);
 }
 
 // ---------- controls ----------
@@ -1739,11 +1886,9 @@ function unitCard(key) {
 // or a trait's breakpoints at all. The sheet reuses unitCard()/traitCard()
 // and moves filtering behind explicit buttons.
 const isTouch = () => matchMedia('(pointer: coarse)').matches;
-let sheetEl = null;
-let sheetKey = null;
-let sheetKind = null;
 
 function closeSheet() {
+  const closingUpgrade = sheetKind === 'upgrade';
   if (sheetEl) {
     sheetEl.classList.remove('show');
     // A dragged sheet keeps its offset otherwise and reopens off screen.
@@ -1751,9 +1896,11 @@ function closeSheet() {
     s.style.transition = ''; s.style.transform = '';
   }
   sheetKey = sheetKind = null;
+  if (closingUpgrade) closeUpgrade(true);
 }
 
 function sheetActions(kind, key) {
+  if (kind === 'upgrade') return '';
   if (kind === 'emblem') {
     // A stepper, not a toggle: several copies of one emblem is a real board.
     const n = emblems.filter(k => k === key).length;
@@ -1817,6 +1964,7 @@ function bindSheetDrag(head, sheet) {
   });
 }
 function openSheet(html, kind, key) {
+  if (sheetKind === 'upgrade' && kind !== 'upgrade') closeUpgrade(true);
   hideCard();
   if (!sheetEl) {
     sheetEl = document.createElement('div');
@@ -1830,6 +1978,10 @@ function openSheet(html, kind, key) {
     sheetEl.querySelector('.sheetx').addEventListener('click', closeSheet);
     bindSheetDrag(sheetEl.querySelector('.sheethead'), sheetEl.querySelector('.sheet'));
     sheetEl.querySelector('.sheetfoot').addEventListener('click', onSheetAction);
+    sheetEl.querySelector('.sheetbody').addEventListener('change', onUpgradeControlChange);
+    sheetEl.querySelector('.sheetbody').addEventListener('click', event => {
+      if (event.target.closest('.upgradepanel')) event.stopPropagation();
+    });
   }
   sheetKind = kind;
   sheetKey = key;
@@ -1837,11 +1989,13 @@ function openSheet(html, kind, key) {
   const foot = sheetEl.querySelector('.sheetfoot');
   foot.className = 'sheetfoot' + (kind === 'trait' ? ' trait' : '');
   foot.innerHTML = sheetActions(kind, key);
+  foot.hidden = kind === 'upgrade';
   sheetEl.querySelector('.sheetbody').scrollTop = 0;
   sheetEl.classList.add('show');
 }
 
 function onSheetAction(e) {
+  if (sheetKind === 'upgrade') return;
   const b = e.target.closest('[data-act]');
   if (!b || !sheetKey) return;
   const act = b.dataset.act;
@@ -1963,16 +2117,22 @@ function dispatchSearch(generation, opts, key) {
   shardProgress = new Map();
   cancelProgressRender();
   solverBest = null;
+  solverProved = false;
   solverInbox = null;
   $('status').textContent = 'searching…';
   const id = ++reqId;
-  activeSearch = { generation, key, opts };
+  activeSearch = {
+    generation,
+    key,
+    opts,
+    context: searchRenderContext(generation, key, opts),
+  };
   recordMetric('workerRuns');
   W.forEach((worker, shard) =>
     worker.postMessage({ type: 'search', id, opts: { ...opts, shard } }));
   ensureSolver();
   if (solverWorker && !solverBroken) {
-    solverWorker.postMessage({ type: 'search', id, opts });
+    queueMainSolver({ type: 'search', id, opts });
   }
 }
 
@@ -1987,7 +2147,9 @@ async function executeSearch(generation) {
   const memoryResult = memoryCacheGet(key);
   if (memoryResult) {
     recordMetric('memoryHits');
-    render({ ...memoryResult, cached: 'memory' });
+    render(
+      { ...memoryResult, cached: 'memory' },
+      searchRenderContext(generation, key, opts));
     return;
   }
 
@@ -1996,7 +2158,9 @@ async function executeSearch(generation) {
   if (deviceResult) {
     recordMetric('deviceHits');
     memoryCacheSet(key, deviceResult);
-    render({ ...deviceResult, cached: 'device' });
+    render(
+      { ...deviceResult, cached: 'device' },
+      searchRenderContext(generation, key, opts));
     return;
   }
 
@@ -2018,6 +2182,384 @@ function run(immediate = false) {
       void executeSearch(generation);
     }, DEBOUNCE_MS);
   }
+}
+
+// ---------- upgrade paths ----------
+function upgradeIsBusy() {
+  return pending || mainSolverBusy();
+}
+
+function upgradePanelId(signature) {
+  return `upgrade-${signature.replaceAll(',', '-')}`;
+}
+
+function pinnedSourceCount(source, context) {
+  const pinned = new Set(context.opts.reqIdx || []);
+  return source.units.filter(index => pinned.has(index)).length;
+}
+
+function upgradeKeepOptions(state) {
+  const total = state.source.units.length;
+  return [total, total - 1]
+    .filter((value, index, values) => value >= 0 && values.indexOf(value) === index);
+}
+
+function upgradePanelMarkup(state) {
+  const sourceLevel = state.context.opts.size;
+  const levels = [];
+  for (let level = sourceLevel; level <= 10; level++) {
+    levels.push(`<option value="${level}"${level === state.level ? ' selected' : ''}>${level}</option>`);
+  }
+  const keeps = upgradeKeepOptions(state).map(keep => {
+    const disabled = keep < state.pinnedCount ? ' disabled' : '';
+    return `<option value="${keep}"${keep === state.keep ? ' selected' : ''}${disabled}>` +
+      `Keep ${keep} of ${state.source.units.length}</option>`;
+  });
+  const guidance = state.pinnedCount === state.source.units.length
+    ? '<p class="uphint">Unpin a source champion to explore removals.</p>'
+    : '';
+  return `<div class="upgradepanel" id="${upgradePanelId(state.signature)}">` +
+    `<div class="upcontrols">` +
+    `<label>Level<select class="upcontrol" data-upfield="level">${levels.join('')}</select></label>` +
+    `<label>Keep<select class="upcontrol" data-upfield="keep">${keeps.join('')}</select></label>` +
+    `</div>${guidance}<div class="upresults" aria-live="polite">${state.resultsHtml}</div></div>`;
+}
+
+function syncUpgradePanel(panel) {
+  if (!panel || !upgradeState) return;
+  const level = panel.querySelector('[data-upfield="level"]');
+  const keep = panel.querySelector('[data-upfield="keep"]');
+  if (level) level.value = String(upgradeState.level);
+  if (keep) keep.value = String(upgradeState.keep);
+  const results = panel.querySelector('.upresults');
+  if (results) results.innerHTML = upgradeState.resultsHtml;
+}
+
+function refreshUpgradeSurface() {
+  syncAllUpgradeTriggers();
+  if (!upgradeState) return;
+  if (upgradeState.mobile) {
+    if (sheetKind === 'upgrade') {
+      syncUpgradePanel(sheetEl?.querySelector('.sheetbody .upgradepanel'));
+    }
+    return;
+  }
+  const card = [...$('list').querySelectorAll('.comp[data-sig]')]
+    .find(node => node.dataset.sig === upgradeState.signature);
+  if (!card) {
+    closeUpgrade();
+    return;
+  }
+  let panel = card.querySelector('.upgradepanel');
+  if (!panel) {
+    card.insertAdjacentHTML('beforeend', upgradePanelMarkup(upgradeState));
+    panel = card.querySelector('.upgradepanel');
+  }
+  syncUpgradePanel(panel);
+}
+
+function syncAllUpgradeTriggers() {
+  const disabled = upgradeIsBusy();
+  for (const button of $('list').querySelectorAll('.upgradepath')) {
+    const card = button.closest('.comp');
+    if (card?.__context) button.dataset.context = card.__context.token;
+    const active = Boolean(upgradeState
+      && button.dataset.sig === upgradeState.signature
+      && button.dataset.context === upgradeState.context.token);
+    button.disabled = disabled;
+    button.setAttribute('aria-expanded', String(active));
+  }
+}
+
+function destroyUpgradeWorker() {
+  clearTimeout(upgradeReadyTimer);
+  clearTimeout(upgradeResponseTimer);
+  upgradeReadyTimer = null;
+  upgradeResponseTimer = null;
+  upgradeScheduler?.terminate();
+  upgradeScheduler = null;
+  if (upgradeWorker) upgradeWorker.terminate();
+  upgradeWorker = null;
+  upgradeReady = false;
+}
+
+function closeUpgrade(fromSheet = false) {
+  const trigger = upgradeState?.trigger;
+  destroyUpgradeWorker();
+  upgradeState = null;
+  for (const panel of $('list').querySelectorAll('.upgradepanel')) panel.remove();
+  syncAllUpgradeTriggers();
+  if (!fromSheet && sheetKind === 'upgrade') closeSheet();
+  else if (trigger?.isConnected && fromSheet) trigger.focus();
+}
+
+function failUpgrade(message) {
+  if (!upgradeState) return;
+  const provedRows = upgradeState.provedRows || [];
+  destroyUpgradeWorker();
+  if (provedRows.length) {
+    upgradeState.resultsHtml = renderUpgradeRows({
+      rows: provedRows,
+      proved: true,
+      rowsComplete: false,
+      enumerationStopReason: 'timeout',
+    });
+  } else {
+    upgradeState.resultsHtml = `<div class="upempty">${message}</div>`;
+  }
+  refreshUpgradeSurface();
+}
+
+function ensureUpgradeWorker() {
+  if (upgradeWorker || !upgradeState) return;
+  try {
+    upgradeWorker = new Worker('solver-worker.js?v=milp-hybrid-v7');
+  } catch (error) {
+    failUpgrade(String(error && error.message || error));
+    return;
+  }
+  upgradeScheduler = SolverScheduler.create({
+    send: message => upgradeWorker.postMessage(message),
+    onStarted: () => {
+      clearTimeout(upgradeResponseTimer);
+      upgradeResponseTimer = setTimeout(
+        () => failUpgrade('Upgrade search timed out.'),
+        UPGRADE_SOLVE_WATCHDOG_MS);
+    },
+    onFinished: () => {
+      clearTimeout(upgradeResponseTimer);
+      upgradeResponseTimer = null;
+    },
+  });
+  upgradeWorker.onmessage = event => {
+    const message = event.data;
+    if (message.type === 'ready') {
+      if (message.algorithmVersion !== algorithmVersion) {
+        failUpgrade('Upgrade solver assets are from a different version.');
+        return;
+      }
+      clearTimeout(upgradeReadyTimer);
+      upgradeReadyTimer = null;
+      upgradeReady = true;
+      const queued = upgradeState?.queuedMessage;
+      if (queued) {
+        upgradeState.queuedMessage = null;
+        upgradeScheduler.enqueue(queued);
+      }
+      return;
+    }
+    if (message.type === 'init-error') {
+      failUpgrade(message.error || 'Upgrade solver failed to initialize.');
+      return;
+    }
+    if (message.type === 'started') {
+      upgradeScheduler.started(message.id);
+      return;
+    }
+    if (message.type !== 'solver') return;
+    if (!message.partial) upgradeScheduler.finished(message.id);
+    if (!upgradeState || message.id !== upgradeState.requestId) return;
+    if (message.partial && message.proved && message.rows?.length) {
+      upgradeState.provedRows = message.rows;
+    }
+    upgradeState.resultsHtml = renderUpgradeRows(message);
+    refreshUpgradeSurface();
+  };
+  upgradeWorker.onerror = event =>
+    failUpgrade(String(event.error || event.message || 'Upgrade solver failed.'));
+  upgradeWorker.postMessage({ type: 'init', db: DB });
+  upgradeReadyTimer = setTimeout(
+    () => failUpgrade('Upgrade solver initialization timed out.'),
+    UPGRADE_READY_TIMEOUT_MS);
+}
+
+function upgradeOptions() {
+  const options = upgradeState.context.opts;
+  return {
+    ...snapshotSearchOptions(options),
+    size: upgradeState.level,
+    reqIdx: [...options.reqIdx],
+    keepIdx: [...upgradeState.source.units],
+    minKeep: upgradeState.keep,
+    maxKeep: upgradeState.keep,
+    sortMode: 'live',
+    sortMode2: 'tier',
+    resultMode: 'roster',
+    solverRows: UPGRADE_SOLVER_ROWS,
+    solverBudgetMs: UPGRADE_SOLVER_BUDGET_MS,
+  };
+}
+
+function runUpgradeSearch() {
+  if (!upgradeState || upgradeIsBusy()) {
+    syncAllUpgradeTriggers();
+    return;
+  }
+  const id = ++upgradeRequestId;
+  upgradeState.requestId = id;
+  upgradeState.provedRows = [];
+  upgradeState.resultsHtml = '<div class="uploading">Finding the best moves...</div>';
+  refreshUpgradeSurface();
+  const message = { type: 'search', id, opts: upgradeOptions() };
+  ensureUpgradeWorker();
+  if (!upgradeWorker) return;
+  if (upgradeReady) upgradeScheduler.enqueue(message);
+  else upgradeState.queuedMessage = message;
+}
+
+function traitMap(row, context) {
+  const mutedTraits = new Set(context.opts.muted || []);
+  return new Map((row.active || [])
+    .filter(([trait, count]) => BOARD_TABLES.floors[trait] !== null
+      && !mutedTraits.has(trait)
+      && count >= BOARD_TABLES.floors[trait])
+    .map(([trait, count]) => {
+      const tiers = BOARD_TABLES.bps[trait];
+      let tier = -1;
+      for (let index = 0; index < tiers.length; index++) {
+        if (count >= tiers[index]) tier = index;
+      }
+      return [trait, { count, tier }];
+    }));
+}
+
+function moveTraitSummary(source, candidate, context) {
+  const before = traitMap(source, context);
+  const after = traitMap(candidate, context);
+  const traitName = index => DB.traits[BOARD_TABLES.traitKeys[index]].name;
+  const upgraded = [...after]
+    .filter(([trait, value]) => before.has(trait)
+      && value.tier > before.get(trait).tier)
+    .sort(([a], [b]) => a - b);
+  if (upgraded.length) {
+    const [trait, value] = upgraded[0];
+    return `${traitName(trait)} ${before.get(trait).count} to ${value.count}` +
+      (upgraded.length > 1 ? ` +${upgraded.length - 1} more` : '');
+  }
+  const added = [...after].filter(([trait]) => !before.has(trait)).sort(([a], [b]) => a - b);
+  if (added.length) {
+    const [trait, value] = added[0];
+    return `${traitName(trait)} 0 to ${value.count}` +
+      (added.length > 1 ? ` +${added.length - 1} more` : '');
+  }
+  const identical = before.size === after.size
+    && [...before].every(([trait, value]) =>
+      after.get(trait)?.tier === value.tier && after.get(trait)?.count === value.count);
+  if (identical) return `same ${candidate.live} traits`;
+  const removed = [...before].find(([trait]) => !after.has(trait));
+  if (removed && added.length) return `${traitName(removed[0])} to ${traitName(added[0][0])}`;
+  return `${candidate.live} active traits`;
+}
+
+function upgradeMoveMarkup(row) {
+  const diff = championDiff(upgradeState.source.units, row.units);
+  const changes = [
+    ...diff.added.map(index => `<span class="upunit add">+ ${DB.champions[index].name}</span>`),
+    ...diff.removed.map(index => `<span class="upunit remove">- ${DB.champions[index].name}</span>`),
+  ].join('');
+  const gold = diff.added.reduce((total, index) => total + DB.champions[index].cost * 3, 0)
+    - diff.removed.reduce((total, index) => total + DB.champions[index].cost * 3, 0);
+  const goldText = `${gold > 0 ? '+' : ''}${gold}g`;
+  const keys = row.units.map(index => DB.champions[index].key).join(',');
+  return `<div class="upmove" data-units="${keys}" data-kept="${diff.kept.length}">` +
+    `<div class="upchange">${changes}</div>` +
+    `<div class="upbuy">${moveTraitSummary(upgradeState.source, row, upgradeState.context)}</div>` +
+    `<div class="upgold" title="Assumes every unit at 2★ (3 copies)">${goldText}</div></div>`;
+}
+
+function renderUpgradeRows(message) {
+  if (message.error) return `<div class="upempty">${message.error}</div>`;
+  if (message.infeasible) {
+    return `<div class="upempty">No board satisfies Level ${upgradeState.level} and ` +
+      `Keep ${upgradeState.keep} of ${upgradeState.source.units.length}.</div>`;
+  }
+  const rawRows = message.rows || [];
+  const sameLevel = upgradeState.level === upgradeState.context.opts.size;
+  const rank = comparator('live', 'tier');
+  const moves = rawRows.filter(row => {
+    const diff = championDiff(upgradeState.source.units, row.units);
+    if (!diff.added.length && !diff.removed.length) return false;
+    if (diff.kept.length !== upgradeState.keep) return false;
+    return !sameLevel || rank(row, upgradeState.source) < 0;
+  });
+  if (!rawRows.length && !message.proved) {
+    return '<div class="upempty">Search ended before it could prove a move. Narrow the pool or try again.</div>';
+  }
+  if (sameLevel && message.proved && !moves.length) {
+    return `<div class="upempty">No board that keeps exactly ${upgradeState.keep} of these ` +
+      `${upgradeState.source.units.length} at level ${upgradeState.level} beats this board.</div>`;
+  }
+  if (sameLevel && !message.proved && rawRows.length && !moves.length) {
+    return '<div class="upempty">No better board with this Level and Keep combination was found before the search budget ended.</div>';
+  }
+
+  const notes = [];
+  if (!sameLevel && message.proved && rawRows.length
+      && compareTraitQuality(rawRows[0], upgradeState.source) >= 0) {
+    notes.push(`No level-${upgradeState.level} board that keeps exactly ` +
+      `${upgradeState.keep} of these ${upgradeState.source.units.length} improves your trait score. ` +
+      `These are the best fills for that Level and Keep combination.`);
+  } else if (message.partial) {
+    notes.push('Best move proven. Finding alternatives...');
+  }
+  if (!message.partial && message.proved && message.rowsComplete === false) {
+    notes.push('Best move proven. Some alternatives may be missing.');
+  }
+  const intro = notes.map(note => `<div class="upnote">${note}</div>`).join('');
+  return intro + (moves.length
+    ? `<div class="uplist" data-proved="${!!message.proved}" ` +
+      `data-complete="${message.rowsComplete !== false}">${moves.map(upgradeMoveMarkup).join('')}</div>`
+    : '<div class="upempty">No move found.</div>');
+}
+
+function openUpgrade(button) {
+  if (upgradeIsBusy()) {
+    syncAllUpgradeTriggers();
+    return;
+  }
+  if (upgradeState
+      && upgradeState.signature === button.dataset.sig
+      && upgradeState.context.token === button.dataset.context) {
+    closeUpgrade();
+    return;
+  }
+  closeUpgrade();
+  const card = button.closest('.comp');
+  const source = card?.__row;
+  const context = card?.__context;
+  if (!source || !context) return;
+  const sourceLevel = context.opts.size;
+  const level = Math.min(10, sourceLevel + 1);
+  const pinnedCount = pinnedSourceCount(source, context);
+  const keep = level > sourceLevel
+    ? source.units.length
+    : Math.max(pinnedCount, source.units.length - 1);
+  upgradeState = {
+    source,
+    context,
+    signature: button.dataset.sig,
+    trigger: button,
+    mobile: isTouch(),
+    level,
+    keep,
+    pinnedCount,
+    resultsHtml: '<div class="uploading">Preparing upgrade search...</div>',
+  };
+  if (upgradeState.mobile) {
+    openSheet(upgradePanelMarkup(upgradeState), 'upgrade', upgradeState.signature);
+  } else {
+    refreshUpgradeSurface();
+  }
+  runUpgradeSearch();
+}
+
+function onUpgradeControlChange(event) {
+  const control = event.target.closest('.upcontrol');
+  if (!control || !upgradeState) return;
+  const value = Number(control.value);
+  if (control.dataset.upfield === 'level') upgradeState.level = value;
+  else upgradeState.keep = value;
+  runUpgradeSearch();
 }
 
 // ---------- render ----------
@@ -2146,9 +2688,20 @@ function elementFromMarkup(markup) {
   return template.content.firstElementChild;
 }
 
+function upgradeButtonMarkup(signature) {
+  const context = renderedContext;
+  const active = Boolean(upgradeState
+    && upgradeState.signature === signature
+    && upgradeState.context.token === context?.token);
+  return `<button type="button" class="upgradepath" data-sig="${signature}" ` +
+    `data-context="${context?.token || ''}" aria-expanded="${active}" ` +
+    `aria-controls="${upgradePanelId(signature)}"${upgradeIsBusy() ? ' disabled' : ''}>` +
+    `Upgrade path</button>`;
+}
+
 // Build one board card for both lists. Only the selected section exposes the
 // control that chooses which pinned comp appears in shared-link previews.
-function compCard(r, { selected = false, showPreview = false } = {}) {
+function compCard(r, { selected = false, showPreview = false, upgrade = false } = {}) {
   const embCount = {};
   emblems.forEach(k => embCount[k] = (embCount[k] || 0) + 1);
   const tkeys = Object.keys(DB.traits);
@@ -2215,6 +2768,12 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
     `aria-pressed="${selected}" ` +
     `data-tip="${selected ? 'Remove from selected' : 'Select this comp'}" ` +
     `aria-label="${selected ? 'Remove this comp from the selected section' : 'Select this comp and pin it above the results'}"></button>`;
+  const upgradeButton = upgrade ? upgradeButtonMarkup(signature) : '';
+  const upgradePanel = upgrade && upgradeState
+      && upgradeState.signature === signature
+      && upgradeState.context.token === renderedContext?.token
+    ? upgradePanelMarkup(upgradeState)
+    : '';
 
   const d = document.createElement('div');
   d.className = 'comp' + (selected ? ' selected' : '');
@@ -2224,6 +2783,7 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
   // Stash the row on the node: pinning needs the full scored board, and
   // re-deriving it from the DOM would mean a second scoring implementation.
   d.__row = r;
+  d.__context = renderedContext;
   d.innerHTML =
     `<div class="comphead"><div class="tline">${badges}${deadGroup}</div>` +
     `<div class="score"><span class="active"><b>${r.live}</b> traits active</span>` +
@@ -2232,8 +2792,8 @@ function compCard(r, { selected = false, showPreview = false } = {}) {
     `<div class="comprow primary">${units}${varTag}</div>` +
     `<div class="compfoot">${profile}` +
     `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
-    copyCodeButton(r.units) + previewButton + pinButton + `</div>` +
-    varRows;
+    copyCodeButton(r.units) + upgradeButton + previewButton + pinButton + `</div>` +
+    varRows + upgradePanel;
   return d;
 }
 
@@ -2289,7 +2849,7 @@ function syncVariants(card, row) {
 
 function updateResultCard(card, row, selected) {
   if (!card || card.dataset.rowKey !== rowRenderKey(row)) {
-    const replacement = compCard(row, { selected });
+    const replacement = compCard(row, { selected, upgrade: true });
     if (!card) {
       replacement.classList.add('entering');
       replacement.addEventListener('animationend',
@@ -2298,9 +2858,11 @@ function updateResultCard(card, row, selected) {
     return replacement;
   }
   card.__row = row;
+  card.__context = renderedContext;
   syncPinState(card, selected);
   syncRequiredPortraits(card);
   syncVariants(card, row);
+  syncAllUpgradeTriggers();
   return card;
 }
 
@@ -2320,13 +2882,22 @@ function reconcileResultCards(rows) {
     if (card === cursor) cursor = cursor.nextElementSibling;
     else list.insertBefore(card, cursor);
   }
-  for (const node of stale) node.remove();
+  for (const node of stale) {
+    if (upgradeState && node.dataset?.sig === upgradeState.signature) closeUpgrade();
+    node.remove();
+  }
+  syncAllUpgradeTriggers();
 }
 
 
-function render(m) {
+function render(m, context = null) {
   const list = $('list'), cnt = $('count');
+  if (context?.token !== renderedContext?.token) {
+    closeUpgrade();
+    renderedContext = context;
+  }
   if (m.error) {
+    closeUpgrade();
     $('status').textContent = '';
     cnt.textContent = '—';
     list.innerHTML = `<div class="empty">${m.error}</div>`;
@@ -2338,6 +2909,7 @@ function render(m) {
   cnt.title = searchSummary.title;
 
   if (!m.rows.length) {
+    closeUpgrade();
     list.innerHTML = `<div class="empty">No boards match.<br>Raise the wasted-traits slider, widen the cost filter, or drop a required unit.</div>`;
     return;
   }
@@ -2380,6 +2952,12 @@ function renderSelectedComps() {
 // Click any trait badge in the results to pin it as a requirement at that count.
 // Bound to both containers so a selected comp behaves exactly like a result row.
 function onCompClick(e) {
+  const upgrade = e.target.closest('.upgradepath');
+  if (upgrade) {
+    openUpgrade(upgrade);
+    return;
+  }
+  if (e.target.closest('.upgradepanel')) return;
   // Expand the collapsed "+N partial" trait chip (mobile only; the group is
   // display:contents on desktop so the badges are always visible there).
   const deadsum = e.target.closest('.deadsum');
@@ -2463,6 +3041,7 @@ function onCompClick(e) {
 }
 
 $('list').addEventListener('click', onCompClick);
+$('list').addEventListener('change', onUpgradeControlChange);
 $('selected').addEventListener('click', onCompClick);
 
 // Re-render the selected section and flip the pin state on any matching result

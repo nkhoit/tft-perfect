@@ -11,6 +11,7 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web', 'traits');
 const SearchUtils = require('../web/traits/search-utils.js');
+const BoardScore = require('../web/traits/board-score.js');
 const LpModel = require('../web/traits/lp-model.js');
 const db = JSON.parse(fs.readFileSync(path.join(WEB, 'data.json'), 'utf8'));
 const T = LpModel.tables(db);
@@ -280,14 +281,9 @@ test('LP objective matches the result-list comparator, not just the primary key'
         if (i === pool.length) {
           const sc = score(pick);
           if (sc.waste > maxWaste) return;
-          // The slot total must match a bonus the board actually activates.
-          let granted = 0;
-          T.teamSize.forEach((tiers, t) => {
-            for (const tier of tiers) {
-              if (sc.counts[t] >= tier.min) granted = Math.max(granted, tier.slots);
-            }
-          });
-          if (sc.slots !== size + granted) return;
+          const validated = BoardScore.validateRoster(
+            db, T, pick.map(index => db.champions[index].key), { size });
+          if (validated.error) return;
           found.push(sc);
           return;
         }

@@ -26,8 +26,8 @@ test('the application contains only Set 18', () => {
   assert.match(html, /twitter:card/);
   assert.match(html, /id="saveSearch"/);
   assert.match(html, /id="savedList"/);
-  assert.match(html, /src="saved-searches\.js"/);
-  assert.match(html, /src="share-state\.js"/);
+  assert.match(html, /src="saved-searches\.js\?v=milp-hybrid-v7"/);
+  assert.match(html, /src="share-state\.js\?v=milp-hybrid-v7"/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
   assert.match(app, /ability\.descResolved \|\| ability\.desc/);
@@ -124,10 +124,50 @@ test('required units use check badges without replacing cost borders', () => {
 test('featured preview controls only render in the selected section', () => {
   const app = read('web/traits/app.js');
 
-  assert.match(app, /function compCard\(r, \{ selected = false, showPreview = false \} = \{\}\)/);
+  assert.match(app,
+    /function compCard\(r, \{ selected = false, showPreview = false, upgrade = false \} = \{\}\)/);
   assert.match(app, /const previewButton = showPreview/);
   assert.match(app, /compCard\(r, \{ selected: true, showPreview: true \}\)/);
   assert.match(app, /card\.querySelector\('\.previewcomp'\)\?\.remove\(\)/);
+});
+
+test('result cards expose isolated desktop and mobile upgrade paths', () => {
+  const app = read('web/traits/app.js');
+  const css = read('web/traits/style.css');
+
+  assert.match(app, /class="upgradepath"/);
+  assert.match(app, /class="upgradepanel"/);
+  assert.match(app, /keepIdx: \[\.\.\.upgradeState\.source\.units\]/);
+  assert.match(app, /resultMode: 'roster'/);
+  assert.match(app, /if \(e\.target\.closest\('\.upgradepanel'\)\) return/);
+  assert.match(app, /openSheet\(upgradePanelMarkup\(upgradeState\), 'upgrade'/);
+  assert.match(app, /if \(kind === 'upgrade'\) return ''/);
+  assert.match(app, /No board that keeps exactly \$\{upgradeState\.keep\}/);
+  assert.match(css, /\.upunit\.add\{color:var\(--acc\)\}/);
+  assert.match(css, /\.upunit\.remove\{color:var\(--red\)\}/);
+  assert.match(css, /\.sheetfoot\[hidden\]\{display:none\}/);
+});
+
+test('v7 assets revalidate without weakening immutable vendor caching', () => {
+  const html = read('web/traits/index.html');
+  const app = read('web/traits/app.js');
+  const config = JSON.parse(read('staticwebapp.config.json'));
+  const routes = config.routes.map(route => route.route);
+
+  assert.match(html, /style\.css\?v=milp-hybrid-v7/);
+  assert.match(html, /search-utils\.js\?v=milp-hybrid-v7/);
+  assert.match(html, /solver-scheduler\.js\?v=milp-hybrid-v7/);
+  assert.match(html, /app\.js\?v=milp-hybrid-v7/);
+  assert.match(app, /solver-worker\.js\?v=milp-hybrid-v7/);
+  assert.ok(routes.indexOf('/traits/vendor/*') < routes.indexOf('/traits/*'));
+  assert.equal(
+    config.routes.find(route => route.route === '/traits/vendor/*')
+      .headers['Cache-Control'],
+    'public, max-age=31536000, immutable');
+  assert.equal(
+    config.routes.find(route => route.route === '/traits/*')
+      .headers['Cache-Control'],
+    'no-cache');
 });
 
 test('filters collapse responsively and remember the user preference', () => {

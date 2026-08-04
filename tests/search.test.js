@@ -16,7 +16,11 @@ function loadWorker() {
   });
   context.importScripts = (...files) => {
     for (const file of files) {
-      vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', 'traits', file), 'utf8'), context);
+      vm.runInContext(
+        fs.readFileSync(
+          path.join(ROOT, 'web', 'traits', file.split('?')[0]),
+          'utf8'),
+        context);
     }
   };
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'web', 'traits', 'worker.js'), 'utf8'), context);

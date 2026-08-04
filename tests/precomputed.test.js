@@ -39,6 +39,7 @@ test('precomputed landing result matches data and search versions', () => {
   assert.ok(precomputed.result.total > 0);
   assert.equal(precomputed.result.ms, 0);
   assert.equal(precomputed.result.effort, 'deep');
+  assert.equal(precomputed.result.proved, true);
 });
 
 test('precomputed landing rows are globally deduplicated', () => {

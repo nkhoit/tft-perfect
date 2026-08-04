@@ -24,13 +24,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Install API dependencies
         run: |
           npm --prefix api ci
           npm --prefix api run sync:traits
 
       - name: Test
-        run: npm test
+        run: |
+          npm test
+          npm run test:upgrade-solver
+          npm run test:browser
 
       - name: Check JavaScript
         run: |
@@ -47,6 +53,7 @@ jobs:
           mkdir -p dist
           cp -r web/. dist/
           cp staticwebapp.config.json dist/
+          npm run deployment:manifest
           echo "--- deploying ---"
           ls -R dist | head -40
 

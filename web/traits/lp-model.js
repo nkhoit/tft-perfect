@@ -47,8 +47,8 @@
 
   // Build the LP text for one (size, bonus) pair.
   //
-  // opts: { size, maxWaste, bonus, reqIdx, poolIdx, emblems, muted, reqTraits,
-  //         sortMode, cuts }
+  // opts: { size, maxWaste, bonus, reqIdx, keepIdx, minKeep, maxKeep, poolIdx,
+  //         emblems, muted, reqTraits, sortMode, cuts }
   function buildLP(db, opts) {
     const T = opts.tables || tables(db);
     const nT = T.traitKeys.length;
@@ -56,9 +56,24 @@
     const bonus = opts.bonus || 0;
     const muted = new Set(opts.muted || []);
     const required = new Set(opts.reqIdx || []);
-    // Pool = choosable champions. Required units are forced on, so they must be
-    // present as variables even if the cost filter excluded them.
-    const pool = [...new Set([...(opts.poolIdx || []), ...required])]
+    const hasKeep = Object.prototype.hasOwnProperty.call(opts, 'keepIdx');
+    const keepable = new Set(opts.keepIdx || []);
+    if (hasKeep && (!Number.isInteger(opts.minKeep) || !Number.isInteger(opts.maxKeep)
+        || opts.minKeep < 0 || opts.maxKeep < opts.minKeep
+        || opts.maxKeep > keepable.size)) {
+      throw new RangeError('Invalid source-board keep bounds.');
+    }
+    const requiredTraits = opts.reqTraits || [];
+    for (const requirement of requiredTraits) {
+      if (!requirement || !Number.isInteger(requirement.t)
+          || requirement.t < 0 || requirement.t >= nT
+          || !Number.isInteger(requirement.n) || requirement.n <= 0) {
+        throw new RangeError('Invalid required trait.');
+      }
+    }
+    // Required and source-board units remain variables even when the current
+    // cost filter excludes them.
+    const pool = [...new Set([...(opts.poolIdx || []), ...required, ...keepable])]
       .sort((a, b) => a - b);
     if (!pool.length) return null;
 
@@ -83,6 +98,25 @@
       if (!contributors.has(t) && !emblemCounts[t]) continue;
       live.push(t);
     }
+    if (requiredTraits.some(requirement => !live.includes(requirement.t))) return null;
+
+    const capacityRules = [];
+    if (bonus) {
+      for (let t = 0; t < T.teamSize.length; t++) {
+        for (const tier of T.teamSize[t]) {
+          if (tier.slots !== bonus) continue;
+          const contributorsForTrait = contributors.get(t) || [];
+          const reachable = emblemCounts[t]
+            + contributorsForTrait.reduce((total, [, points]) => total + points, 0);
+          if (reachable < tier.min) continue;
+          capacityRules.push({ trait: t, tier, contributors: contributorsForTrait });
+        }
+      }
+      if (!capacityRules.length) return null;
+      if (capacityRules.length > 1) {
+        throw new Error('Multiple capacity profiles are not supported.');
+      }
+    }
 
     const L = [];
     const scoringTerms = [], tierTerms = [], wasteTerms = [];
@@ -93,6 +127,7 @@
       if (first < 0) continue;
       scoringTerms.push(`y${t}_${first}`);
       for (let j = first; j < bp.length; j++) tierTerms.push(`y${t}_${j}`);
+      for (let i = 0; i < first; i++) tierTerms.push(`y${t}_${first}`);
     }
 
     // Objective.
@@ -159,6 +194,17 @@
     L.push(' slots:' + plus(pool.map(c => `${T.slots[c]} x${c}`)) + ` = ${size + bonus}`);
 
     for (const c of required) L.push(` req${c}: x${c} = 1`);
+    if (hasKeep) {
+      if (opts.minKeep === keepable.size && opts.maxKeep === keepable.size) {
+        for (const champion of keepable) {
+          if (!required.has(champion)) L.push(` keep${champion}: x${champion} = 1`);
+        }
+      } else if (keepable.size) {
+        const terms = plus([...keepable].map(champion => `x${champion}`));
+        L.push(' keepMin:' + terms + ` >= ${opts.minKeep}`);
+        L.push(' keepMax:' + terms + ` <= ${opts.maxKeep}`);
+      }
+    }
 
     // Champion forms (Lux) are mutually exclusive.
     const groups = new Map();
@@ -190,20 +236,35 @@
     L.push(` wcap: +1 Wtot <= ${opts.maxWaste}`);
 
     // Required trait breakpoints ("Invoker 4").
-    (opts.reqTraits || []).forEach((r, i) => {
-      if (live.includes(r.t)) L.push(` rt${i}: +1 n${r.t} >= ${r.n}`);
+    requiredTraits.forEach((requirement, i) => {
+      L.push(` rt${i}: +1 n${requirement.t} >= ${requirement.n}`);
     });
 
     // Capacity trait must actually be active to grant its slots, and must NOT
     // be active when we're solving the zero-bonus case (otherwise the solver
     // returns a board that would really have had more slots available).
-    T.teamSize.forEach((tiers, t) => {
-      if (!tiers.length || !live.includes(t)) return;
-      for (const tier of tiers) {
-        if (bonus && tier.slots === bonus) L.push(` cap${t}: +1 n${t} >= ${tier.min}`);
-        else if (!bonus) L.push(` cap${t}: +1 n${t} <= ${tier.min - 1}`);
+    if (bonus) {
+      const [{ trait, tier, contributors: capacityContributors }] = capacityRules;
+      L.push(` cap${trait}: +1 n${trait} >= ${tier.min}`);
+      const needed = Math.max(0, tier.min - emblemCounts[trait]);
+      if (needed) {
+        const zTerms = capacityContributors.map(([champion, points]) =>
+          `${points} z${trait}_${champion}`);
+        L.push(` prePts${trait}:` + plus(zTerms) + ` >= ${needed}`);
+        L.push(` preSlots${trait}:` + plus(capacityContributors.map(([champion]) =>
+          `${T.slots[champion]} z${trait}_${champion}`)) + ` <= ${size}`);
+        for (const [champion] of capacityContributors) {
+          L.push(` preSel${trait}_${champion}: +1 z${trait}_${champion} -1 x${champion} <= 0`);
+        }
       }
-    });
+    } else {
+      T.teamSize.forEach((tiers, trait) => {
+        if (!tiers.length || !live.includes(trait)) return;
+        for (const tier of tiers) {
+          L.push(` cap${trait}: +1 n${trait} <= ${tier.min - 1}`);
+        }
+      });
+    }
 
     // No-good cuts: ban previously returned rosters. sum(x in S) <= |S|-1.
     (opts.cuts || []).forEach((roster, i) => {
@@ -218,6 +279,12 @@
     L.push('Binary');
     const bins = pool.map(c => `x${c}`);
     for (const t of live) T.bps[t].forEach((_, j) => bins.push(`y${t}_${j}`));
+    for (const { trait, contributors: capacityContributors } of capacityRules) {
+      const needed = Math.max(0, capacityRules[0].tier.min - emblemCounts[trait]);
+      if (needed) {
+        for (const [champion] of capacityContributors) bins.push(`z${trait}_${champion}`);
+      }
+    }
     L.push(' ' + bins.join(' '));
 
     L.push('General');
