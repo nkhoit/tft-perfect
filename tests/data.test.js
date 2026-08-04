@@ -298,6 +298,23 @@ test('hover cards stay out of the way on touch devices', () => {
   assert.match(body, /canHover\(\)/);
 });
 
+test('the sheet shares the desktop hover card styling', () => {
+  const css = read('web/traits/style.css');
+  // The sheet renders the very same markup unitCard()/traitCard() produce,
+  // so the card rules must target it too rather than being duplicated.
+  for (const cls of ['.chd', '.csub', '.clead', '.tunit', '.crow', '.cbp', '.cab']) {
+    assert.ok(css.includes('.sheetbody ' + cls),
+      'card rule ' + cls + ' is not shared with the sheet');
+  }
+  // Cost colours ride on .tunit.kN -- every cost tier needs the border.
+  for (let n = 1; n <= 5; n++) {
+    assert.ok(css.includes('.sheetbody .tunit.k' + n),
+      'cost ' + n + ' portrait border is not shared with the sheet');
+  }
+  // .csub is an inline span next to the name; it must break onto its own
+  // line in the sheet or it collides with the trait name.
+  assert.match(css, /\.sheetbody \.csub\{[^}]*display:block/);
+});
 test('touch devices pick trait breakpoints from a sheet', () => {
   const app = read('web/traits/app.js');
   const css = read('web/traits/style.css');

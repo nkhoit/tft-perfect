@@ -403,73 +403,73 @@ button:hover{border-color:var(--acc2)}
   background:#10141c;border:1px solid #333c4d;border-radius:9px;padding:10px 11px;
   box-shadow:0 10px 34px #000a;font-size:11.5px;line-height:1.45;color:#c3cad6;
   opacity:0;pointer-events:none;transition:opacity .09s}
-#card.show{opacity:1}
-#card .chd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
-#card .chd img{width:30px;height:30px;object-fit:contain;flex:none}
-#card .chd img.sq{border-radius:5px;object-fit:cover}
-#card .chd b{display:block;font-size:13px;color:#eef2f7}
-#card .csub{font-size:10px;color:#8b94a3;letter-spacing:.04em}
-#card .csub.k1{color:#9aa4b2}#card .csub.k2{color:#4ac07a}#card .csub.k3{color:#4a90d9}
-#card .csub.k4{color:#c061d0}#card .csub.k5{color:#e0a13a}
-#card .clead{margin:0 0 7px;color:#aab3c0}
-#card .tdetails{margin:0 0 7px;color:#c3cad6}
-#card .tdetail{line-height:1.45}
-#card .tunits{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;padding-top:7px;
+#card.show, .sheetbody.show{opacity:1}
+#card .chd, .sheetbody .chd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+#card .chd img, .sheetbody .chd img{width:30px;height:30px;object-fit:contain;flex:none}
+#card .chd img.sq, .sheetbody .chd img.sq{border-radius:5px;object-fit:cover}
+#card .chd b, .sheetbody .chd b{display:block;font-size:13px;color:#eef2f7}
+#card .csub, .sheetbody .csub{font-size:10px;color:#8b94a3;letter-spacing:.04em}
+#card .csub.k1, .sheetbody .csub.k1{color:#9aa4b2}#card .csub.k2, .sheetbody .csub.k2{color:#4ac07a}#card .csub.k3, .sheetbody .csub.k3{color:#4a90d9}
+#card .csub.k4, .sheetbody .csub.k4{color:#c061d0}#card .csub.k5, .sheetbody .csub.k5{color:#e0a13a}
+#card .clead, .sheetbody .clead{margin:0 0 7px;color:#aab3c0}
+#card .tdetails, .sheetbody .tdetails{margin:0 0 7px;color:#c3cad6}
+#card .tdetail, .sheetbody .tdetail{line-height:1.45}
+#card .tunits, .sheetbody .tunits{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;padding-top:7px;
   border-top:1px solid #252d3a}
-#card .tunit{width:32px;height:32px;overflow:hidden;border:2px solid #394352;
+#card .tunit, .sheetbody .tunit{width:32px;height:32px;overflow:hidden;border:2px solid #394352;
   border-radius:5px;background:#181d27}
-#card .tunit img{display:block;width:100%;height:100%;object-fit:cover}
-#card .tunit.k1{border-color:#9aa4b2}#card .tunit.k2{border-color:#4ac07a}
-#card .tunit.k3{border-color:#4a90d9}#card .tunit.k4{border-color:#c061d0}
-#card .tunit.k5{border-color:#e0a13a}
-#card .crow{display:flex;gap:7px;padding:3px 0;border-top:1px solid #1e2531}
-#card .cbp{flex:none;min-width:19px;height:17px;border-radius:4px;font-size:10px;
+#card .tunit img, .sheetbody .tunit img{display:block;width:100%;height:100%;object-fit:cover}
+#card .tunit.k1, .sheetbody .tunit.k1{border-color:#9aa4b2}#card .tunit.k2, .sheetbody .tunit.k2{border-color:#4ac07a}
+#card .tunit.k3, .sheetbody .tunit.k3{border-color:#4a90d9}#card .tunit.k4, .sheetbody .tunit.k4{border-color:#c061d0}
+#card .tunit.k5, .sheetbody .tunit.k5{border-color:#e0a13a}
+#card .crow, .sheetbody .crow{display:flex;gap:7px;padding:3px 0;border-top:1px solid #1e2531}
+#card .cbp, .sheetbody .cbp{flex:none;min-width:19px;height:17px;border-radius:4px;font-size:10px;
   font-weight:800;display:flex;align-items:center;justify-content:center;
   background:#232a36;color:#dfe5ee}
-#card .cbp.bronze{background:#5a3b23;color:#f0cba8}
-#card .cbp.silver{background:#3f4652;color:#e7ecf3}
-#card .cbp.gold{background:#7a5c17;color:#ffe9a8}
-#card .cbp.chromatic,#card .cbp.prismatic{background:#5a3d6e;color:#f0d8ff}
-#card .cbp.unique{background:#1f5a44;color:#b6f5da}
-#card .ctx{flex:1}
-#card .tupgrades{display:flex;flex-direction:column;gap:4px;margin-top:6px;
+#card .cbp.bronze, .sheetbody .cbp.bronze{background:#5a3b23;color:#f0cba8}
+#card .cbp.silver, .sheetbody .cbp.silver{background:#3f4652;color:#e7ecf3}
+#card .cbp.gold, .sheetbody .cbp.gold{background:#7a5c17;color:#ffe9a8}
+#card .cbp.chromatic, .sheetbody .cbp.chromatic, #card .cbp.prismatic, .sheetbody .cbp.prismatic{background:#5a3d6e;color:#f0d8ff}
+#card .cbp.unique, .sheetbody .cbp.unique{background:#1f5a44;color:#b6f5da}
+#card .ctx, .sheetbody .ctx{flex:1}
+#card .tupgrades, .sheetbody .tupgrades{display:flex;flex-direction:column;gap:4px;margin-top:6px;
   padding-top:5px;border-top:1px solid #252d3a}
-#card .tupgrade{display:grid;grid-template-columns:34px minmax(0,1fr);gap:5px;
+#card .tupgrade, .sheetbody .tupgrade{display:grid;grid-template-columns:34px minmax(0,1fr);gap:5px;
   align-items:start}
-#card .tucount{display:inline-flex;align-items:center;gap:3px;font-weight:700;
+#card .tucount, .sheetbody .tucount{display:inline-flex;align-items:center;gap:3px;font-weight:700;
   color:#e5c75f;font-variant-numeric:tabular-nums}
-#card .tstar{width:23px;height:8px;object-fit:contain}
-#card .si{display:inline-block;width:14px;height:14px;margin:0 2px;object-fit:contain;
+#card .tstar, .sheetbody .tstar{width:23px;height:8px;object-fit:contain}
+#card .si, .sheetbody .si{display:inline-block;width:14px;height:14px;margin:0 2px;object-fit:contain;
   vertical-align:-2px}
-#card .ph{color:#7f8895;font-style:italic;cursor:help}
-#card .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
-#card .cab b{font-size:12px;color:#eef2f7}
-#card .apara{margin:0 0 7px;color:#aab3c0}
-#card .apara:last-child{margin-bottom:0}
-#card .alabel{color:#eef2f7;font-weight:800}
-#card .asections{display:flex;flex-direction:column;gap:5px;margin-top:5px}
-#card .asections .apara{margin:0}
-#card .amode{padding:6px 7px;background:#141a24;border:1px solid #252d3a;
+#card .ph, .sheetbody .ph{color:#7f8895;font-style:italic;cursor:help}
+#card .cab, .sheetbody .cab{margin:7px 0 4px;padding-top:6px;border-top:1px solid #1e2531}
+#card .cab b, .sheetbody .cab b{font-size:12px;color:#eef2f7}
+#card .apara, .sheetbody .apara{margin:0 0 7px;color:#aab3c0}
+#card .apara:last-child, .sheetbody .apara:last-child{margin-bottom:0}
+#card .alabel, .sheetbody .alabel{color:#eef2f7;font-weight:800}
+#card .asections, .sheetbody .asections{display:flex;flex-direction:column;gap:5px;margin-top:5px}
+#card .asections .apara, .sheetbody .asections .apara{margin:0}
+#card .amode, .sheetbody .amode{padding:6px 7px;background:#141a24;border:1px solid #252d3a;
   border-left-width:2px;border-radius:5px}
-#card .amode.ad{border-left-color:#d4a84f}
-#card .amode.ap{border-left-color:#7568df}
-#card .amodekey{display:inline-flex;align-items:center;justify-content:center;gap:2px;
+#card .amode.ad, .sheetbody .amode.ad{border-left-color:#d4a84f}
+#card .amode.ap, .sheetbody .amode.ap{border-left-color:#7568df}
+#card .amodekey, .sheetbody .amodekey{display:inline-flex;align-items:center;justify-content:center;gap:2px;
   margin-bottom:4px;padding:2px 5px;border-radius:4px;font-size:10px}
-#card .amode.ad .amodekey{background:#4b3b1f;color:#f2d68c}
-#card .amode.ap .amodekey{background:#302b57;color:#c9c3ff}
-#card .amodestat{display:inline-flex;align-items:center;gap:1px;margin-left:3px}
-#card .amodekey .si{width:12px;height:12px;margin:0}
-#card .amodetext{display:block;color:#c3cad6;line-height:1.4}
-#card .amodetext .apara{margin:0;color:inherit}
-#card .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
-#card .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
+#card .amode.ad .amodekey, .sheetbody .amode.ad .amodekey{background:#4b3b1f;color:#f2d68c}
+#card .amode.ap .amodekey, .sheetbody .amode.ap .amodekey{background:#302b57;color:#c9c3ff}
+#card .amodestat, .sheetbody .amodestat{display:inline-flex;align-items:center;gap:1px;margin-left:3px}
+#card .amodekey .si, .sheetbody .amodekey .si{width:12px;height:12px;margin:0}
+#card .amodetext, .sheetbody .amodetext{display:block;color:#c3cad6;line-height:1.4}
+#card .amodetext .apara, .sheetbody .amodetext .apara{margin:0;color:inherit}
+#card .cchs, .sheetbody .cchs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+#card .cch, .sheetbody .cch{display:inline-flex;align-items:center;gap:3px;background:#181d27;
   border:1px solid #232a36;border-radius:5px;padding:1px 5px;font-size:10.5px}
-#card .cch img{width:13px;height:13px;object-fit:contain}
-#card .crole{display:inline-flex;align-items:center;gap:5px;margin:0 0 7px;
+#card .cch img, .sheetbody .cch img{width:13px;height:13px;object-fit:contain}
+#card .crole, .sheetbody .crole{display:inline-flex;align-items:center;gap:5px;margin:0 0 7px;
   padding:3px 7px;background:#122628;border:1px solid #2f777d;border-radius:5px;
   color:#bfe7e8;font-size:10.5px;font-weight:700}
-#card .crole img{width:16px;height:16px;object-fit:contain}
-#card .cnote{margin:6px 0 0;font-size:10px;color:#6e7683;font-style:italic}
+#card .crole img, .sheetbody .crole img{width:16px;height:16px;object-fit:contain}
+#card .cnote, .sheetbody .cnote{margin:6px 0 0;font-size:10px;color:#6e7683;font-style:italic}
 
 /* ---- muted traits: shown on boards, worth no score ---- */
 /* hexes have no border to dash -- mute reads as a desaturated grey ring + dot */
@@ -488,8 +488,8 @@ label.sub select{margin-top:3px}
 .cstat{display:flex;justify-content:space-between;font-size:11px;line-height:1.6}
 .cstat span{color:#8b94a3}
 .cstat b{color:#e6e9ef;font-weight:600}
-#card .stars{color:#e6e9ef;font-variant-numeric:tabular-nums;white-space:nowrap}
-#card .stars i{padding:0 2px;color:#687080;font-style:normal}
+#card .stars, .sheetbody .stars{color:#e6e9ef;font-variant-numeric:tabular-nums;white-space:nowrap}
+#card .stars i, .sheetbody .stars i{padding:0 2px;color:#687080;font-style:normal}
 
 /* ---- per-board variants: same trait signature, different roster ---- */
 .vtag{appearance:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
@@ -527,8 +527,8 @@ h2 .q{display:inline-flex;align-items:center;justify-content:center;width:14px;h
   color:#7f8895;font-size:9px;font-weight:800;font-style:normal;line-height:1;
   cursor:help;vertical-align:middle;user-select:none;transition:color .1s,border-color .1s}
 h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
-#card .qline{margin:0 0 4px}
-#card .qline:last-child{margin:0}
+#card .qline, .sheetbody .qline{margin:0 0 4px}
+#card .qline:last-child, .sheetbody .qline:last-child{margin:0}
 .meta .u{font-style:normal;color:#6b7280}
 
 /* ---- selected/excluded units strip ---- */
@@ -654,3 +654,20 @@ h2 .q:hover,h2 .q:focus{color:#3ddc84;border-color:#3ddc84;outline:none}
   font-variant-numeric:tabular-nums;font-size:14px}
 .sheetrow{display:flex;gap:6px;width:100%}
 .sheetrow .sheetbtn{flex:1 1 auto}
+
+/* The sheet borrows #card's content styles, but it is a full-width surface
+   at phone size rather than a 290px floating panel, so the pieces that were
+   tuned for that width need sheet-specific sizing. */
+.sheetbody{font-size:13px;line-height:1.5;color:#c3cad6}
+.sheetbody .chd{gap:10px;margin-bottom:9px}
+.sheetbody .chd img{width:38px;height:38px}
+.sheetbody .chd b{font-size:16px}
+/* .csub is an inline span; without this it runs straight into the name. */
+.sheetbody .csub{display:block;font-size:11px;margin-top:2px}
+.sheetbody .clead,.sheetbody .tdetails{margin-bottom:9px}
+/* Portraits stretched to fill the sheet and lost their cost border. */
+.sheetbody .tunits{gap:7px;margin-top:10px;padding-top:9px}
+.sheetbody .tunit{width:44px;height:44px;border-radius:6px;flex:none}
+.sheetbody .cbp{min-width:22px;height:19px;font-size:11px}
+.sheetbody .crow{padding:5px 0}
+.sheetbody .tstar{width:26px;height:9px}
