@@ -28,6 +28,8 @@ function chromePath() {
     '/usr/bin/google-chrome-stable',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
   ].filter(Boolean);
   const found = candidates.find(candidate => fs.existsSync(candidate));
   assert.ok(found, 'Chrome is required for browser verification');
