@@ -7,6 +7,10 @@ test('upgrade paths render without replacing desktop results', { timeout: 120000
   const session = await launchBrowser();
   try {
     await loadExplorer(session);
+    assert.deepEqual(await session.cdp.evaluate(
+      `[...document.querySelector('#list .compfoot').querySelectorAll(
+        '.upgradepath, .pincomp, .copycode')].map(button => button.className)`),
+    ['upgradepath', 'pincomp', 'copycode']);
     const before = await session.cdp.evaluate(
       `document.querySelectorAll('#list > .comp').length`);
     await session.cdp.evaluate(

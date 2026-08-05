@@ -303,6 +303,13 @@ test('main and alternate compositions share the roster row layout', () => {
   assert.match(css, /\.score \.unique,\.score \.slots\{/);
 });
 
+test('result actions put upgrade, select, then copy in that order', () => {
+  const app = read('web/traits/app.js');
+
+  assert.match(app,
+    /const footerActions = upgrade\s*\?\s*upgradeButton \+ pinButton \+ copyCodeButton\(r\.units\)/);
+});
+
 test('team composition renders as one segmented strip', () => {
   const app = read('web/traits/app.js');
   const css = read('web/traits/style.css');

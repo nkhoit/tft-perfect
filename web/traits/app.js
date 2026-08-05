@@ -2804,6 +2804,9 @@ function compCard(r, { selected = false, showPreview = false, upgrade = false } 
       && upgradeState.context.token === renderedContext?.token
     ? upgradePanelMarkup(upgradeState)
     : '';
+  const footerActions = upgrade
+    ? upgradeButton + pinButton + copyCodeButton(r.units)
+    : previewButton + pinButton + copyCodeButton(r.units);
 
   const d = document.createElement('div');
   d.className = 'comp' + (selected ? ' selected' : '');
@@ -2822,7 +2825,7 @@ function compCard(r, { selected = false, showPreview = false, upgrade = false } 
     `<div class="comprow primary">${units}${varTag}</div>` +
     `<div class="compfoot">${profile}` +
     `<span class="vg" title="Assumes every unit at 2★ (3 copies)">${r.gold}g</span>` +
-    copyCodeButton(r.units) + upgradeButton + previewButton + pinButton + `</div>` +
+    footerActions + `</div>` +
     varRows + upgradePanel;
   return d;
 }
