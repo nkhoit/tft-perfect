@@ -143,16 +143,19 @@ test('clicking an added upgrade portrait requires it at the target level',
         name: document.querySelector('#list .upchamp.add img').alt,
         level: document.querySelector('#list [data-upfield="level"]').value,
       })`);
-      await session.cdp.evaluate(`(() => {
-        const portrait = document.querySelector('#list .upchamp.add');
-        portrait.dispatchEvent(new MouseEvent('mouseover', {
-          bubbles: true,
-          clientX: 100,
-          clientY: 100,
-        }));
-      })()`);
-      await waitFor(() => session.cdp.evaluate(
-        `document.querySelector('#card.show')?.textContent.includes(${JSON.stringify(expected.name)})`));
+      if (await session.cdp.evaluate(
+        `matchMedia('(hover: hover) and (pointer: fine)').matches`)) {
+        await session.cdp.evaluate(`(() => {
+          const portrait = document.querySelector('#list .upchamp.add');
+          portrait.dispatchEvent(new MouseEvent('mouseover', {
+            bubbles: true,
+            clientX: 100,
+            clientY: 100,
+          }));
+        })()`);
+        await waitFor(() => session.cdp.evaluate(
+          `document.querySelector('#card.show')?.textContent.includes(${JSON.stringify(expected.name)})`));
+      }
       await session.cdp.evaluate(
         `document.querySelector('#list .upchamp.add').click()`);
       assert.deepEqual(await session.cdp.evaluate(`({
