@@ -73,6 +73,22 @@ test('coarse pointers use the existing mobile sheet', { timeout: 120000 }, async
     assert.equal(await session.cdp.evaluate(
       `Boolean(document.querySelector('.sheetwrap.show .upchamp.add img')
         && document.querySelector('.sheetwrap.show .uptrait'))`), true);
+    const expected = await session.cdp.evaluate(`({
+      key: document.querySelector('.sheetwrap.show .upchamp.add').dataset.key,
+      level: document.querySelector('.sheetwrap.show [data-upfield="level"]').value,
+    })`);
+    await session.cdp.evaluate(
+      `document.querySelector('.sheetwrap.show .upchamp.add').click()`);
+    await waitFor(() => session.cdp.evaluate(
+      `!document.querySelector('.sheetwrap.show')`));
+    assert.deepEqual(await session.cdp.evaluate(`({
+      level: document.querySelector('#size').value,
+      required: document.querySelector('.u[data-key="${expected.key}"]')
+        .classList.contains('req'),
+    })`), {
+      level: expected.level,
+      required: true,
+    });
   } finally {
     await session.cleanup();
   }
@@ -110,3 +126,46 @@ test('Clear restores cost, level, and waste filters', { timeout: 120000 }, async
     await session.cleanup();
   }
 });
+
+test('clicking an added upgrade portrait requires it at the target level',
+  { timeout: 120000 }, async () => {
+    const session = await launchBrowser();
+    try {
+      await loadExplorer(session);
+      await session.cdp.evaluate(
+        `document.querySelector('#list .comp .upgradepath').click()`);
+      await waitFor(() => session.cdp.evaluate(
+        `Boolean(document.querySelector('#list .upgradepanel .upchamp.add[data-key]')
+          && !document.querySelector('#list .upgradepanel')?.textContent.includes('Finding'))`),
+      60000);
+      const expected = await session.cdp.evaluate(`({
+        key: document.querySelector('#list .upchamp.add').dataset.key,
+        name: document.querySelector('#list .upchamp.add img').alt,
+        level: document.querySelector('#list [data-upfield="level"]').value,
+      })`);
+      await session.cdp.evaluate(`(() => {
+        const portrait = document.querySelector('#list .upchamp.add');
+        portrait.dispatchEvent(new MouseEvent('mouseover', {
+          bubbles: true,
+          clientX: 100,
+          clientY: 100,
+        }));
+      })()`);
+      await waitFor(() => session.cdp.evaluate(
+        `document.querySelector('#card.show')?.textContent.includes(${JSON.stringify(expected.name)})`));
+      await session.cdp.evaluate(
+        `document.querySelector('#list .upchamp.add').click()`);
+      assert.deepEqual(await session.cdp.evaluate(`({
+        level: document.querySelector('#size').value,
+        required: document.querySelector('.u[data-key="${expected.key}"]')
+          .classList.contains('req'),
+        panelClosed: !document.querySelector('#list .upgradepanel'),
+      })`), {
+        level: expected.level,
+        required: true,
+        panelClosed: true,
+      });
+    } finally {
+      await session.cleanup();
+    }
+  });

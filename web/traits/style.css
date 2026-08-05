@@ -205,8 +205,10 @@ button:hover{border-color:var(--acc2)}
   border-radius:7px;background:var(--panel2);font-size:11px}
 .upchange{display:flex;flex-wrap:wrap;gap:7px}
 .upchamp{position:relative;display:block;flex:none;width:48px;height:48px;overflow:visible;
-  border:2px solid var(--edge);border-radius:8px;background:#111722}
+  padding:0;border:2px solid var(--edge);border-radius:8px;background:#111722}
 .upchamp.add{border-color:var(--acc)}.upchamp.remove{border-color:var(--red)}
+.upchamp.add{cursor:pointer}.upchamp.add:hover,.upchamp.add:focus-visible{
+  border-color:#a5f7bf;filter:brightness(1.08);outline:none}
 .upchamp>img{display:block;width:100%;height:100%;border-radius:5px;object-fit:cover}
 .upchampmark{position:absolute;z-index:2;top:-6px;right:-6px;display:grid;place-items:center;
   width:18px;height:18px;border:2px solid var(--panel2);border-radius:50%;

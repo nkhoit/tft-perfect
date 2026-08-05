@@ -1977,6 +1977,11 @@ function openSheet(html, kind, key) {
     sheetEl.querySelector('.sheetfoot').addEventListener('click', onSheetAction);
     sheetEl.querySelector('.sheetbody').addEventListener('change', onUpgradeControlChange);
     sheetEl.querySelector('.sheetbody').addEventListener('click', event => {
+      const champion = event.target.closest('.upchamp.add[data-key]');
+      if (champion) {
+        applyUpgradeChampion(champion.dataset.key);
+        return;
+      }
       if (event.target.closest('.upgradepanel')) event.stopPropagation();
     });
   }
@@ -2066,7 +2071,7 @@ document.addEventListener('mouseover', e => {
     .map(l => `<div class="qline">${l}</div>`).join(''), e);
   const tEl = e.target.closest('.tg[data-key], .tb[data-tk]');
   if (tEl) return showCard(traitCard(tEl.dataset.key || tEl.dataset.tk), e);
-  const uEl = e.target.closest('.u[data-key], .uc[data-key]');
+  const uEl = e.target.closest('.u[data-key], .uc[data-key], .upchamp[data-key]');
   if (uEl) return showCard(unitCard(uEl.dataset.key), e);
   hideCard();
 });
@@ -2457,10 +2462,13 @@ function upgradeChampionMarkup(index, kind) {
   const champion = DB.champions[index];
   const action = kind === 'add' ? 'Add' : 'Remove';
   const mark = kind === 'add' ? '+' : '-';
-  return `<span class="upchamp ${kind}" title="${action} ${champion.name}">` +
+  const tag = kind === 'add' ? 'button' : 'span';
+  const button = kind === 'add' ? ' type="button"' : '';
+  return `<${tag}${button} class="upchamp ${kind}" data-key="${champion.key}" ` +
+    `title="${action} ${champion.name}" aria-label="${action} ${champion.name}">` +
     `<img src="${champion.icon}" alt="${champion.name}">` +
     `<span class="upchampmark" aria-hidden="true">${mark}</span>` +
-    `<span class="upchampname">${champion.name}</span></span>`;
+    `<span class="upchampname">${champion.name}</span></${tag}>`;
 }
 
 function upgradeMoveMarkup(row) {
@@ -2563,6 +2571,16 @@ function openUpgrade(button) {
     refreshUpgradeSurface();
   }
   runUpgradeSearch();
+}
+
+function applyUpgradeChampion(key) {
+  if (!upgradeState) return;
+  const targetLevel = upgradeState.level;
+  closeUpgrade();
+  $('size').value = targetLevel;
+  $('sizeV').textContent = targetLevel;
+  renderActiveFilters();
+  setUnitState(key, 1);
 }
 
 function onUpgradeControlChange(event) {
@@ -2967,6 +2985,11 @@ function onCompClick(e) {
   const upgrade = e.target.closest('.upgradepath');
   if (upgrade) {
     openUpgrade(upgrade);
+    return;
+  }
+  const upgradeChampion = e.target.closest('.upchamp.add[data-key]');
+  if (upgradeChampion) {
+    applyUpgradeChampion(upgradeChampion.dataset.key);
     return;
   }
   if (e.target.closest('.upgradepanel')) return;

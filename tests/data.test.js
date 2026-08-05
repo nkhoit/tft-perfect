@@ -144,8 +144,11 @@ test('result cards expose isolated desktop and mobile upgrade paths', () => {
   assert.match(app, /if \(kind === 'upgrade'\) return ''/);
   assert.match(app, /No board that keeps exactly \$\{upgradeState\.keep\}/);
   assert.match(app, /class="upchamp \$\{kind\}"/);
+  assert.match(app, /data-key="\$\{champion\.key\}"/);
   assert.match(app, /class="upchampmark"/);
   assert.match(app, /class="uptrait \$\{kind\}"/);
+  assert.match(app, /\.upchamp\[data-key\]/);
+  assert.match(app, /function applyUpgradeChampion\(/);
   assert.match(css, /\.upchamp\.add\{[^}]*border-color:var\(--acc\)/);
   assert.match(css, /\.upchamp\.remove\{[^}]*border-color:var\(--red\)/);
   assert.match(css, /\.uptrait\.add\{[^}]*color:var\(--acc\)/);
