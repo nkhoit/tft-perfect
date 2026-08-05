@@ -1464,19 +1464,7 @@ $('afChips').addEventListener('click', e => {
   clearChip(chip.dataset.kind, chip.dataset.id);
   renderActiveFilters();
 });
-// The sidebar Clear button predates the cost filter and the sliders and
-// resets neither, so delegating to it would strand chips in the bar. Clear
-// all means all: every chip the bar can show must go.
-$('afClear').addEventListener('click', () => {
-  for (let c = 1; c <= 5; c++) costOn.add(c);
-  for (const b of $('costs').children) b.classList.add('on');
-  $('size').value = DEFAULT_SIZE;
-  $('sizeV').textContent = DEFAULT_SIZE;
-  $('waste').value = DEFAULT_WASTE;
-  $('wasteV').textContent = DEFAULT_WASTE;
-  $('clear').click();
-  renderActiveFilters();
-});
+$('afClear').addEventListener('click', clearAllFilters);
 renderEmblems = syncFilterBar(renderEmblems);
 renderTraitGrid = syncFilterBar(renderTraitGrid);
 for (const id of ['size', 'waste'])
@@ -1596,8 +1584,15 @@ $('share').onclick = async () => {
     button.disabled = false;
   }
 };
-$('clear').onclick = () => {
+function clearAllFilters() {
   for (const k of state.keys()) state.set(k, 0);
+  costOn.clear();
+  for (let cost = 1; cost <= 5; cost++) costOn.add(cost);
+  for (const button of $('costs').children) button.classList.add('on');
+  $('size').value = DEFAULT_SIZE;
+  $('sizeV').textContent = DEFAULT_SIZE;
+  $('waste').value = DEFAULT_WASTE;
+  $('wasteV').textContent = DEFAULT_WASTE;
   emblems.length = 0; renderEmblems();
   reqTraits.length = 0; muted.clear(); renderTraitGrid();
   excludedGroups.clear();
@@ -1606,8 +1601,10 @@ $('clear').onclick = () => {
   $('search').value = '';
   buildPool();
   updPickN();
+  renderActiveFilters();
   run();
-};
+}
+$('clear').onclick = clearAllFilters;
 
 readSavedSearches();
 

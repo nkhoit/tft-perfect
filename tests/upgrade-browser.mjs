@@ -77,3 +77,36 @@ test('coarse pointers use the existing mobile sheet', { timeout: 120000 }, async
     await session.cleanup();
   }
 });
+
+test('Clear restores cost, level, and waste filters', { timeout: 120000 }, async () => {
+  const session = await launchBrowser();
+  try {
+    await loadExplorer(session);
+    await session.cdp.evaluate(`(() => {
+      document.querySelector('#costs [data-cost="5"]').click();
+      const size = document.querySelector('#size');
+      size.value = '9';
+      size.dispatchEvent(new Event('input', { bubbles: true }));
+      const waste = document.querySelector('#waste');
+      waste.value = '4';
+      waste.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    assert.equal(await session.cdp.evaluate(
+      `document.querySelectorAll('#activeFilters .afchip').length >= 3`), true);
+    await session.cdp.evaluate(`document.querySelector('#clear').click()`);
+    assert.deepEqual(await session.cdp.evaluate(`({
+      allCosts: [...document.querySelectorAll('#costs .cbtn')].every(button =>
+        button.classList.contains('on')),
+      size: document.querySelector('#size').value,
+      waste: document.querySelector('#waste').value,
+      filtersHidden: document.querySelector('#activeFilters').hidden,
+    })`), {
+      allCosts: true,
+      size: '8',
+      waste: '10',
+      filtersHidden: true,
+    });
+  } finally {
+    await session.cleanup();
+  }
+});

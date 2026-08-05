@@ -452,6 +452,18 @@ test('the active filter bar summarises every non-default filter', () => {
   assert.match(app, /function clearChip/);
   assert.match(css, /\.afbar\{/);
 });
+
+test('both clear buttons reset every filter surfaced in the active filter bar', () => {
+  const app = read('web/traits/app.js');
+
+  assert.match(app, /function clearAllFilters\(\)/);
+  assert.match(app, /costOn\.clear\(\)/);
+  assert.match(app, /for \(let cost = 1; cost <= 5; cost\+\+\) costOn\.add\(cost\)/);
+  assert.match(app, /\$\('size'\)\.value = DEFAULT_SIZE/);
+  assert.match(app, /\$\('waste'\)\.value = DEFAULT_WASTE/);
+  assert.match(app, /\$\('clear'\)\.onclick = clearAllFilters/);
+  assert.match(app, /\$\('afClear'\)\.addEventListener\('click', clearAllFilters\)/);
+});
 test('touch devices can preview a unit without applying a filter', () => {
   const app = read('web/traits/app.js');
   const css = read('web/traits/style.css');
