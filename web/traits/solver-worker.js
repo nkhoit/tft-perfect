@@ -1,10 +1,10 @@
 // solver-worker.js — proves the optimum with HiGHS and enumerates a small frontier.
 
 importScripts(
-  'search-utils.js?v=milp-hybrid-v8',
-  'solver-status.js?v=milp-hybrid-v8',
-  'board-score.js?v=milp-hybrid-v8',
-  'lp-model.js?v=milp-hybrid-v8',
+  'search-utils.js?v=milp-hybrid-v9',
+  'solver-status.js?v=milp-hybrid-v9',
+  'board-score.js?v=milp-hybrid-v9',
+  'lp-model.js?v=milp-hybrid-v9',
   'vendor/highs.js');
 
 let DB = null;

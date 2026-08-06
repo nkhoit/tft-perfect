@@ -3,10 +3,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  // Cache identity includes result-shaping semantics, not just scoring. V8 adds
-  // a canonical-identity tiebreaker to the comparator, so equal-scoring boards
-  // now have a deterministic order and old cached lists must be discarded.
-  const ALGORITHM_VERSION = 'milp-hybrid-v8';
+  // Cache identity includes result-shaping semantics, not just scoring. V9 adds
+  // the experimental local-search result shape and mode-isolated cache keys.
+  const ALGORITHM_VERSION = 'milp-hybrid-v9';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -132,6 +131,8 @@
     const numbers = values => [...(values || [])].sort((a, b) => a - b);
     const canonical = {
       version,
+      engine: options.engine || 'hybrid',
+      seed: options.seed,
       size: options.size,
       maxWaste: options.maxWaste,
       reqIdx: numbers(options.reqIdx),
@@ -168,6 +169,7 @@
     // may simply have run out of budget, which used to look identical to
     // success — the single most misleading thing this UI could do.
     const proved = !!result.proved;
+    const sampled = !!result.sampled;
     // A partial render shows only the proven frontier while the wider search
     // still runs. Say so, or the board count looks like the search failed.
     const partial = !!result.partial;
@@ -184,7 +186,12 @@
         + 'budget ran out before every board below it could be scored. Lower-ranked '
         + 'boards are a sample, not the complete ranking.">list truncated</span>'
       : '';
-    const statusHtml = effort + (result.cached
+    const sampledBadge = '<span class="sampled" title="Experimental local search samples '
+      + 'promising complete boards until its time budget expires. It does not enumerate '
+      + 'every board or prove optimality.">experimental sample</span>';
+    const statusHtml = effort + (sampled
+      ? sampledBadge + (result.cached ? ' · <span class="hit">cached</span>' : ` · ${seconds}s`)
+      : result.cached
       ? `<span class="hit">cached</span>`
         + (proved ? ' · ' + provedBadge + listBadge : '')
         + (!proved && result.truncated ? ' · <span class="cut">incomplete</span>' : '')
@@ -202,8 +209,12 @@
       ? `best <b>${result.rows.length}</b> so far` +
         (result.total ? ` of ${result.total.toLocaleString()}+ scored` : '')
       : `best <b>${result.rows.length}</b> of ${result.total.toLocaleString()}+ scored` +
-        (!proved && result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
-    const title = cachedTitle + (partial
+        (sampled ? ' <span class="tag warn">sampled</span>'
+          : !proved && result.truncated ? ' <span class="tag warn">incomplete</span>' : '');
+    const title = cachedTitle + (sampled
+      ? 'Experimental local search sampled complete legal boards within its time budget. '
+        + 'Results are neither optimal nor exhaustive.'
+      : partial
       ? (proved
         ? 'The top board is already proved optimal. Lower-ranked boards are still filling in.'
         : 'Results are still filling in as the search finds them.')

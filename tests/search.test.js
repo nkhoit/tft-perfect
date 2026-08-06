@@ -551,7 +551,20 @@ test('search cache keys normalize unordered options', () => {
     searchCacheKey('data-v1', { ...base, sortMode: 'tier' }));
   assert.notEqual(searchCacheKey('data-v1', { ...base, effort: 'quick' }),
     searchCacheKey('data-v1', { ...base, effort: 'deep' }));
+  assert.notEqual(searchCacheKey('data-v1', { ...base, engine: 'hybrid' }),
+    searchCacheKey('data-v1', { ...base, engine: 'local' }));
   assert.notEqual(searchCacheKey('data-v1', base), searchCacheKey('data-v2', base));
+});
+
+test('sampled search status is explicitly experimental and never optimal', () => {
+  const { summary } = require('../web/traits/search-utils.js');
+  const result = summary({
+    rows: [{}], total: 12, ms: 500, truncated: true, sampled: true, proved: false,
+  });
+  assert.match(result.statusHtml, /experimental sample/);
+  assert.match(result.countHtml, /sampled/);
+  assert.match(result.title, /neither optimal nor exhaustive/i);
+  assert.doesNotMatch(result.statusHtml, />optimal</);
 });
 
 test('cached search status identifies its source', () => {

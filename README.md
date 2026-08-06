@@ -33,13 +33,15 @@ Built for **Set 18 · Enchanted Wilds** using PBE data.
 
 ## Features
 
-- Board size 2-10 and wasted-trait allowance 0-10, re-running live.
+- Board size 2-12 and wasted-trait allowance 0-10, re-running live.
 - Required trait breakpoints such as `Invoker 4`.
 - Required and excluded units, cost filters, and unit/trait search.
 - Stackable emblems that add trait points without using board slots.
 - Weighted units and traits, including Avatar, Apex Predator, and Riftbeast 10.
 - Debounced, cancellable searches with versioned memory and device caches.
 - Quick, Balanced, and Deep search budgets with one-click refinement.
+- A device-persisted **Try new experience** toggle for sampled, local-search-only
+  anytime results without DFS or MILP.
 - An instant precomputed result for the default landing search.
 - Compact shareable URLs that restore every search control.
 - Discord preview links for featured selected compositions.
@@ -125,7 +127,12 @@ containing Lux cannot preserve which origin variant was shown.
 ```bash
 npm test
 npm run check
+npm run test:browser
+npm run benchmark:local-search
 ```
+
+The local-search benchmark compares three seeded size-10 cases against one
+500 ms DFS shard and prints a table plus machine-readable JSON.
 
 ## Data
 

@@ -68,8 +68,8 @@ test('compareTraitQuality ignores gold without letting waste rescue fewer traits
       source) > 0);
 });
 
-test('upgrade semantics use the v8 cache namespace', () => {
-  assert.equal(SearchUtils.algorithmVersion, 'milp-hybrid-v8');
+test('upgrade semantics use the v9 cache namespace', () => {
+  assert.equal(SearchUtils.algorithmVersion, 'milp-hybrid-v9');
 });
 
 test('exact keep bounds preserve required pins and emit overlap rows', () => {
