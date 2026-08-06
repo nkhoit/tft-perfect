@@ -1,7 +1,7 @@
 // worker.js — combinatorial board search with wasted-trait pruning.
 // Runs off the main thread so the UI stays responsive while sliders move.
 
-importScripts('search-utils.js?v=milp-hybrid-v7');
+importScripts('search-utils.js?v=milp-hybrid-v8');
 
 let DB = null;
 let TK = [];        // trait keys, indexed

@@ -26,8 +26,8 @@ test('the application contains only Set 18', () => {
   assert.match(html, /twitter:card/);
   assert.match(html, /id="saveSearch"/);
   assert.match(html, /id="savedList"/);
-  assert.match(html, /src="saved-searches\.js\?v=milp-hybrid-v7"/);
-  assert.match(html, /src="share-state\.js\?v=milp-hybrid-v7"/);
+  assert.match(html, /src="saved-searches\.js\?v=milp-hybrid-v8"/);
+  assert.match(html, /src="share-state\.js\?v=milp-hybrid-v8"/);
   assert.doesNotMatch(html + app + readme, /Set 17|set17|data-set18/);
   assert.doesNotMatch(html, /id="setSel"/);
   assert.match(app, /ability\.descResolved \|\| ability\.desc/);
@@ -162,11 +162,11 @@ test('v7 assets revalidate without weakening immutable vendor caching', () => {
   const config = JSON.parse(read('staticwebapp.config.json'));
   const routes = config.routes.map(route => route.route);
 
-  assert.match(html, /style\.css\?v=milp-hybrid-v7/);
-  assert.match(html, /search-utils\.js\?v=milp-hybrid-v7/);
-  assert.match(html, /solver-scheduler\.js\?v=milp-hybrid-v7/);
-  assert.match(html, /app\.js\?v=milp-hybrid-v7/);
-  assert.match(app, /solver-worker\.js\?v=milp-hybrid-v7/);
+  assert.match(html, /style\.css\?v=milp-hybrid-v8/);
+  assert.match(html, /search-utils\.js\?v=milp-hybrid-v8/);
+  assert.match(html, /solver-scheduler\.js\?v=milp-hybrid-v8/);
+  assert.match(html, /app\.js\?v=milp-hybrid-v8/);
+  assert.match(app, /solver-worker\.js\?v=milp-hybrid-v8/);
   assert.ok(routes.indexOf('/traits/vendor/*') < routes.indexOf('/traits/*'));
   assert.equal(
     config.routes.find(route => route.route === '/traits/vendor/*')

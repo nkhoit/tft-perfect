@@ -3,9 +3,10 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SearchUtils = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
-  // Cache identity includes result-shaping semantics, not just scoring. V7
-  // tightens solver proof semantics and invalidates old persisted claims.
-  const ALGORITHM_VERSION = 'milp-hybrid-v7';
+  // Cache identity includes result-shaping semantics, not just scoring. V8 adds
+  // a canonical-identity tiebreaker to the comparator, so equal-scoring boards
+  // now have a deterministic order and old cached lists must be discarded.
+  const ALGORITHM_VERSION = 'milp-hybrid-v8';
   const KEY = {
     live: (a, b) => b.live - a.live,
     tier: (a, b) => b.tierSum - a.tierSum,
@@ -26,7 +27,16 @@
         const difference = KEY[key](a, b);
         if (difference) return difference;
       }
-      return 0;
+      // Every key above is score-based, so equal-scoring boards used to compare
+      // 0 and keep whatever order the engines emitted. Both engines are
+      // wall-clock bounded, so that order changed between identical runs and
+      // the ranked list visibly reshuffled. Falling back to the canonical
+      // roster signature makes this a total order: same candidates in, same
+      // list out. It only ever breaks exact ties, never outranks a real
+      // difference.
+      const left = a.units ? compSignature(a.units) : '';
+      const right = b.units ? compSignature(b.units) : '';
+      return left < right ? -1 : left > right ? 1 : 0;
     };
   }
 

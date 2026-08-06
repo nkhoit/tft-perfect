@@ -82,7 +82,7 @@ const { algorithmVersion, antiStack, breakpoints, championDiff, compSignature,
   moveSelectionFirst, scoreFloor, scoresAt,
   scoringBreakpoints, searchCacheKey, summary, toggleSelection } = SearchUtils;
 
-if (algorithmVersion !== 'milp-hybrid-v7'
+if (algorithmVersion !== 'milp-hybrid-v8'
     || typeof championDiff !== 'function'
     || typeof compareTraitQuality !== 'function'
     || typeof SolverScheduler === 'undefined'
@@ -848,7 +848,7 @@ function queueMainSolver(message) {
 function ensureSolver() {
   if (solverBroken || solverWorker) return;
   try {
-    solverWorker = new Worker('solver-worker.js?v=milp-hybrid-v7');
+    solverWorker = new Worker('solver-worker.js?v=milp-hybrid-v8');
   } catch (err) {
     failMainSolver(String(err && err.message || err));
     return;
@@ -919,7 +919,7 @@ function ensureWorkers(count, callback) {
   const epoch = ++workerEpoch;
   let started = 0;
   for (let i = 0; i < count; i++) {
-    const worker = new Worker('worker.js?v=milp-hybrid-v7');
+    const worker = new Worker('worker.js?v=milp-hybrid-v8');
     worker.onmessage = event => {
       if (epoch !== workerEpoch) return;
       if (event.data.type === 'ready') {
@@ -2336,7 +2336,7 @@ function failUpgrade(message) {
 function ensureUpgradeWorker() {
   if (upgradeWorker || !upgradeState) return;
   try {
-    upgradeWorker = new Worker('solver-worker.js?v=milp-hybrid-v7');
+    upgradeWorker = new Worker('solver-worker.js?v=milp-hybrid-v8');
   } catch (error) {
     failUpgrade(String(error && error.message || error));
     return;
