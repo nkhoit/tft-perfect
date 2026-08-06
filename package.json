@@ -8,7 +8,7 @@
     "api:setup": "cd api && (test -d node_modules || npm install) && npm run sync:traits",
     "test": "node --test",
     "test:upgrade-solver": "node tests/run-upgrade-solver.mjs",
-    "test:browser": "node --test tests/upgrade-browser.mjs tests/rolls-browser.mjs",
+    "test:browser": "node --test tests/upgrade-browser.mjs tests/rolls-browser.mjs tests/size-browser.mjs",
     "benchmark:upgrade": "node tests/upgrade-benchmark.mjs",
     "deployment:manifest": "node create-deployment-manifest.mjs dist"
   },

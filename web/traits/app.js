@@ -40,6 +40,9 @@ const DEVICE_CACHE_STORE = 'results';
 const METRICS_KEY = 'tft-search-metrics-v1';
 const SHARE_SCHEMA_VERSION = 2;
 const DEFAULT_LEVEL = 8;
+// Board size is not player level: a Tactician's Crown (or an augment) adds
+// slots on top of it, so the ceiling here is above the level cap of 10.
+const MAX_SIZE = 12;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SIZE = 8;
 const DEFAULT_SORT = ['live', 'cost'];
@@ -442,7 +445,7 @@ function applySharedSearchState(shared) {
   }
   resetSearchState();
 
-  if (Number.isInteger(shared.l) && shared.l >= 2 && shared.l <= 10) {
+  if (Number.isInteger(shared.l) && shared.l >= 2 && shared.l <= MAX_SIZE) {
     $('size').value = shared.l;
     $('sizeV').textContent = shared.l;
   }
@@ -648,7 +651,7 @@ function defaultSavedSearchName() {
   if (champion) return `${champion.name} team`;
   if (excludedGroups.size) return `No ${[...excludedGroups][0]} forms`;
   if (poolView !== 'cost') return `Units by ${poolView}`;
-  return `Level ${$('size').value} search`;
+  return `${$('size').value}-unit search`;
 }
 
 function renderSavedSearches() {
@@ -1411,7 +1414,7 @@ function activeChips() {
   for (let c = 1; c <= 5; c++)
     if (!costOn.has(c)) out.push(chipHtml('cost', c, 'no ' + c + '\u2605', '', 'off'));
   const size = +$('size').value;
-  if (size !== DEFAULT_SIZE) out.push(chipHtml('size', size, 'Level ' + size, '', 'num'));
+  if (size !== DEFAULT_SIZE) out.push(chipHtml('size', size, size + ' units', '', 'num'));
   const waste = +$('waste').value;
   if (waste !== DEFAULT_WASTE)
     out.push(chipHtml('waste', waste, waste + ' waste', '', 'num'));
@@ -2222,7 +2225,7 @@ function upgradeKeepOptions(state) {
 function upgradePanelMarkup(state) {
   const sourceLevel = state.context.opts.size;
   const levels = [];
-  for (let level = sourceLevel; level <= 10; level++) {
+  for (let level = sourceLevel; level <= MAX_SIZE; level++) {
     levels.push(`<option value="${level}"${level === state.level ? ' selected' : ''}>${level}</option>`);
   }
   const keeps = upgradeKeepOptions(state).map(keep => {
@@ -2235,7 +2238,7 @@ function upgradePanelMarkup(state) {
     : '';
   return `<div class="upgradepanel" id="${upgradePanelId(state.signature)}">` +
     `<div class="upcontrols">` +
-    `<label>Level<select class="upcontrol" data-upfield="level">${levels.join('')}</select></label>` +
+    `<label>Units<select class="upcontrol" data-upfield="level">${levels.join('')}</select></label>` +
     `<label>Keep<select class="upcontrol" data-upfield="keep">${keeps.join('')}</select></label>` +
     `</div>${guidance}<div class="upresults" aria-live="polite">${state.resultsHtml}</div></div>`;
 }
@@ -2503,7 +2506,7 @@ function upgradeMoveMarkup(row) {
 function renderUpgradeRows(message) {
   if (message.error) return `<div class="upempty">${message.error}</div>`;
   if (message.infeasible) {
-    return `<div class="upempty">No board satisfies Level ${upgradeState.level} and ` +
+    return `<div class="upempty">No board satisfies ${upgradeState.level} units and ` +
       `Keep ${upgradeState.keep} of ${upgradeState.source.units.length}.</div>`;
   }
   const rawRows = message.rows || [];
@@ -2520,18 +2523,18 @@ function renderUpgradeRows(message) {
   }
   if (sameLevel && message.proved && !moves.length) {
     return `<div class="upempty">No board that keeps exactly ${upgradeState.keep} of these ` +
-      `${upgradeState.source.units.length} at level ${upgradeState.level} beats this board.</div>`;
+      `${upgradeState.source.units.length} at ${upgradeState.level} units beats this board.</div>`;
   }
   if (sameLevel && !message.proved && rawRows.length && !moves.length) {
-    return '<div class="upempty">No better board with this Level and Keep combination was found before the search budget ended.</div>';
+    return '<div class="upempty">No better board with this Units and Keep combination was found before the search budget ended.</div>';
   }
 
   const notes = [];
   if (!sameLevel && message.proved && rawRows.length
       && compareTraitQuality(rawRows[0], upgradeState.source) >= 0) {
-    notes.push(`No level-${upgradeState.level} board that keeps exactly ` +
+    notes.push(`No ${upgradeState.level}-unit board that keeps exactly ` +
       `${upgradeState.keep} of these ${upgradeState.source.units.length} improves your trait score. ` +
-      `These are the best fills for that Level and Keep combination.`);
+      `These are the best fills for that Units and Keep combination.`);
   } else if (message.partial) {
     notes.push('Best move proven. Finding alternatives...');
   }
@@ -2562,7 +2565,7 @@ function openUpgrade(button) {
   const context = card?.__context;
   if (!source || !context) return;
   const sourceLevel = context.opts.size;
-  const level = Math.min(10, sourceLevel + 1);
+  const level = Math.min(MAX_SIZE, sourceLevel + 1);
   const pinnedCount = pinnedSourceCount(source, context);
   const keep = level > sourceLevel
     ? source.units.length

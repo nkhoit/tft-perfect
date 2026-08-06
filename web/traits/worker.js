@@ -110,7 +110,7 @@ function search(o) {
 
   const maxSlots = size + MAX_TEAM_BONUS;
   if (requiredSlots > maxSlots) {
-    return { error: 'More required unit slots than this level can support.' };
+    return { error: 'More required unit slots than this board size can support.' };
   }
 
   function championPriority(index) {
