@@ -16,7 +16,10 @@ ALIAS = {"Elder Dragon": "ElderDragon", "Mama Beak": "MamaBeak",
 
 def blob(c):
     a = c.get("ability") or {}
-    return " | ".join([a.get("descResolved") or ""] + (a.get("stats") or []))
+    text = " | ".join([a.get("descResolved") or ""] + (a.get("stats") or []))
+    # Stats arrays store star values spaced ("[145 / 220 / 325]") while patch
+    # notes quote them compactly ("145/220/325"). Normalise so both forms match.
+    return re.sub(r"\s*/\s*", "/", text)
 
 
 def main():

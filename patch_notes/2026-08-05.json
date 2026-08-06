@@ -1,0 +1,171 @@
+{
+  "label": "PBE 2026-08-05",
+  "source": "https://x.com/TheTruexy/status/2085154566526693831",
+  "champions": [
+    {
+      "name": "Akali",
+      "changes": [
+        {
+          "field": "Spell Damage",
+          "from": "130/195/295",
+          "to": "145/220/325"
+        },
+        {
+          "field": "Spell Bonus Damage",
+          "from": "30/45/68",
+          "to": "35/52/80"
+        }
+      ]
+    },
+    {
+      "name": "Cinderling",
+      "changes": [
+        {
+          "field": "Spell Damage",
+          "from": "270/405/610",
+          "to": "340/510/765"
+        }
+      ]
+    },
+    {
+      "name": "Yorick",
+      "changes": [
+        {
+          "field": "Heal",
+          "from": "280/325/410",
+          "to": "280/325/435"
+        },
+        {
+          "field": "Ghoul Base Health",
+          "from": "200/400/700",
+          "to": "200/400/750"
+        }
+      ]
+    },
+    {
+      "name": "Scuttlecrab",
+      "changes": [
+        {
+          "field": "Heal",
+          "from": "250/325/525",
+          "to": "300/375/575"
+        }
+      ]
+    },
+    {
+      "name": "Yunara",
+      "changes": [
+        {
+          "field": "Ability primary damage",
+          "from": "170/255/400",
+          "to": "170/255/450"
+        }
+      ]
+    },
+    {
+      "name": "Cassiopeia",
+      "changes": [
+        {
+          "field": "Spell Damage",
+          "from": "400/600/960",
+          "to": "425/640/1020"
+        }
+      ]
+    },
+    {
+      "name": "Sivir",
+      "changes": [
+        {
+          "field": "Spell Damage",
+          "from": "155/235",
+          "to": "170/255"
+        }
+      ]
+    },
+    {
+      "name": "Kennen",
+      "changes": [
+        {
+          "field": "Firestorm Damage",
+          "from": "550/825",
+          "to": "525/785"
+        }
+      ]
+    },
+    {
+      "name": "Taric",
+      "changes": [
+        {
+          "field": "Heal",
+          "from": "225/325",
+          "to": "200/300"
+        }
+      ]
+    },
+    {
+      "name": "Ivern",
+      "changes": [
+        {
+          "field": "Shield",
+          "from": "165/325",
+          "to": "150/275"
+        }
+      ]
+    }
+  ],
+  "traits": [
+    {
+      "name": "Adaptor",
+      "changes": [
+        {
+          "field": "AD or AP",
+          "from": "20/30/50%",
+          "to": "25/35/55%"
+        }
+      ]
+    },
+    {
+      "name": "Riftbeast",
+      "changes": [
+        {
+          "field": "7 Piece Armor/MR",
+          "from": "3",
+          "to": "5"
+        }
+      ]
+    },
+    {
+      "name": "Blossom",
+      "changes": [
+        {
+          "field": "Bonus Health",
+          "from": "12%",
+          "to": "10%",
+          "note": "@BonusHealth@ is never interpolated into our stored trait text (only @ADAP@ is), so there is nothing to edit. Recorded for the next CDragon rebuild."
+        }
+      ]
+    },
+    {
+      "name": "Coven",
+      "changes": [
+        {
+          "field": "Breakpoints 3rd/4th/5th/6th",
+          "from": "140/200/275/375",
+          "to": "130/185/250/365",
+          "note": "Coven damage values are not stored in our trait text."
+        }
+      ]
+    },
+    {
+      "name": "Solar",
+      "changes": [
+        {
+          "field": "3 Threshold AS",
+          "from": "25%",
+          "to": "18%",
+          "note": "Solar 3-star threshold AS is not interpolated into our stored text."
+        }
+      ]
+    }
+  ]
+}
