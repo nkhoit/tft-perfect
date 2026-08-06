@@ -588,3 +588,17 @@ test('the generated data and checked-in roster are internally consistent', () =>
     assert.deepEqual(modes, ['AD', 'AP'], `${adaptor.key} is missing an Adaptor ability mode`);
   }
 });
+
+test('Invoker uses its real Set 18 art, not the stale Set 5 chalice', () => {
+  const data = JSON.parse(read('web/traits/data.json'));
+  const invoker = data.traits.Invoker;
+  assert.ok(invoker, 'Invoker trait is missing');
+  // CommunityDragon still serves Set 5's chalice at trait_icon_18_invoker.png.
+  // Riot reused the filename for Set 18, so the path resolves (HTTP 200) while
+  // showing the wrong symbol. The correct droplet-and-arcs art -- unchanged
+  // since Set 16 -- lives at trait_icon_16_invoker.png on the same CDN.
+  assert.doesNotMatch(invoker.icon, /trait_icon_18_invoker\.png$/,
+    'Invoker points at the stale Set 5 chalice art');
+  assert.match(invoker.icon, /trait_icon_16_invoker\.png$/,
+    'Invoker should use the Set 16 droplet art');
+});

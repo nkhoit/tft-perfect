@@ -104,6 +104,19 @@ ICON_OVERRIDE = {
     "TFT18_Pebbles": "game/assets/characters/tft18_sentry/tft18_sentry_square.png",
     "TFT18_AncientSentinel": "game/assets/characters/tft18_sentinel/tft18_sentinel_square.png",
 }
+# Trait art CommunityDragon resolves to the wrong symbol. Keyed by trait key.
+#
+# Riot reuses trait icon filenames across sets, so a stale extraction can sit at
+# a Set 18 path and still return HTTP 200 -- nothing errors, the art is just
+# wrong. Invoker's trait_icon_18_invoker.png is byte-for-byte Set 5's chalice;
+# the real droplet-and-arcs art has been unchanged since Set 16.
+#
+# Verified by pixel-comparing all 35 trait icons against an official-art mirror:
+# 34 agreed (0.87-1.00), Invoker alone scored 0.69. Set 16's file scores 0.98.
+# Drop an entry once CommunityDragon re-extracts the correct asset.
+TRAIT_ICON_OVERRIDE = {
+    "Invoker": "game/assets/ux/traiticons/trait_icon_16_invoker.png",
+}
 # Lux has one form per Origin; PBE art uses its own suffixes.
 LUX_ART = {"Blossom": "blossom", "Coven": "coven", "Elderwood": "elderwood",
            "Eldritch": "blackthorn", "Fae": "fae", "Inferno": "inferno",
@@ -593,9 +606,20 @@ def main():
         icon = None
         # CommunityDragon gives the authoritative asset path in `icon`; the
         # name-derived guesses only cover the cases where it's missing.
+        # An override wins outright -- it exists precisely because the
+        # authoritative path resolves to stale art from an older set.
         cd_icon = (t.get("icon") or "").lower().replace(".tex", ".png")
         stem = re.sub(r"[^a-z0-9]", "", name.lower())
-        for cand in (f"game/{cd_icon}" if cd_icon else None,
+        override = TRAIT_ICON_OVERRIDE.get(key)
+        if override and override not in files:
+            # Falling through here would silently restore the wrong art, which
+            # is exactly the bug the override exists to fix. Say so instead.
+            raise SystemExit(
+                f"TRAIT_ICON_OVERRIDE[{key!r}] -> {override} is not in the "
+                "exported-file manifest; the override would silently fall back "
+                "to CommunityDragon's stale art.")
+        for cand in (override,
+                     f"game/{cd_icon}" if cd_icon else None,
                      f"game/assets/ux/traiticons/trait_icon_18_{stem}.png",
                      f"game/assets/ux/traiticons/trait_icon_18_{t['apiName'].split('_')[-1].lower()}.png"):
             if cand and cand in files:
