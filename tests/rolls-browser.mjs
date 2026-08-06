@@ -18,9 +18,11 @@ async function loadRolls(session, query = '') {
 test('roll odds page responds to controls', { timeout: 120000 }, async () => {
   const session = await launchBrowser();
   try {
-    await loadRolls(session, '?lv=8&c=4&g=50');
+    // Pinned to s=1 so this stays a test of the gold/level controls rather
+    // than of whatever the default star target happens to be.
+    await loadRolls(session, '?lv=8&c=4&g=50&s=1');
 
-    // Baseline: level 8, 4-cost, 50 gold.
+    // Baseline: level 8, 4-cost, 50 gold, one copy.
     assert.equal(await session.cdp.evaluate(
       `document.getElementById('tierPct').textContent`), '24%');
     const base = await session.cdp.evaluate(
@@ -110,3 +112,56 @@ test('the page fits a phone viewport without horizontal overflow',
       await session.cleanup();
     }
   });
+
+test('star level changes the odds and survives a reload', { timeout: 120000 }, async () => {
+  const session = await launchBrowser();
+  try {
+    const go = async (query) => {
+      await session.cdp.call('Page.navigate', {
+        url: `http://127.0.0.1:${session.appPort}/rolls/${query}`,
+      });
+      await waitFor(() => session.cdp.evaluate(
+        `Boolean(document.querySelector('#starSeg button'))`));
+    };
+
+    await go('?lv=8&c=4&g=50&s=1');
+    const single = await session.cdp.evaluate(
+      `document.getElementById('bigPct').textContent`);
+
+    // Clicking 2-star must lower the number and say so in words.
+    await session.cdp.evaluate(
+      `document.querySelector('#starSeg button[data-star="2"]').click()`);
+    const twoStar = await session.cdp.evaluate(`({
+      pct: document.getElementById('bigPct').textContent,
+      sub: document.getElementById('bigSub').textContent,
+      url: location.search,
+      pressed: document.querySelector('#starSeg button[data-star="2"]')
+        .getAttribute('aria-pressed'),
+    })`);
+
+    assert.match(twoStar.sub, /3 copies/, 'headline should name the copy count');
+    assert.equal(twoStar.pressed, 'true');
+    assert.match(twoStar.url, /s=2/, 'star level belongs in the URL');
+    assert.ok(parseFloat(twoStar.pct) < parseFloat(single),
+      `2-star ${twoStar.pct} should be harder than 1-star ${single}`);
+
+    // The URL must actually restore that state on a fresh load.
+    await go('?lv=8&c=4&g=50&s=2');
+    const restored = await session.cdp.evaluate(
+      `document.getElementById('bigPct').textContent`);
+    assert.equal(restored, twoStar.pct, 's=2 should round-trip through the URL');
+
+    // Tiny-but-possible odds must not render as a flat 0%, which would be
+    // indistinguishable from a genuinely impossible ask.
+    await go('?lv=8&c=4&g=50&s=3');
+    const longShot = await session.cdp.evaluate(`({
+      pct: document.getElementById('bigPct').textContent,
+      exact: window.RollOdds.rollChance(4, 8, 25, { need: 9 }),
+    })`);
+    assert.ok(longShot.exact > 0, 'this ask is a long shot, not impossible');
+    assert.notEqual(longShot.pct, '0%', 'a possible outcome must not read as 0%');
+    assert.notEqual(longShot.pct, '0.0%', 'a possible outcome must not read as 0.0%');
+  } finally {
+    await session.cleanup();
+  }
+});

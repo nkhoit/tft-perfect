@@ -45,6 +45,10 @@ label b{color:var(--txt);text-transform:none;letter-spacing:0}
 /* Levels are a fixed 11-item set; a plain flex-wrap leaves the last row
    stretched into odd wide buttons. A grid keeps every cell the same size. */
 .seg#levelSeg{display:grid;grid-template-columns:repeat(6,1fr)}
+/* Star buttons carry a second line ("3 copies"), so they need to stack. */
+.seg.star button{display:flex;flex-direction:column;gap:2px;padding:6px 0;line-height:1.15}
+.seg.star button small{font-size:10px;font-weight:600;color:var(--dim);letter-spacing:.2px}
+.seg.star button[aria-pressed="true"] small{color:inherit;opacity:.85}
 .seg button{
   flex:1 1 auto;min-width:34px;padding:7px 0;cursor:pointer;
   background:var(--panel2);color:var(--txt);border:1px solid var(--edge);

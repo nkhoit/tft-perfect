@@ -76,15 +76,45 @@ function shopChance(cost, level, opts) {
   return 1 - Math.pow(1 - p, SLOTS);
 }
 
-// Chance of seeing at least one copy across `rolls` shop refreshes.
+// How many copies a champion needs to reach a star level. A 1-cost 3-star is
+// nine copies, which is why hitting one is a whole gameplan rather than a
+// rolldown.
+const COPIES_FOR_STAR = { 1: 1, 2: 3, 3: 9 };
+
+// Chance of seeing AT LEAST `need` copies across `rolls` shop refreshes.
 //
-// Treats each shop as independent, which is how the game actually deals them:
-// a reroll re-deals all 5 slots from the pool. Copies you buy mid-rolldown do
-// shrink the pool, but modelling that requires knowing what you buy and when --
-// this is the standard approximation every roll calculator uses.
+// Each reroll re-deals all 5 slots, and within this model every slot is an
+// independent draw at probability p. So the copies seen over N shops is just
+// Binomial(5N, p), and "did I hit 2-star" is its upper tail at need = 3.
+//
+// The one-copy case reduces to 1 - (1-p)^(5N), which is what the old
+// closed form computed -- this is a strict generalisation, not a rewrite.
+//
+// Caveat unchanged from before: copies you buy mid-rolldown shrink the pool,
+// but modelling that needs to know what you buy and when. Every roll
+// calculator makes the same independence approximation.
+function binomialAtLeast(n, p, need) {
+  if (need <= 0) return 1;
+  if (n <= 0 || p <= 0) return 0;
+  if (p >= 1) return n >= need ? 1 : 0;
+  if (need > n) return 0;
+
+  // Sum the lower tail P(X < need) term by term, then complement. `need` is
+  // at most 9, so this is a handful of iterations regardless of n.
+  const q = 1 - p;
+  let term = Math.pow(q, n);          // i = 0
+  let lower = term;
+  for (let i = 0; i < need - 1; i++) {
+    term *= ((n - i) / (i + 1)) * (p / q);
+    lower += term;
+  }
+  return Math.max(0, Math.min(1, 1 - lower));
+}
+
 function rollChance(cost, level, rolls, opts) {
-  const perShop = shopChance(cost, level, opts);
-  return 1 - Math.pow(1 - perShop, Math.max(0, rolls));
+  const { need = 1 } = opts || {};
+  const p = slotChance(cost, level, opts);
+  return binomialAtLeast(SLOTS * Math.max(0, rolls), p, need);
 }
 
 // Expected number of copies seen over `rolls` shops.
@@ -97,26 +127,47 @@ function expectedCopies(cost, level, rolls, opts) {
 // Inverts rollChance: solve (1 - perShop)^rolls <= 1 - target for rolls.
 // Returns null when the odds are zero, since no amount of gold suffices.
 function goldFor(cost, level, confidence, opts) {
-  const perShop = shopChance(cost, level, opts);
-  if (perShop <= 0) return null;
-  if (perShop >= 1) return { rolls: 1, gold: 2 };
-  const rolls = Math.ceil(Math.log(1 - confidence) / Math.log(1 - perShop));
-  return { rolls, gold: rolls * 2 };
+  const { need = 1 } = opts || {};
+  const p = slotChance(cost, level, opts);
+  if (p <= 0) return null;
+
+  // For need = 1 the closed form inverts directly. For more copies the
+  // binomial tail has no clean inverse, so walk rolls upward -- the answer is
+  // bounded by the cap below and each step is a few multiplications.
+  if (need === 1) {
+    const perShop = shopChance(cost, level, opts);
+    if (perShop >= 1) return { rolls: 1, gold: 2 };
+    const rolls = Math.ceil(Math.log(1 - confidence) / Math.log(1 - perShop));
+    return { rolls, gold: rolls * 2 };
+  }
+
+  // A hard ceiling keeps this terminating even for absurd asks (99% on a
+  // 3-star 5-cost). Beyond it the honest answer is "not happening".
+  const MAX_ROLLS = 100000;
+  for (let r = 1; r <= MAX_ROLLS; r++) {
+    if (binomialAtLeast(SLOTS * r, p, need) >= confidence) {
+      return { rolls: r, gold: r * 2 };
+    }
+  }
+  return null;
 }
 
 // Full curve of cumulative hit chance per roll, for charting.
 function curve(cost, level, rolls, opts) {
-  const perShop = shopChance(cost, level, opts);
+  const { need = 1 } = opts || {};
+  const p = slotChance(cost, level, opts);
   const out = [];
   for (let i = 1; i <= rolls; i++) {
-    out.push({ roll: i, gold: i * 2, chance: 1 - Math.pow(1 - perShop, i) });
+    out.push({ roll: i, gold: i * 2, chance: binomialAtLeast(SLOTS * i, p, need) });
   }
   return out;
 }
 
 const api = {
   SHOP_ODDS, POOL_COPIES, POOL_TYPES, SLOTS, MIN_LEVEL, MAX_LEVEL,
-  levelOdds, slotChance, shopChance, rollChance, expectedCopies, goldFor, curve,
+  COPIES_FOR_STAR,
+  levelOdds, slotChance, shopChance, rollChance, expectedCopies, goldFor,
+  curve, binomialAtLeast,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -142,3 +142,121 @@ test('closed-form odds match a Monte Carlo simulation', () => {
   assert.ok(Math.abs(observed - analytic) < 0.01,
     `simulation ${observed.toFixed(4)} vs analytic ${analytic.toFixed(4)}`);
 });
+
+// ---- star levels / multi-copy targets ---------------------------------
+
+test('need=1 reproduces the original single-copy closed form exactly', () => {
+  // The binomial generalisation must not move the numbers the tool already
+  // shipped. Anything above float noise here is a regression.
+  for (let lv = odds.MIN_LEVEL; lv <= odds.MAX_LEVEL; lv++) {
+    for (let cost = 1; cost <= 5; cost++) {
+      for (const rolls of [0, 1, 5, 25, 100]) {
+        const p = odds.slotChance(cost, lv);
+        const perShop = 1 - Math.pow(1 - p, odds.SLOTS);
+        const closed = 1 - Math.pow(1 - perShop, rolls);
+        const actual = odds.rollChance(cost, lv, rolls, { need: 1 });
+        assert.ok(Math.abs(closed - actual) < 1e-12,
+          `lv${lv} c${cost} r${rolls}: ${closed} vs ${actual}`);
+      }
+    }
+  }
+});
+
+test('a star level needs the right number of copies', () => {
+  assert.equal(odds.COPIES_FOR_STAR[1], 1);
+  assert.equal(odds.COPIES_FOR_STAR[2], 3);
+  assert.equal(odds.COPIES_FOR_STAR[3], 9);
+});
+
+test('more copies is always harder', () => {
+  for (const rolls of [5, 25, 60]) {
+    const one = odds.rollChance(4, 8, rolls, { need: 1 });
+    const two = odds.rollChance(4, 8, rolls, { need: 3 });
+    const three = odds.rollChance(4, 8, rolls, { need: 9 });
+    assert.ok(one > two, `1-copy ${one} should beat 3-copy ${two}`);
+    assert.ok(two > three, `3-copy ${two} should beat 9-copy ${three}`);
+  }
+});
+
+test('binomial tail matches a direct sum', () => {
+  // Independent check of binomialAtLeast against an explicit
+  // sum of P(X = i) computed with a plain factorial.
+  const fact = (n) => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
+  const choose = (n, k) => fact(n) / (fact(k) * fact(n - k));
+  for (const [n, p, need] of [[10, 0.3, 3], [20, 0.1, 2], [15, 0.5, 9], [25, 0.08, 3]]) {
+    let expected = 0;
+    for (let i = need; i <= n; i++) {
+      expected += choose(n, i) * Math.pow(p, i) * Math.pow(1 - p, n - i);
+    }
+    const actual = odds.binomialAtLeast(n, p, need);
+    assert.ok(Math.abs(expected - actual) < 1e-9,
+      `n=${n} p=${p} need=${need}: ${expected} vs ${actual}`);
+  }
+});
+
+test('binomial tail handles the degenerate edges', () => {
+  assert.equal(odds.binomialAtLeast(10, 0.5, 0), 1);
+  assert.equal(odds.binomialAtLeast(0, 0.5, 1), 0);
+  assert.equal(odds.binomialAtLeast(10, 0, 1), 0);
+  assert.equal(odds.binomialAtLeast(2, 0.5, 5), 0, 'cannot need more than n');
+  assert.equal(odds.binomialAtLeast(10, 1, 3), 1);
+});
+
+test('goldFor targets the requested star level', () => {
+  // Hitting 2-star must cost strictly more gold than hitting 1-star.
+  const one = odds.goldFor(4, 8, 0.5, { need: 1 });
+  const two = odds.goldFor(4, 8, 0.5, { need: 3 });
+  assert.ok(two.gold > one.gold, `${two.gold} should exceed ${one.gold}`);
+
+  // And the gold it quotes must actually reach the confidence asked for.
+  for (const need of [1, 3, 9]) {
+    for (const conf of [0.5, 0.75, 0.9]) {
+      const res = odds.goldFor(4, 9, conf, { need });
+      const reached = odds.rollChance(4, 9, res.rolls, { need });
+      assert.ok(reached >= conf, `need${need} conf${conf}: got ${reached}`);
+      const justUnder = odds.rollChance(4, 9, res.rolls - 1, { need });
+      assert.ok(justUnder < conf, `need${need} conf${conf}: not minimal`);
+    }
+  }
+});
+
+test('goldFor stays null when the tier is unrollable', () => {
+  assert.equal(odds.goldFor(5, 4, 0.5, { need: 3 }), null);
+});
+
+test('the curve targets the star level and stays monotonic', () => {
+  const c = odds.curve(4, 8, 30, { need: 3 });
+  assert.equal(c.length, 30);
+  for (let i = 1; i < c.length; i++) {
+    assert.ok(c[i].chance >= c[i - 1].chance, 'curve must not go backwards');
+  }
+  assert.ok(Math.abs(c[29].chance - odds.rollChance(4, 8, 30, { need: 3 })) < 1e-12);
+  // and it must sit strictly below the 1-copy curve
+  const single = odds.curve(4, 8, 30, { need: 1 });
+  assert.ok(c[29].chance < single[29].chance);
+});
+
+test('multi-copy odds match a Monte Carlo simulation', () => {
+  let seed = 4242;
+  const rand = () => {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  for (const [lv, cost, rolls, need] of [[8, 4, 25, 3], [9, 4, 30, 3], [7, 3, 20, 3]]) {
+    const p = odds.slotChance(cost, lv);
+    const N = 200000;
+    let hits = 0;
+    for (let i = 0; i < N; i++) {
+      let seen = 0;
+      for (let s = 0; s < odds.SLOTS * rolls; s++) if (rand() < p) seen++;
+      if (seen >= need) hits++;
+    }
+    const sim = hits / N;
+    const analytic = odds.rollChance(cost, lv, rolls, { need });
+    assert.ok(Math.abs(sim - analytic) < 0.006,
+      `lv${lv} c${cost} need${need}: sim ${sim} vs analytic ${analytic}`);
+  }
+});

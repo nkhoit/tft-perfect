@@ -12,7 +12,7 @@
   const takenEl = $('taken');
   const contestedEl = $('contested');
 
-  const state = { level: 8, cost: 4, gold: 50, taken: 0, contested: 0 };
+  const state = { level: 8, cost: 4, star: 2, gold: 50, taken: 0, contested: 0 };
 
   // ---- URL state so a setup can be linked ------------------------------
   function readUrl() {
@@ -26,6 +26,7 @@
     state.gold = num('g', 0, 100, state.gold);
     state.taken = num('t', 0, 9, state.taken);
     state.contested = num('x', 0, 200, state.contested);
+    state.star = num('s', 1, 3, state.star);
   }
 
   function writeUrl() {
@@ -35,6 +36,7 @@
     q.set('g', state.gold);
     if (state.taken) q.set('t', state.taken);
     if (state.contested) q.set('x', state.contested);
+    q.set('s', state.star);
     history.replaceState(null, '', '?' + q.toString());
   }
 
@@ -59,6 +61,18 @@
       render();
     });
     costSeg.appendChild(b);
+  }
+
+  const STAR_LABEL = { 1: '1\u2605', 2: '2\u2605', 3: '3\u2605' };
+  const starSeg = $('starSeg');
+  for (let st = 1; st <= 3; st++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = `${STAR_LABEL[st]}<small>${O.COPIES_FOR_STAR[st]} cop${
+      O.COPIES_FOR_STAR[st] === 1 ? 'y' : 'ies'}</small>`;
+    b.dataset.star = st;
+    b.addEventListener('click', () => { state.star = st; render(); });
+    starSeg.appendChild(b);
   }
 
   goldEl.addEventListener('input', () => { state.gold = +goldEl.value; render(); });
@@ -174,7 +188,12 @@
     contestedEl.value = state.contested;
 
     const rolls = Math.floor(state.gold / 2);
-    const opts = { taken: state.taken, contested: state.contested };
+    const need = O.COPIES_FOR_STAR[state.star];
+    const opts = { taken: state.taken, contested: state.contested, need };
+
+    [...starSeg.children].forEach((b) => {
+      b.setAttribute('aria-pressed', String(+b.dataset.star === state.star));
+    });
 
     $('goldEcho').textContent = state.gold + 'g';
     $('takenEcho').textContent = state.taken;
@@ -186,16 +205,26 @@
     const total = O.rollChance(state.cost, state.level, rolls, opts);
     const exp = O.expectedCopies(state.cost, state.level, rolls, opts);
 
-    const pct = (x) => (x * 100).toFixed(1) + '%';
+    // A 3-star ask can land on genuinely tiny odds. Rounding 0.03% to "0.0%"
+    // makes a long shot look identical to an impossible one, so keep a
+    // significant digit until the value really is zero.
+    const pct = (x) => {
+      if (x <= 0) return '0%';
+      const p = x * 100;
+      if (p < 0.1) return '<0.1%';
+      return p.toFixed(1) + '%';
+    };
     const big = $('bigPct');
     big.textContent = row[state.cost - 1] === 0 ? '0%' : pct(total);
     big.className = 'big' + (total >= 0.6 ? '' : total >= 0.3 ? ' warn' : ' bad');
 
+    const copyWord = need === 1 ? 'copy' : 'copies';
+    const starWord = `${state.star}\u2605 (${need} ${copyWord})`;
     $('bigSub').textContent = row[state.cost - 1] === 0
       ? `level ${state.level} shops never contain ${state.cost}-costs`
       : rolls === 0
         ? 'spend some gold to see your odds'
-        : `chance to hit at least one copy in ${rolls} roll${rolls === 1 ? '' : 's'}`;
+        : `chance to hit ${starWord} in ${rolls} roll${rolls === 1 ? '' : 's'}`;
 
     $('perShop').textContent = pct(perShop);
     $('rollCount').textContent = rolls;
