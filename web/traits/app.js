@@ -1,5 +1,5 @@
 // app.js — TFT Trait Explorer
-let DB = null, W = [], dataReady = false, workersReady = false;
+let DB = null, W = [], dataReady = false, workersReady = false, workerMode = null;
 let reqId = 0, pending = false, workerEpoch = 0, searchGeneration = 0;
 let inbox = [];                   // shard results for the in-flight request
 // Mid-flight snapshots, keyed by worker, so a shard's newer snapshot replaces
@@ -57,6 +57,7 @@ const VALID_SORTS = new Set(['live', 'tier', 'waste', 'cost', 'rich']);
 const POOL_VIEWS = new Set(['cost', 'origin', 'class']);
 const MAX_SHARED_EMBLEMS = 20;
 const FILTERS_STORAGE_KEY = 'tftkit:filters-collapsed';
+const LOCAL_SEARCH_STORAGE_KEY = 'tftkit:local-search-experiment';
 const MAIN_SOLVER_READY_TIMEOUT_MS = 20000;
 const SOLVER_WATCHDOG_GRACE_MS = 3000;
 const UPGRADE_SOLVER_ROWS = 3;
@@ -82,7 +83,7 @@ const { algorithmVersion, antiStack, breakpoints, championDiff, compSignature,
   moveSelectionFirst, scoreFloor, scoresAt,
   scoringBreakpoints, searchCacheKey, summary, toggleSelection } = SearchUtils;
 
-if (algorithmVersion !== 'milp-hybrid-v8'
+if (algorithmVersion !== 'milp-hybrid-v9'
     || typeof championDiff !== 'function'
     || typeof compareTraitQuality !== 'function'
     || typeof SolverScheduler === 'undefined'
@@ -117,6 +118,30 @@ let upgradeRequestId = 0;
 let sheetEl = null;
 let sheetKey = null;
 let sheetKind = null;
+
+try {
+  $('newExperience').checked = localStorage.getItem(LOCAL_SEARCH_STORAGE_KEY) === '1';
+} catch {
+  $('newExperience').checked = false;
+}
+
+function localSearchEnabled() {
+  return $('newExperience').checked;
+}
+
+$('newExperience').addEventListener('change', () => {
+  try {
+    localStorage.setItem(LOCAL_SEARCH_STORAGE_KEY, localSearchEnabled() ? '1' : '0');
+  } catch {
+    // The choice still applies for this tab when storage is unavailable.
+  }
+  if (localSearchEnabled()) {
+    closeUpgrade();
+    stopMainSolver();
+  }
+  syncAllUpgradeTriggers();
+  run(true);
+});
 
 function setFiltersCollapsed(collapsed, persist = false) {
   const wrap = document.querySelector('.wrap');
@@ -786,6 +811,7 @@ function stopWorkers(cancellation = false) {
   W.forEach(worker => worker.terminate());
   W = [];
   workersReady = false;
+  workerMode = null;
   queuedDispatch = null;
   pending = false;
   inbox = [];
@@ -813,6 +839,18 @@ function clearMainSolverTimers() {
   clearTimeout(solverResponseTimer);
   solverReadyTimer = null;
   solverResponseTimer = null;
+}
+
+function stopMainSolver() {
+  clearMainSolverTimers();
+  queuedMainSolverRequest = null;
+  solverBudgets.clear();
+  solverScheduler?.terminate();
+  solverScheduler = null;
+  if (solverWorker) solverWorker.terminate();
+  solverWorker = null;
+  solverReady = false;
+  solverInbox = null;
 }
 
 function failMainSolver(message) {
@@ -848,7 +886,7 @@ function queueMainSolver(message) {
 function ensureSolver() {
   if (solverBroken || solverWorker) return;
   try {
-    solverWorker = new Worker('solver-worker.js?v=milp-hybrid-v8');
+    solverWorker = new Worker('solver-worker.js?v=milp-hybrid-v9');
   } catch (err) {
     failMainSolver(String(err && err.message || err));
     return;
@@ -906,8 +944,8 @@ function ensureSolver() {
     MAIN_SOLVER_READY_TIMEOUT_MS);
 }
 
-function ensureWorkers(count, callback) {
-  if (W.length && W.length !== count) stopWorkers(false);
+function ensureWorkers(count, mode, callback) {
+  if (W.length && (W.length !== count || workerMode !== mode)) stopWorkers(false);
   queuedDispatch = callback;
   if (workersReady && W.length === count) {
     queuedDispatch = null;
@@ -916,10 +954,14 @@ function ensureWorkers(count, callback) {
   }
   if (W.length) return;
 
+  workerMode = mode;
   const epoch = ++workerEpoch;
   let started = 0;
   for (let i = 0; i < count; i++) {
-    const worker = new Worker('worker.js?v=milp-hybrid-v8');
+    const script = mode === 'local'
+      ? 'local-worker.js?v=milp-hybrid-v9'
+      : 'worker.js?v=milp-hybrid-v9';
+    const worker = new Worker(script);
     worker.onmessage = event => {
       if (epoch !== workerEpoch) return;
       if (event.data.type === 'ready') {
@@ -1058,6 +1100,8 @@ function renderProgressNow() {
   const merged = mergeSearchResults(parts, search.opts.sortMode, search.opts.sortMode2);
   if (!merged.rows.length) return;
   merged.effort = search.opts.effort;
+  merged.sampled = search.opts.engine === 'local';
+  merged.experimental = search.opts.engine === 'local';
   merged.proved = solverProved;
   merged.partial = true;
   render(merged, search.context);
@@ -1096,7 +1140,8 @@ function finishSearch() {
   const search = activeSearch;
   if (!search) return;
   // Wait for the solver unless it is unavailable or already reported.
-  const solverPending = !solverBroken && solverWorker && solverInbox === null;
+  const solverPending = search.opts.engine !== 'local'
+    && !solverBroken && solverWorker && solverInbox === null;
   if (solverPending) return;
 
   pending = false;
@@ -1126,6 +1171,8 @@ function finishSearch() {
     solverRows.length ? [...parts, solverPart] : parts,
     search.opts.sortMode, search.opts.sortMode2);
   merged.effort = search.opts.effort;
+  merged.sampled = search.opts.engine === 'local';
+  merged.experimental = search.opts.engine === 'local';
   // `proved` means the solver ran to optimality on this exact query, so the top
   // row is the best board that exists — not merely the best one we stumbled on.
   merged.proved = !!(solver && solver.proved);
@@ -2112,14 +2159,17 @@ function buildSearchOptions() {
     else if (costOn.has(c.cost)) poolIdx.push(i);
   });
   const tkeys = Object.keys(DB.traits);
+  const engine = localSearchEnabled() ? 'local' : 'hybrid';
   return {
     size, maxWaste: +$('waste').value, reqIdx, poolIdx, emblems: [...emblems],
     reqTraits: reqTraits.map(r => ({ t: tkeys.indexOf(r.key), n: r.n }))
                         .filter(r => r.t >= 0),
     muted: [...muted].map(k => tkeys.indexOf(k)).filter(t => t >= 0),
     sortMode: $('sort').value, sortMode2: $('sort2').value,
-    effort,
-    timeBudgetMs: settings.timeBudgetMs,
+    effort, engine,
+    // Unlike Deep DFS, an anytime stochastic search must always have a wall-clock
+    // bound. Ten seconds is its deepest opt-in budget.
+    timeBudgetMs: engine === 'local' && !settings.timeBudgetMs ? 10000 : settings.timeBudgetMs,
     limit: 100, uniq: true,
     // The solver's cost is superlinear in rows returned (each no-good cut makes
     // the next solve harder), so we ask it for a small proven frontier and let
@@ -2130,6 +2180,7 @@ function buildSearchOptions() {
     // global top 100; retained signatures carry their best found alternates.
     returnN: 100,
     shards: Math.min(NW, settings.workers),
+    ...(engine === 'local' ? { seed: 0x18c0ffee } : {}),
   };
 }
 
@@ -2153,8 +2204,8 @@ function dispatchSearch(generation, opts, key) {
   recordMetric('workerRuns');
   W.forEach((worker, shard) =>
     worker.postMessage({ type: 'search', id, opts: { ...opts, shard } }));
-  ensureSolver();
-  if (solverWorker && !solverBroken) {
+  if (opts.engine !== 'local') ensureSolver();
+  if (opts.engine !== 'local' && solverWorker && !solverBroken) {
     queueMainSolver({ type: 'search', id, opts });
   }
 }
@@ -2187,7 +2238,7 @@ async function executeSearch(generation) {
     return;
   }
 
-  ensureWorkers(opts.shards, () => dispatchSearch(generation, opts, key));
+  ensureWorkers(opts.shards, opts.engine, () => dispatchSearch(generation, opts, key));
 }
 
 function run(immediate = false) {
@@ -2282,7 +2333,8 @@ function refreshUpgradeSurface() {
 }
 
 function syncAllUpgradeTriggers() {
-  const disabled = upgradeIsBusy();
+  const localOnly = localSearchEnabled() || renderedContext?.opts?.engine === 'local';
+  const disabled = localOnly || upgradeIsBusy();
   for (const button of $('list').querySelectorAll('.upgradepath')) {
     const card = button.closest('.comp');
     if (card?.__context) button.dataset.context = card.__context.token;
@@ -2290,6 +2342,9 @@ function syncAllUpgradeTriggers() {
       && button.dataset.sig === upgradeState.signature
       && button.dataset.context === upgradeState.context.token);
     button.disabled = disabled;
+    button.title = localOnly
+      ? 'Unavailable in the experimental local-search-only experience.'
+      : '';
     button.setAttribute('aria-expanded', String(active));
   }
 }
@@ -2336,7 +2391,7 @@ function failUpgrade(message) {
 function ensureUpgradeWorker() {
   if (upgradeWorker || !upgradeState) return;
   try {
-    upgradeWorker = new Worker('solver-worker.js?v=milp-hybrid-v8');
+    upgradeWorker = new Worker('solver-worker.js?v=milp-hybrid-v9');
   } catch (error) {
     failUpgrade(String(error && error.message || error));
     return;
@@ -2554,6 +2609,7 @@ function renderUpgradeRows(message) {
 }
 
 function openUpgrade(button) {
+  if (localSearchEnabled() || renderedContext?.opts?.engine === 'local') return;
   if (upgradeIsBusy()) {
     syncAllUpgradeTriggers();
     return;

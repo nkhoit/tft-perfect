@@ -16,7 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#4ade80">
 <link rel="stylesheet" href="/shared/tokens.css">
-<link rel="stylesheet" href="style.css?v=milp-hybrid-v8">
+<link rel="stylesheet" href="style.css?v=milp-hybrid-v9">
 </head>
 <body>
 <header>
@@ -25,6 +25,10 @@
   <span class="setname">Set 18 · Enchanted Wilds</span>
   <div class="meta" id="meta">loading…</div>
   <div class="spacer"></div>
+  <label class="newexp" title="Use only the experimental anytime local search. Results are sampled, not optimal.">
+    <input id="newExperience" type="checkbox">
+    <span>Try new experience</span>
+  </label>
 </header>
 
 <div class="wrap">
@@ -162,12 +166,13 @@ Deep uses the full search budget.">?</i></h2>
   </main>
 </div>
 
-<script src="search-utils.js?v=milp-hybrid-v8"></script>
-<script src="board-score.js?v=milp-hybrid-v8"></script>
-<script src="solver-scheduler.js?v=milp-hybrid-v8"></script>
-<script src="saved-searches.js?v=milp-hybrid-v8"></script>
-<script src="share-state.js?v=milp-hybrid-v8"></script>
-<script src="team-code.js?v=milp-hybrid-v8"></script>
-<script src="app.js?v=milp-hybrid-v8"></script>
+<script src="search-utils.js?v=milp-hybrid-v9"></script>
+<script src="board-score.js?v=milp-hybrid-v9"></script>
+<script src="local-search.js?v=milp-hybrid-v9"></script>
+<script src="solver-scheduler.js?v=milp-hybrid-v9"></script>
+<script src="saved-searches.js?v=milp-hybrid-v9"></script>
+<script src="share-state.js?v=milp-hybrid-v9"></script>
+<script src="team-code.js?v=milp-hybrid-v9"></script>
+<script src="app.js?v=milp-hybrid-v9"></script>
 </body>
 </html>

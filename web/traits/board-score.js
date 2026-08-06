@@ -140,7 +140,7 @@
   }
 
   function validateRoster(db, T, keys, options = {}) {
-    if (!Array.isArray(keys) || !keys.length || keys.length > 12) {
+    if (!Array.isArray(keys) || !keys.length) {
       return { error: 'Roster size is invalid.' };
     }
     const indexes = [];
@@ -162,8 +162,13 @@
     }
 
     const size = options.size;
-    if (!Number.isInteger(size) || size < 2 || size > 10) {
-      return { error: 'Roster level is invalid.' };
+    if (!Number.isInteger(size) || size < 2 || size > 12) {
+      return { error: 'Roster size is invalid.' };
+    }
+    const maxBonus = T.teamSize.reduce((sum, tiers) =>
+      sum + tiers.reduce((best, tier) => Math.max(best, tier.slots), 0), 0);
+    if (keys.length > size + maxBonus) {
+      return { error: 'Roster size is invalid.' };
     }
     const emblems = options.emblems || [];
     const muted = options.muted || [];
@@ -179,5 +184,5 @@
     };
   }
 
-  return { scoreRoster, tables, validateRoster };
+  return { rosterCounts, scoreRoster, tables, unlockedBonus, validateRoster };
 }));
