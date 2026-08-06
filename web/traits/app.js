@@ -613,7 +613,13 @@ function warmShareApi() {
 async function syncSearchUrl(generation) {
   if (!dataReady || !DB) return;
   const sync = ++urlSyncGeneration;
-  const url = await shareUrl();
+  let url;
+  try {
+    url = await shareUrl();
+  } catch (error) {
+    console.error('Could not sync the search URL.', error);
+    return;
+  }
   if (sync !== urlSyncGeneration || generation !== searchGeneration) return;
   history.replaceState(null, '', url);
 }
@@ -725,7 +731,11 @@ async function saveCurrentSearch() {
     }, 1200);
   } catch (error) {
     console.error('Could not save the search.', error);
-    window.alert('This search could not be saved on this device.');
+    if (error?.code === 'SHARE_TOO_LARGE') {
+      window.alert(error.message);
+    } else {
+      window.alert('This search could not be saved on this device.');
+    }
   }
 }
 
@@ -1578,7 +1588,10 @@ $('share').onclick = async () => {
     }
   } catch (error) {
     console.error('Could not copy the search link.', error);
-    if (url) window.prompt('Copy this search link:', url.toString());
+    if (error?.code === 'SHARE_TOO_LARGE') {
+      window.alert(error.message);
+      button.textContent = 'Copy failed';
+    } else if (url) window.prompt('Copy this search link:', url.toString());
     else button.textContent = 'Copy failed';
   } finally {
     button.disabled = false;

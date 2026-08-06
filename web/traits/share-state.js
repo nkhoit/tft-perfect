@@ -7,7 +7,11 @@
     ['d', 'deflate-raw'],
     ['z', 'deflate'],
   ];
-  const MAX_DECODED_BYTES = 256 * 1024;
+  // MUST match api/src/lib/share-codec.js — the server is the security
+  // boundary and is authoritative; the client must never emit a token the
+  // server will reject.
+  const MAX_DECODED_BYTES = 32 * 1024;
+  const MAX_TOKEN_CHARS = 2049;
 
   function base64Url(bytes) {
     let binary = '';
@@ -61,11 +65,17 @@
         }
       }
     }
-    return best.prefix + base64Url(best.bytes);
+    const token = best.prefix + base64Url(best.bytes);
+    if (token.length > MAX_TOKEN_CHARS) {
+      const error = new Error('This search is too large to share. Try removing some filters.');
+      error.code = 'SHARE_TOO_LARGE';
+      throw error;
+    }
+    return token;
   }
 
   async function decode(value) {
-    if (typeof value !== 'string' || value.length < 2 || value.length > 12000) {
+    if (typeof value !== 'string' || value.length < 2 || value.length > MAX_TOKEN_CHARS) {
       throw new Error('Invalid shared-search state.');
     }
     const prefix = value[0];
