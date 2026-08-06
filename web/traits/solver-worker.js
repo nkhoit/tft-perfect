@@ -135,7 +135,11 @@ async function solve(opts, onProgress) {
   const proof = SolverStatus.proof(branches, rows.length);
   if (proof.proved && best && onProgress) onProgress([best]);
 
-  let rowsComplete = opts.resultMode === 'roster';
+  // Starts optimistic and is falsified by any branch that stops early. This
+  // used to be seeded from `resultMode === 'roster'`, which made the flag
+  // meaningless for the main search: it began life false and stayed false even
+  // when enumeration ran to completion.
+  let rowsComplete = true;
   let enumerationStopReason = null;
 
   // Phase two enumerates a proven top-L roster frontier with no-good cuts.
@@ -205,8 +209,12 @@ async function solve(opts, onProgress) {
       solvedRosters++;
       addRow(row);
     }
-    if (opts.resultMode === 'roster' && !exhausted && solvedRosters < want) {
+    // The `want` cap stopping enumeration is still truncation: boards below
+    // the cut were never scored. This check used to be roster-only, so the
+    // main search could hit its row cap and still report a complete list.
+    if (!exhausted && solvedRosters < want) {
       rowsComplete = false;
+      enumerationStopReason ||= 'cap';
     }
   }
 
@@ -215,7 +223,11 @@ async function solve(opts, onProgress) {
   return {
     rows,
     ...proof,
-    ...(opts.resultMode === 'roster' ? { rowsComplete } : {}),
+    // Phase two enumerates the ranked list under a time budget, so it can stop
+    // early even when phase one proved the top board optimal. Every caller
+    // needs to know that -- not just the roster mode -- or a truncated sample
+    // renders as a bare "optimal" and reads as a complete list.
+    rowsComplete,
     ...(enumerationStopReason ? { enumerationStopReason } : {}),
   };
 }

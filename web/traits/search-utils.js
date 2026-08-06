@@ -164,14 +164,24 @@
     const provedBadge = '<span class="opt" title="A constraint solver proved this '
       + 'is the highest-scoring board for these settings — not just the best one found '
       + 'before the search ran out of budget.">optimal</span>';
+    // Phase one proves the TOP board; phase two enumerates the rest under a
+    // time budget. A bare "optimal" on a truncated list reads as "this list is
+    // complete", which makes two searches with different constraints look
+    // contradictory when they merely sampled the frontier differently.
+    const truncatedList = result.rowsComplete === false;
+    const listBadge = truncatedList
+      ? ' · <span class="cut" title="The top board is proved optimal, but the search '
+        + 'budget ran out before every board below it could be scored. Lower-ranked '
+        + 'boards are a sample, not the complete ranking.">list truncated</span>'
+      : '';
     const statusHtml = effort + (result.cached
       ? `<span class="hit">cached</span>`
-        + (proved ? ' · ' + provedBadge : '')
+        + (proved ? ' · ' + provedBadge + listBadge : '')
         + (!proved && result.truncated ? ' · <span class="cut">incomplete</span>' : '')
       : partial
         ? (proved ? provedBadge + ' · ' : '') + '<span class="more">finding more…</span>'
         : proved
-          ? `${provedBadge} · ${seconds}s`
+          ? `${provedBadge}${listBadge} · ${seconds}s`
           : result.truncated
             ? `<span class="cut" title="Hit the search limit; unseen boards may rank higher. Narrow the pool or require a trait.">stopped early</span> · ${seconds}s`
             : `searched in ${seconds}s`);

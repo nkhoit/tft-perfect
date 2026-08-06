@@ -1129,6 +1129,11 @@ function finishSearch() {
   // `proved` means the solver ran to optimality on this exact query, so the top
   // row is the best board that exists — not merely the best one we stumbled on.
   merged.proved = !!(solver && solver.proved);
+  // `proved` covers the TOP row only. The solver enumerates the ranked list
+  // below it under a time budget, so that list can be a truncated sample even
+  // on a proved search. Carry the flag through or the status line renders a
+  // bare "optimal" and users read the sample as the complete ranking.
+  if (solver && solver.rowsComplete === false) merged.rowsComplete = false;
   merged.solverMs = solver ? solver.ms : null;
   if (solver && solver.error) merged.solverError = solver.error;
 
