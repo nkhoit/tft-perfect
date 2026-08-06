@@ -2,13 +2,13 @@
   "name": "tftkit",
   "private": true,
   "scripts": {
-    "check": "node --check precompute_default.js && node --check create-deployment-manifest.mjs && node --check web/traits/search-utils.js && node --check web/traits/board-score.js && node --check web/traits/solver-status.js && node --check web/traits/solver-scheduler.js && node --check web/traits/saved-searches.js && node --check web/traits/share-state.js && node --check web/traits/team-code.js && node --check web/traits/lp-model.js && node --check web/traits/solver-worker.js && node --check web/traits/worker.js && node --check web/traits/app.js",
+    "check": "node --check precompute_default.js && node --check create-deployment-manifest.mjs && node --check web/traits/search-utils.js && node --check web/traits/board-score.js && node --check web/traits/solver-status.js && node --check web/traits/solver-scheduler.js && node --check web/traits/saved-searches.js && node --check web/traits/share-state.js && node --check web/traits/team-code.js && node --check web/traits/lp-model.js && node --check web/traits/solver-worker.js && node --check web/traits/worker.js && node --check web/traits/app.js && node --check web/rolls/odds.js && node --check web/rolls/app.js",
     "precompute": "node precompute_default.js",
     "pretest": "npm run api:setup",
     "api:setup": "cd api && (test -d node_modules || npm install) && npm run sync:traits",
     "test": "node --test",
     "test:upgrade-solver": "node tests/run-upgrade-solver.mjs",
-    "test:browser": "node --test tests/upgrade-browser.mjs",
+    "test:browser": "node --test tests/upgrade-browser.mjs tests/rolls-browser.mjs",
     "benchmark:upgrade": "node tests/upgrade-benchmark.mjs",
     "deployment:manifest": "node create-deployment-manifest.mjs dist"
   },

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roll Odds — TFTKIT</title>
+<meta name="description" content="Work out your real odds of hitting a TFT champion: shop odds by level, pool contention, and the gold it takes.">
+<meta property="og:site_name" content="TFTKIT">
+<meta property="og:type" content="website">
+<meta property="og:title" content="TFT Roll Odds Calculator">
+<meta property="og:description" content="Work out your real odds of hitting a champion, and the gold it takes.">
+<meta property="og:url" content="https://tftkit.com/rolls/">
+<meta name="theme-color" content="#4ade80">
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+
+<header>
+  <a class="kit" href="/">TFT<span>KIT</span></a>
+  <h1>Roll <span class="beta">Odds</span></h1>
+  <span class="setname">Set 18 · Enchanted Wilds</span>
+  <div class="spacer"></div>
+</header>
+
+<main class="wrap">
+
+  <section class="panel controls">
+    <div class="field">
+      <label for="level">Your level</label>
+      <div class="seg" id="levelSeg" role="group" aria-label="Your level"></div>
+    </div>
+
+    <div class="field">
+      <label for="costSeg">Champion cost</label>
+      <div class="seg cost" id="costSeg" role="group" aria-label="Champion cost"></div>
+    </div>
+
+    <div class="field">
+      <label for="gold">Gold to spend <span class="hint" id="goldEcho"></span></label>
+      <input type="range" id="gold" min="0" max="100" step="2" value="50">
+      <div class="ticks"><span>0</span><span>50</span><span>100</span></div>
+    </div>
+
+    <details class="adv">
+      <summary>Pool contention</summary>
+      <p class="note">
+        Every player draws from one shared pool. Copies already bought are gone
+        from it — including yours.
+      </p>
+      <div class="field">
+        <label for="taken">Copies of <b id="takenName">this champion</b> already owned
+          <span class="hint" id="takenEcho">0</span></label>
+        <input type="range" id="taken" min="0" max="9" step="1" value="0">
+      </div>
+      <div class="field">
+        <label>Other units gone from this cost tier
+          <span class="hint" id="contestedEcho">0</span></label>
+        <input type="range" id="contested" min="0" max="80" step="5" value="0">
+        <p class="note tiny">
+          Counter-intuitively this <em>helps</em> — a thinner tier means your
+          champion is a bigger slice of what's left.
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel results" id="results">
+    <div class="headline">
+      <div class="big" id="bigPct">—</div>
+      <div class="bigsub" id="bigSub">chance to hit at least one copy</div>
+    </div>
+
+    <div class="statgrid">
+      <div class="stat">
+        <span class="k">Per shop</span>
+        <span class="v" id="perShop">—</span>
+      </div>
+      <div class="stat">
+        <span class="k">Rolls</span>
+        <span class="v" id="rollCount">—</span>
+      </div>
+      <div class="stat">
+        <span class="k">Copies expected</span>
+        <span class="v" id="expCopies">—</span>
+      </div>
+      <div class="stat">
+        <span class="k">Tier odds</span>
+        <span class="v" id="tierPct">—</span>
+      </div>
+    </div>
+
+    <div class="chartwrap">
+      <svg id="chart" viewBox="0 0 600 200" preserveAspectRatio="none"
+           role="img" aria-label="Cumulative hit chance as gold is spent"></svg>
+      <div class="axis"><span>0g</span><span id="axMid">—</span><span id="axEnd">—</span></div>
+    </div>
+
+    <table class="conf">
+      <caption>Gold needed for a given confidence</caption>
+      <thead><tr><th>Confidence</th><th>Rolls</th><th>Gold</th></tr></thead>
+      <tbody id="confBody"></tbody>
+    </table>
+  </section>
+
+  <section class="panel odds">
+    <h2>Shop odds by level</h2>
+    <div class="tablescroll">
+      <table class="oddstable">
+        <thead><tr><th>Lv</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th></tr></thead>
+        <tbody id="oddsBody"></tbody>
+      </table>
+    </div>
+    <p class="note">
+      Pool: <b id="poolLine">—</b>
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <span>tftkit.com</span>
+  <span class="dot">·</span>
+  <a href="/traits/">Trait Explorer</a>
+  <span class="dot">·</span>
+  <a href="https://github.com/nkhoit/tftkit">source</a>
+  <span class="fine">
+    Not affiliated with or endorsed by Riot Games.
+  </span>
+</footer>
+
+<script src="odds.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>

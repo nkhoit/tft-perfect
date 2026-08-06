@@ -5,13 +5,16 @@
   "routes": [
     { "route": "/traits", "redirect": "/traits/", "statusCode": 301 },
     { "route": "/traits/vendor/*", "headers": { "Cache-Control": "public, max-age=31536000, immutable" } },
-    { "route": "/traits/*", "headers": { "Cache-Control": "no-cache" } }
+    { "route": "/traits/*", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/rolls", "redirect": "/rolls/", "statusCode": 301 },
+    { "route": "/rolls/*", "headers": { "Cache-Control": "no-cache" } }
   ],
   "navigationFallback": {
     "rewrite": "/404.html",
     "exclude": [
       "/shared/*",
       "/traits/*",
+      "/rolls/*",
       "/*.css",
       "/*.js",
       "/*.json",
