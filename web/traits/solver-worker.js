@@ -209,10 +209,11 @@ async function solve(opts, onProgress) {
       solvedRosters++;
       addRow(row);
     }
-    // The `want` cap stopping enumeration is still truncation: boards below
-    // the cut were never scored. This check used to be roster-only, so the
-    // main search could hit its row cap and still report a complete list.
-    if (!exhausted && solvedRosters < want) {
+    // Exiting via the `while (solvedRosters < want)` condition means the cap
+    // stopped us, not the search space: boards below the cut were never
+    // scored. The old check asked `solvedRosters < want`, which is false on
+    // exactly this path, so hitting the cap silently reported a complete list.
+    if (!exhausted) {
       rowsComplete = false;
       enumerationStopReason ||= 'cap';
     }
