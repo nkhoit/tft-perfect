@@ -418,13 +418,15 @@ function sharedSearchState() {
   if (level !== DEFAULT_LEVEL) shared.l = level;
   if (waste !== DEFAULT_WASTE) shared.w = waste;
 
-  const required = [], excluded = [];
+  const required = [], excluded = [], carries = [];
   for (const champion of DB.champions) {
     const value = state.get(champion.key);
-    if (value === 1) required.push(champion.key);
+    if (value === 1 || value === 3) required.push(champion.key);
     else if (value === 2) excluded.push(champion.key);
+    if (value === 3) carries.push(champion.key);
   }
   if (required.length) shared.r = required;
+  if (carries.length) shared.cy = carries;
   if (excluded.length) shared.x = excluded;
   if (excludedGroups.size) shared.xg = [...excludedGroups].sort();
 
@@ -485,6 +487,11 @@ function applySharedSearchState(shared) {
     : [];
   for (const key of strings(shared.r, DB.champions.length)) {
     if (championKeys.has(key)) state.set(key, 1);
+  }
+  // Carries are a subset of required units, restored after them so the carry
+  // flag wins. Older links have no `cy` and simply restore as plain requires.
+  for (const key of strings(shared.cy, DB.champions.length)) {
+    if (championKeys.has(key)) state.set(key, 3);
   }
   for (const key of strings(shared.x, DB.champions.length)) {
     if (championKeys.has(key) && state.get(key) === 0) state.set(key, 2);
@@ -672,7 +679,10 @@ function defaultSavedSearchName() {
     const { key, n } = reqTraits[0];
     return `${DB.traits[key]?.name || key} ${n}`;
   }
-  const champion = DB.champions.find(unit => state.get(unit.key) === 1);
+  const champion = DB.champions.find(unit => {
+    const v = state.get(unit.key);
+    return v === 1 || v === 3;
+  });
   if (champion) return `${champion.name} team`;
   if (excludedGroups.size) return `No ${[...excludedGroups][0]} forms`;
   if (poolView !== 'cost') return `Units by ${poolView}`;
@@ -1351,7 +1361,10 @@ function setUnitState(key, value) {
   state.set(key, value);
   for (const tile of document.querySelectorAll('.u[data-key], .uc[data-key]')) {
     if (tile.dataset.key !== key) continue;
-    tile.classList.toggle('req', value === 1);
+    // 3 = carry: still a required unit for the solver, but flagged as an
+    // item holder so the comp panel knows what package you are building.
+    tile.classList.toggle('req', value === 1 || value === 3);
+    tile.classList.toggle('carry', value === 3);
     tile.classList.toggle('exc', value === 2);
   }
   applyFilter();
@@ -1370,13 +1383,17 @@ function addUnit(el, c, group) {
     d.innerHTML = `<img loading="lazy" src="${c.icon}" alt="">
       ${portraitRoleBadge(c)}<span class="cst c${c.cost}">${c.cost}</span><span class="nm">${c.name}</span>`;
     const value = isGroupExcluded(c) ? 2 : (state.get(c.key) || 0);
-    d.classList.toggle('req', value === 1);
+    d.classList.toggle('req', value === 1 || value === 3);
+    d.classList.toggle('carry', value === 3);
     d.classList.toggle('exc', value === 2);
     d.onclick = () => {
       // Touch has no hover, so a tap must be able to mean "tell me about
       // this" -- the sheet carries require/exclude as explicit buttons.
       if (isTouch()) return openSheet(unitCard(c.key), 'unit', c.key);
-      setUnitState(c.key, state.get(c.key) === 1 ? 0 : 1);
+      // none -> required -> carry -> none. Marking a carry is how you tell
+      // the tool "this is the unit I am building items for".
+      const cur = state.get(c.key) || 0;
+      setUnitState(c.key, cur === 0 ? 1 : cur === 1 ? 3 : 0);
     };
     d.oncontextmenu = e => {
       e.preventDefault();
@@ -1409,7 +1426,7 @@ function updPickN() {
   let r = 0, x = 0;
   for (const champion of DB.champions) {
     const value = state.get(champion.key);
-    if (value === 1) r++;
+    if (value === 1 || value === 3) r++;
     else if (value === 2 || isGroupExcluded(champion)) x++;
   }
   $('pickN').textContent = `${r} required · ${x} excluded`;
@@ -1436,7 +1453,7 @@ function activeChips() {
   const req = [], exc = [];
   for (const c of DB.champions) {
     const v = state.get(c.key);
-    if (v === 1) req.push(c); else if (v === 2) exc.push(c);
+    if (v === 1 || v === 3) req.push(c); else if (v === 2) exc.push(c);
   }
   const byCost = (a, b) => a.cost - b.cost || a.name.localeCompare(b.name);
   for (const c of req.sort(byCost))
@@ -2154,7 +2171,7 @@ function buildSearchOptions() {
   const reqIdx = [], poolIdx = [];
   DB.champions.forEach((c, i) => {
     const s = state.get(c.key);
-    if (s === 1) reqIdx.push(i);
+    if (s === 1 || s === 3) reqIdx.push(i);
     else if (s === 2 || isGroupExcluded(c)) return;
     else if (costOn.has(c.cost)) poolIdx.push(i);
   });
@@ -2920,7 +2937,9 @@ function syncPinState(card, selected) {
 
 function syncRequiredPortraits(card) {
   for (const portrait of card.querySelectorAll('.uc[data-key]')) {
-    portrait.classList.toggle('req', state.get(portrait.dataset.key) === 1);
+    const v = state.get(portrait.dataset.key);
+    portrait.classList.toggle('req', v === 1 || v === 3);
+    portrait.classList.toggle('carry', v === 3);
   }
 }
 
@@ -3025,7 +3044,51 @@ function render(m, context = null) {
   }
 
   reconcileResultCards(m.rows);
+  renderCompBar();
   if (!m.partial) renderSelectedComps();
+}
+
+// The comp bar answers the question the results list cannot: given the units
+// you said you are itemizing, what item package are you actually building, and
+// does anything on the board change that? It reads declared carries only --
+// guessing intent from the role field is what made this wrong for Zyra.
+function declaredCarries() {
+  const keys = [];
+  for (const [key, value] of state) if (value === 3) keys.push(key);
+  return keys;
+}
+
+function renderCompBar() {
+  const bar = $('compBar');
+  if (!bar || typeof CompQuality === 'undefined') return;
+  const carries = declaredCarries();
+  if (!carries.length) { bar.hidden = true; bar.innerHTML = ''; return; }
+
+  // Evaluate over every pinned unit, not just the carries: a required unit can
+  // supply free Shred/Sunder (Kog'Maw's Caustic) that changes the item plan
+  // even though it never holds an item itself.
+  const pinned = [];
+  for (const champion of DB.champions) {
+    const value = state.get(champion.key);
+    if (value === 1 || value === 3) pinned.push(champion.key);
+  }
+  const indexes = pinned
+    .map(key => DB.champions.findIndex(c => c.key === key))
+    .filter(i => i >= 0);
+  const quality = CompQuality.evaluate(DB, indexes, null, null, carries);
+  const names = carries
+    .map(key => (DB.champions.find(c => c.key === key) || {}).name)
+    .filter(Boolean);
+
+  const bits = [`<span class="cb-l">Building around</span> ${names.join(' + ')}`,
+    `<span class="cb-l">Items</span> ${quality.itemPlan}`];
+  // Only item-plan notes belong here. Board-shape notes (frontline/backline)
+  // describe a full 8-unit board, not the 1-2 carries you declared.
+  const warn = quality.notes.filter(n => /Shred|Sunder|freed by/.test(n));
+  bar.className = 'compbar' + (quality.itemCoherent ? '' : ' warn');
+  bar.innerHTML = bits.join('<span class="cb-sep">·</span>') +
+    (warn.length ? `<span class="cb-sep">·</span><span class="cb-w">${warn[0]}</span>` : '');
+  bar.hidden = false;
 }
 
 // The selected section sits above the results and survives re-searching: these
