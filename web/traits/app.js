@@ -46,6 +46,9 @@ const MAX_SIZE = 12;
 const DEFAULT_WASTE = 10;
 const DEFAULT_SIZE = 8;
 const DEFAULT_SORT = ['live', 'cost'];
+// Set once the user picks a tiebreak themselves (or restores a shared link),
+// after which declaring a carry must never move it for them.
+let sortTouchedByUser = false;
 const DEFAULT_EFFORT = 'deep';
 const EFFORT_ORDER = ['quick', 'balanced', 'deep'];
 const EFFORTS = {
@@ -404,6 +407,9 @@ function resetSearchState() {
   $('wasteV').textContent = DEFAULT_WASTE;
   $('sort').value = DEFAULT_SORT[0];
   $('sort2').value = DEFAULT_SORT[1];
+  // Clear means "back to defaults", including the right to auto-pick a
+  // tiebreak again next time a carry is declared.
+  sortTouchedByUser = false;
   $('effort').value = DEFAULT_EFFORT;
   $('search').value = '';
   poolView = 'cost';
@@ -542,6 +548,9 @@ function applySharedSearchState(shared) {
       && shared.s.every(sort => VALID_SORTS.has(sort))) {
     $('sort').value = shared.s[0];
     $('sort2').value = shared.s[1];
+    // A shared link carries a deliberate sort. Treat it as the sender's choice
+    // so restoring their carries does not overwrite the order they shared.
+    sortTouchedByUser = true;
   }
   if (typeof shared.o === 'string' && EFFORTS[shared.o]) $('effort').value = shared.o;
   if (typeof shared.q === 'string') $('search').value = shared.q.slice(0, 100);
@@ -1369,7 +1378,21 @@ function setUnitState(key, value) {
   }
   applyFilter();
   updPickN();
+  autoTiebreakForCarries();
   run();
+}
+
+// The default tiebreak is "cheapest board", which is right when you are
+// browsing trait shells but wrong the moment you declare a carry: among boards
+// with identical traits it picks the 1-cost stat-stick over the 3-cost with a
+// real body (Xayah over Raptor, Rakan over Taric). Declaring a carry says "I am
+// itemizing this board", so strength becomes the sensible tiebreak.
+// Only ever moves the default -- a tiebreak you chose yourself is left alone.
+function autoTiebreakForCarries() {
+  if (sortTouchedByUser) return;
+  const hasCarry = [...state.values()].some(v => v === 3);
+  const want = hasCarry ? 'rich' : DEFAULT_SORT[1];
+  if ($('sort2').value !== want) $('sort2').value = want;
 }
 
 function addUnit(el, c, group) {
@@ -1408,7 +1431,8 @@ function applyFilter() {
   const shown = new Map();
   for (const d of $('pool').querySelectorAll('.u[data-key]')) {
     const c = DB.champions.find(x => x.key === d.dataset.key);
-    const hide = (!costOn.has(c.cost) && state.get(c.key) !== 1) ||
+    const picked = state.get(c.key);
+    const hide = (!costOn.has(c.cost) && picked !== 1 && picked !== 3) ||
                  (q && !d.dataset.search.includes(q));
     d.classList.toggle('hide', hide);
     if (!hide) shown.set(d.dataset.group, (shown.get(d.dataset.group) || 0) + 1);
@@ -1608,7 +1632,7 @@ function renderEmblems() {
   });
 });
 $('sort').addEventListener('change', run);
-$('sort2').addEventListener('change', run);
+$('sort2').addEventListener('change', () => { sortTouchedByUser = true; run(); });
 $('effort').addEventListener('change', () => {
   updateRefineButton();
   run();
