@@ -128,3 +128,36 @@ test('an Adaptor carry flexes instead of splitting the item package', () => {
   assert.equal(quality.itemCoherent, true, 'Adaptor must not force a 2nd package');
   assert.ok(quality.notes.some(note => /Adaptor/.test(note)), 'flexibility should be surfaced');
 });
+
+// Declaring a tank means "reserve items for this unit", not "this unit deals
+// damage". Malphite is an APTank, so reading his role label as a damage type
+// made Aphelios + Malphite -- one of the most standard boards in the game --
+// report a phantom AD/AP split needing both Shred and Sunder.
+test('a declared tank reserves items without inventing a damage split', () => {
+  const byKey = key => db.champions.findIndex(c => c.key === key);
+  const roster = ['Aphelios', 'Malphite', 'Rakan', 'Xayah'].map(byKey);
+  assert.ok(roster.every(index => index >= 0), 'fixture units must exist');
+
+  const quality = CompQuality.evaluate(db, roster, null, null, ['Aphelios', 'Malphite']);
+
+  assert.deepEqual(quality.carries, ['Aphelios'], 'the tank is not a damage carry');
+  assert.deepEqual(quality.tanks, ['Malphite'], 'the tank is tracked as an item soak');
+  assert.equal(quality.itemCoherent, true, 'a carry plus a tank is a coherent board');
+  assert.ok(!quality.notes.some(note => /Shred and Sunder/.test(note)),
+    'must not warn about a split that does not exist');
+  assert.match(quality.itemPlan, /^AD package/, 'damage package follows the carry only');
+  assert.match(quality.itemPlan, /Malphite defensive/, 'tank still shows up in the plan');
+});
+
+// Declaring only a tank is a legitimate state: you know where your items go,
+// you have not picked a damage carry yet.
+test('a tank declared alone is not reported as a damage carry', () => {
+  const byKey = key => db.champions.findIndex(c => c.key === key);
+  const roster = ['Malphite', 'Rakan', 'Xayah', 'Aphelios'].map(byKey);
+  const quality = CompQuality.evaluate(db, roster, null, null, ['Malphite']);
+
+  assert.deepEqual(quality.carries, [], 'a pure tank never becomes a damage carry');
+  assert.deepEqual(quality.tanks, ['Malphite']);
+  assert.equal(quality.itemPlan, 'defensive items only');
+  assert.ok(!quality.notes.some(note => /Shred and Sunder/.test(note)));
+});

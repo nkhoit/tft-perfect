@@ -3104,11 +3104,14 @@ function renderCompBar() {
     .map(key => DB.champions.findIndex(c => c.key === key))
     .filter(i => i >= 0);
   const quality = CompQuality.evaluate(DB, indexes, null, null, carries);
-  const names = carries
-    .map(key => (DB.champions.find(c => c.key === key) || {}).name)
-    .filter(Boolean);
+  const nameOf = key => (DB.champions.find(c => c.key === key) || {}).name;
+  // A declared tank reserves items but is not who you build around, so the
+  // headline names the damage carries and the item plan names the tank.
+  const names = (quality.carries.length ? quality.carries : carries)
+    .map(nameOf).filter(Boolean);
+  const lead = quality.carries.length ? 'Building around' : 'Itemizing';
 
-  const bits = [`<span class="cb-l">Building around</span> ${names.join(' + ')}`,
+  const bits = [`<span class="cb-l">${lead}</span> ${names.join(' + ')}`,
     `<span class="cb-l">Items</span> ${quality.itemPlan}`];
   // Only item-plan notes belong here. Board-shape notes (frontline/backline)
   // describe a full 8-unit board, not the 1-2 carries you declared.

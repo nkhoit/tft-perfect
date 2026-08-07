@@ -99,11 +99,20 @@
   // top-tier AP casters; one is a carry and one is a trait body, and only the
   // player knows which. Without a declaration we fall back to a cost-tier
   // guess, which is a hint, not a verdict.
+  //
+  // Declaring a TANK means "reserve items for this unit", not "this unit deals
+  // damage". A tank's role label still starts with AD/AP (Malphite is APTank),
+  // so feeding it into the damage-package math invents a split: Aphelios +
+  // Malphite is one of the most standard boards in the game, and reading
+  // Malphite as an AP carry flagged it as needing both Shred and Sunder. Tanks
+  // are tracked separately -- they consume item budget, never a damage type.
   function itemCoherence(profiles, freeShred, declared) {
-    let carries, inferred = false;
+    let carries, tanks = [], inferred = false;
     if (declared && declared.length) {
       const want = new Set(declared);
-      carries = profiles.filter(p => want.has(p.key));
+      const picked = profiles.filter(p => want.has(p.key));
+      carries = picked.filter(p => p.itemized);
+      tanks = picked.filter(p => !p.itemized);
     } else {
       const topCost = profiles.reduce((max, p) => Math.max(max, p.cost), 0);
       carries = profiles.filter(p =>
@@ -116,13 +125,17 @@
     const types = new Set(carries.map(p => p.damage).filter(Boolean));
     return {
       carries,
+      tanks,
       inferred,
       types: [...types],
       lockedTypes: [...locked],
       flexCarries: carries.filter(p => p.damage === 'flex').map(p => p.key),
       coherent: locked.size <= 1 || freeShred.length > 0,
       exempt: locked.size > 1 && freeShred.length > 0,
-      carryless: carries.length === 0,
+      // A board whose only declaration is a tank is not carryless in the
+      // "you forgot to itemize anyone" sense -- it just has no damage plan yet.
+      carryless: carries.length === 0 && tanks.length === 0,
+      tankOnly: carries.length === 0 && tanks.length > 0,
     };
   }
 
@@ -181,10 +194,15 @@
     // The headline a player acts on: which package do I build?
     let itemPlan;
     if (coherence.carryless) itemPlan = 'no carry declared';
+    else if (coherence.tankOnly) itemPlan = 'defensive items only';
     else if (coherence.lockedTypes.length === 1) itemPlan = coherence.lockedTypes[0] + ' package';
     else if (coherence.lockedTypes.length === 0) itemPlan = 'flexible (Adaptor carries)';
     else if (freeShred.length) itemPlan = 'split, covered by ' + freeShred.join('/');
     else itemPlan = 'split -- two packages';
+    // A declared tank reserves items without changing the damage package.
+    if (coherence.tanks.length && !coherence.tankOnly) {
+      itemPlan += ' + ' + coherence.tanks.map(p => p.key).join('/') + ' defensive';
+    }
 
     return {
       profiles,
@@ -193,6 +211,7 @@
       backline,
       avgCost,
       carries: coherence.carries.map(p => p.key),
+      tanks: coherence.tanks.map(p => p.key),
       carriesInferred: coherence.inferred,
       damageTypes: coherence.types,
       itemCoherent: coherence.coherent && !coherence.carryless,
