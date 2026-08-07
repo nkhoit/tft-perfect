@@ -1995,8 +1995,12 @@ function sheetActions(kind, key) {
   }
   if (kind === 'unit') {
     const st = state.get(key) || 0;
+    // Touch has no right-click and no click-cycle, so each pick state needs
+    // its own button. Carry is a required unit you are also itemizing.
     return '<button class="sheetbtn' + (st === 1 ? ' on' : '') + '" data-act="req">' +
       (st === 1 ? 'Required \u2713' : 'Require') + '</button>' +
+      '<button class="sheetbtn' + (st === 3 ? ' on' : '') + '" data-act="cry">' +
+      (st === 3 ? 'Carry \u2713' : 'Carry') + '</button>' +
       '<button class="sheetbtn' + (st === 2 ? ' on' : '') + '" data-act="exc">' +
       (st === 2 ? 'Excluded \u2713' : 'Exclude') + '</button>';
   }
@@ -2099,7 +2103,7 @@ function onSheetAction(e) {
   }
   if (sheetKind === 'unit') {
     const st = state.get(sheetKey) || 0;
-    const want = act === 'req' ? 1 : 2;
+    const want = act === 'req' ? 1 : act === 'cry' ? 3 : 2;
     setUnitState(sheetKey, st === want ? 0 : want);
   } else {
     const cur = reqTraits.find(r => r.key === sheetKey);
