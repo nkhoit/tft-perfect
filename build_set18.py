@@ -91,6 +91,19 @@ TRAIT_TEAM_SIZE = {
     "Riftbeast": [{"min": 10, "slots": 2}],
 }
 
+# CDragon is a mirror, not the patch, and it can disagree with live balance.
+# While building the Coven calculator all three sources disagreed on 7 Coven:
+# CDragon and MetaTFT both said 7/kill 100/loss, the patch notes said 10/kill
+# 80/loss, and data.json had a third answer (7/70). The patch notes win.
+# Keyed by trait, then by breakpoint index, to the corrected tier string.
+PATCH_TRAIT_TIERS = {
+    "Coven": {
+        2: "3 per kill, 30 per loss",
+        3: "10 per kill, 80 per loss",
+    },
+}
+
+
 UNIT_ROLES = {
     f"{damage}{role}"
     for damage in ("AD", "AP", "Hybrid")
@@ -637,6 +650,10 @@ def main():
             trait["details"] = details
         if key in TRAIT_TEAM_SIZE:
             trait["teamSize"] = TRAIT_TEAM_SIZE[key]
+        # Patch notes beat the mirror: stamp corrected tier strings last.
+        for idx, text in (PATCH_TRAIT_TIERS.get(key) or {}).items():
+            if idx < len(trait["tiers"]):
+                trait["tiers"][idx] = text
         traits[key] = trait
         bykey[key] = key
         bykey[name] = key
