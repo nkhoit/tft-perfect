@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coven Cashout Calculator - TFTKIT</title>
+<meta name="description" content="What Coven cashout you can afford, and what it costs you in HP.">
+<meta property="og:site_name" content="TFTKIT">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Coven Cashout Calculator">
+<meta property="og:url" content="https://tftkit.com/coven/">
+<meta name="theme-color" content="#4ade80">
+<link rel="stylesheet" href="/shared/tokens.css">
+<link rel="stylesheet" href="style.css?v=coven-v1">
+</head>
+<body>
+<header>
+  <a class="kit" href="/">TFT<span>KIT</span></a>
+  <h1>Coven <span class="beta">Cashout</span></h1>
+  <span class="setname">Set 18 - Enchanted Wilds</span>
+  <div class="spacer"></div>
+  <div class="patch" id="patchLabel"></div>
+</header>
+
+<div class="wrap">
+  <section class="panel inputs">
+    <div class="mode" role="tablist">
+      <button id="modePlan" class="modebtn on" role="tab" type="button">Plan from a stage</button>
+      <button id="modeNow" class="modebtn" role="tab" type="button">I am mid-game</button>
+    </div>
+
+    <div class="grid">
+      <label class="fld">
+        <span>Coven tier</span>
+        <select id="tier">
+          <option value="0">auto (by level)</option>
+          <option value="3">3 Coven</option>
+          <option value="4">4 Coven</option>
+          <option value="5" selected>5 Coven</option>
+          <option value="7">7 Coven</option>
+        </select>
+      </label>
+
+      <label class="fld">
+        <span>Starting round</span>
+        <select id="from"></select>
+      </label>
+
+      <label class="fld" id="fldEssence">
+        <span>Essence now</span>
+        <input id="essence" type="number" min="0" step="5" value="0">
+      </label>
+
+      <label class="fld">
+        <span>Health now</span>
+        <input id="hp" type="number" min="1" max="100" step="1" value="100">
+      </label>
+    </div>
+
+    <details class="curve" id="curveBox">
+      <summary>Level curve <span class="hint">standard: 6 by 3-2, 7 by 3-6, 8 by 4-2</span></summary>
+      <div class="grid curvegrid">
+        <label class="fld"><span>Level 6 by</span><select id="lv6"></select></label>
+        <label class="fld"><span>Level 7 by</span><select id="lv7"></select></label>
+        <label class="fld"><span>Level 8 by</span><select id="lv8"></select></label>
+        <label class="fld"><span>Level 9 by</span><select id="lv9"></select></label>
+      </div>
+      <p class="note">
+        Loss damage is stage base plus surviving enemy units, so when you level
+        decides what a loss costs. Levelling earlier means bigger boards on both
+        sides and more damage per loss.
+      </p>
+    </details>
+  </section>
+
+  <section class="panel out">
+    <div class="verdict" id="verdict"></div>
+    <table class="ladder" id="ladder">
+      <thead>
+        <tr>
+          <th>Cashout</th><th>Essence</th><th>Need</th>
+          <th>Lands</th><th>Health left</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" id="assump"></p>
+  </section>
+</div>
+
+<script src="coven-data.js?v=coven-v1"></script>
+<script src="coven-sim.js?v=coven-v1"></script>
+<script src="app.js?v=coven-v1"></script>
+</body>
+</html>

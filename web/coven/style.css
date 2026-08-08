@@ -1,0 +1,70 @@
+/* Coven cashout calculator. Shares the site tokens; layout is its own. */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--txt);
+  font-family: var(--font); font-size: 14px;
+}
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--edge);
+  background: var(--panel); flex-wrap: wrap;
+}
+.kit { color: var(--txt); text-decoration: none; font-weight: 700; }
+.kit span { color: var(--acc); }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.beta { color: var(--acc); }
+.setname, .patch { color: var(--dim); font-size: 12px; }
+.spacer { flex: 1; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+.panel {
+  background: var(--panel); border: 1px solid var(--edge);
+  border-radius: 10px; padding: 14px; margin-bottom: 14px;
+}
+.mode { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.modebtn {
+  flex: 1; min-width: 140px; padding: 8px 10px; cursor: pointer;
+  background: var(--panel2); color: var(--dim);
+  border: 1px solid var(--edge); border-radius: 8px; font-size: 13px;
+}
+.modebtn.on { color: var(--txt); border-color: var(--acc); }
+.grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.fld { display: flex; flex-direction: column; gap: 4px; }
+.fld span { color: var(--dim); font-size: 12px; }
+.fld select, .fld input {
+  background: var(--panel2); color: var(--txt);
+  border: 1px solid var(--edge); border-radius: 6px;
+  padding: 7px 8px; font-size: 14px; width: 100%;
+}
+.curve { margin-top: 12px; }
+.curve summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+.curvegrid { margin-top: 10px; }
+.hint { color: var(--c1); font-size: 11px; }
+.note { color: var(--dim); font-size: 12px; line-height: 1.5; margin: 10px 0 0; }
+.verdict {
+  font-size: 15px; font-weight: 600; margin-bottom: 12px;
+  padding: 10px 12px; border-radius: 8px; background: var(--panel2);
+  border-left: 3px solid var(--edge);
+}
+.verdict.ok { border-left-color: var(--acc); }
+.verdict.dead { border-left-color: var(--red); }
+.ladder { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ladder th {
+  text-align: left; color: var(--dim); font-weight: 500;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  padding: 6px 8px; border-bottom: 1px solid var(--edge);
+}
+.ladder td { padding: 7px 8px; border-bottom: 1px solid var(--edge); }
+.ladder tr.ok td { color: var(--txt); }
+.ladder tr.risky td { color: var(--gold); }
+.ladder tr.dead td { color: var(--dim); }
+.ladder .tag { text-align: right; font-size: 11px; }
+.ladder tr.ok .tag { color: var(--acc); }
+.ladder tr.risky .tag { color: var(--gold); }
+.ladder tr.dead .tag { color: var(--red); }
+@media (max-width: 560px) {
+  .ladder th:nth-child(2), .ladder td:nth-child(2) { display: none; }
+  .wrap { padding: 10px; }
+}

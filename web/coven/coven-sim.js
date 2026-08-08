@@ -72,6 +72,11 @@
   // this across a range of killsPerRound and shows the band.
   function project(opts) {
     var curve = opts.curve || STANDARD_CURVE;
+    // A curve keyed by level instead of an ordered array reads as length 0,
+    // which silently pins the whole game at level 4. Fail loudly instead.
+    if (!Array.isArray(curve) || !curve.length) {
+      throw new TypeError("curve must be a non-empty array of {stage, round, level}");
+    }
     var essence = opts.essence || 0;
     var hp = opts.hp;
     var kills = opts.killsPerRound || 0;
@@ -81,11 +86,15 @@
 
     var hits = {};
     var timeline = [];
+    var died = false;
 
     for (var i = 0; i < ROUNDS.length; i++) {
       var round = ROUNDS[i];
       if (ordinal(round) < start) continue;
-      if (hp <= 0) break;
+      // Death and running out of rounds are different failures and the player
+      // needs to tell them apart: one says 'you die getting there', the other
+      // says 'the game ends first'.
+      if (hp <= 0) { died = true; break; }
 
       var level = levelAt(curve, round);
       // You cannot field more Coven bodies than you have board slots.
@@ -117,7 +126,8 @@
         }
       }
     }
-    return { timeline: timeline, hits: hits, endEssence: essence, endHp: hp };
+    return { timeline: timeline, hits: hits, endEssence: essence, endHp: hp,
+             died: died };
   }
 
   // Run project() across a plausible range of kill rates and report the band.
@@ -133,7 +143,13 @@
     var out = [];
     for (var t = 0; t < DATA.THRESHOLDS.length; t++) {
       var got = runs.map(function (r) { return r.hits[t]; });
-      if (got.some(function (h) { return !h; })) { out.push(null); continue; }
+      if (got.some(function (h) { return !h; })) {
+        // Unreached is not one outcome. If any run died on the way, the
+        // honest report is "this kills you", not "the game ended first".
+        out.push({ level: t + 1, need: DATA.THRESHOLDS[t], unreached: true,
+                   fatal: runs.some(function (r) { return r.died; }) });
+        continue;
+      }
       var hps = got.map(function (h) { return h.hpLeft; });
       out.push({
         level: t + 1,

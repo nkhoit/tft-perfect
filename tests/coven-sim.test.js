@@ -79,3 +79,33 @@ test('kill variance widens as you greed deeper', () => {
   assert.ok(spread(5) > spread(2),
     'deep cashouts must carry more kill-driven uncertainty');
 });
+
+// A curve keyed by level ({6: {...}}) instead of an ordered array reads as
+// length 0 and silently pins every round at level 4 -- a whole different game,
+// with no error. This shape mistake must be loud.
+test('a malformed level curve is rejected, not silently ignored', () => {
+  assert.throws(
+    () => Sim.project({ hp: 100, curve: { 6: { stage: 3, round: 2 } } }),
+    /curve must be a non-empty array/,
+    'an object keyed by level is not a curve');
+  assert.throws(
+    () => Sim.project({ hp: 100, curve: [] }),
+    /curve must be a non-empty array/);
+});
+
+// 'Unreachable' hides two different answers. Running out of rounds and dying
+// on the way are opposite decisions -- one says wait, the other says stop.
+test('a cashout that kills you is distinguished from one the clock beats', () => {
+  const lethal = Sim.band({ hp: 100, essence: 0, from: { stage: 2, round: 5 }, tier: 5 },
+    [0]);
+  const deep = lethal[8];
+  assert.ok(deep && deep.unreached, 'L9 is not reached from a stage-2 start');
+  assert.equal(deep.fatal, true, 'you die on the way, the clock is not the reason');
+
+  // Starting late in the game leaves too few rounds, but plenty of health.
+  const late = Sim.band({ hp: 100, essence: 0, from: { stage: 7, round: 7 }, tier: 5 },
+    [0]);
+  const l1 = late[0];
+  assert.ok(l1 && l1.unreached, 'no rounds left after 7-7 to bank 40 essence');
+  assert.equal(l1.fatal, false, 'the game ending is not the same as dying');
+});
